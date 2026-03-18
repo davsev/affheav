@@ -59,6 +59,38 @@ async function postPhoto({ message, imageUrl }) {
   }
 }
 
+async function getTokenInfo() {
+  const appId = process.env.FACEBOOK_APP_ID;
+  const appSecret = process.env.FACEBOOK_APP_SECRET;
+  const token = process.env.FACEBOOK_ACCESS_TOKEN;
+
+  if (!appId || !appSecret || !token) {
+    throw new Error('FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, and FACEBOOK_ACCESS_TOKEN must be set');
+  }
+
+  const response = await axios.get(`${BASE}/debug_token`, {
+    params: {
+      input_token: token,
+      access_token: `${appId}|${appSecret}`,
+    },
+  });
+
+  const data = response.data?.data;
+  return {
+    valid: data.is_valid,
+    app: data.application,
+    user_id: data.user_id,
+    scopes: data.scopes,
+    expires_at: data.expires_at
+      ? new Date(data.expires_at * 1000).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })
+      : 'לא פג תוקף (Page Token)',
+    expires_at_raw: data.expires_at || 0,
+    days_left: data.expires_at
+      ? Math.ceil((data.expires_at * 1000 - Date.now()) / (1000 * 60 * 60 * 24))
+      : null,
+  };
+}
+
 async function refreshToken() {
   const appId = process.env.FACEBOOK_APP_ID;
   const appSecret = process.env.FACEBOOK_APP_SECRET;
@@ -80,4 +112,4 @@ async function refreshToken() {
   return response.data; // { access_token, token_type, expires_in }
 }
 
-module.exports = { postPhoto, refreshToken };
+module.exports = { postPhoto, refreshToken, getTokenInfo };

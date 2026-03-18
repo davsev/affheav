@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { refreshToken } = require('../services/facebook');
+const { refreshToken, getTokenInfo } = require('../services/facebook');
 
 // POST /api/facebook/refresh-token
 router.post('/refresh-token', async (req, res) => {
@@ -16,6 +16,16 @@ router.post('/refresh-token', async (req, res) => {
       expires_at: expiresAt,
       note: 'Copy the access_token above into your .env FACEBOOK_ACCESS_TOKEN and restart the server.',
     });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/facebook/token-info
+router.get('/token-info', async (req, res) => {
+  try {
+    const info = await getTokenInfo();
+    res.json({ success: true, ...info });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

@@ -365,8 +365,35 @@ document.getElementById('btn-reset-prompt').addEventListener('click', async () =
   setTimeout(() => { res.textContent = ''; }, 3000);
 });
 
-// Load prompt when settings tab is opened
-document.querySelector('[data-tab="settings"]').addEventListener('click', loadPrompt);
+// ── Facebook Token Info ────────────────────────────────────────────────────────
+async function loadTokenInfo() {
+  const el = document.getElementById('fb-token-info');
+  try {
+    const d = await api('/api/facebook/token-info');
+    const daysLeft = d.days_left;
+    const color = daysLeft === null ? '#4ade80' : daysLeft > 14 ? '#4ade80' : daysLeft > 3 ? '#fbbf24' : '#f87171';
+    const expiry = daysLeft === null
+      ? '<span style="color:#4ade80">לא פג תוקף (Page Token ✓)</span>'
+      : `<span style="color:${color}">${d.expires_at} (${daysLeft} ימים נותרו)</span>`;
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:120px 1fr;gap:6px 12px;line-height:1.8;">
+        <span style="color:#64748b;">תקף:</span><span style="color:${d.valid ? '#4ade80' : '#f87171'}">${d.valid ? '✓ כן' : '✗ לא'}</span>
+        <span style="color:#64748b;">אפליקציה:</span><span>${d.app || '—'}</span>
+        <span style="color:#64748b;">תפוגה:</span>${expiry}
+        <span style="color:#64748b;">הרשאות:</span><span style="font-size:11px;font-family:monospace;">${(d.scopes || []).join(', ')}</span>
+      </div>`;
+  } catch (e) {
+    el.innerHTML = `<span style="color:#f87171">שגיאה: ${e.message}</span>`;
+  }
+}
+
+document.getElementById('btn-check-token').addEventListener('click', loadTokenInfo);
+
+// Load prompt + token info when settings tab is opened
+document.querySelector('[data-tab="settings"]').addEventListener('click', () => {
+  loadPrompt();
+  loadTokenInfo();
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadProducts();
