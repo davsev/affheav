@@ -8,6 +8,16 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Load persisted prompt from Google Sheets on startup
+const promptStore = require('./services/promptStore');
+const { getSetting } = require('./services/googleSheets');
+getSetting('openai_prompt').then(saved => {
+  if (saved) {
+    promptStore.set(saved);
+    console.log('✓ Loaded prompt from Google Sheets');
+  }
+}).catch(() => {});
+
 // ── SSE Log Stream ────────────────────────────────────────────────────────────
 const sseClients = new Set();
 const logHistory = [];   // replay buffer — keeps last 500 entries

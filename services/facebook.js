@@ -25,18 +25,10 @@ async function getPageToken() {
 
 async function postPhoto({ message, imageUrl }) {
   const pageId = process.env.FACEBOOK_PAGE_ID;
+  const pageToken = process.env.FACEBOOK_ACCESS_TOKEN;
 
-  if (!pageId || !process.env.FACEBOOK_ACCESS_TOKEN) {
+  if (!pageId || !pageToken) {
     throw new Error('FACEBOOK_PAGE_ID or FACEBOOK_ACCESS_TOKEN not set in .env');
-  }
-
-  let pageToken;
-  try {
-    pageToken = await getPageToken();
-    console.log('[Facebook] Got page token successfully');
-  } catch (err) {
-    const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
-    throw new Error(`getPageToken failed: ${detail}`);
   }
 
   try {

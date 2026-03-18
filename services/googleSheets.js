@@ -111,4 +111,48 @@ async function addProduct({ Link, image, Text, join_link, wa_group }) {
   });
 }
 
-module.exports = { getAllProducts, getNextUnsent, markSent, addProduct, updateProductText };
+const SETTINGS_SHEET = 'Settings';
+
+async function getSetting(key) {
+  try {
+    const sheets = await getClient();
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: `${SETTINGS_SHEET}!A:B`,
+    });
+    const rows = res.data.values || [];
+    const row = rows.find(r => r[0] === key);
+    return row ? row[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+async function setSetting(key, value) {
+  const sheets = await getClient();
+  // Read existing to find row or append
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: `${SETTINGS_SHEET}!A:B`,
+  });
+  const rows = res.data.values || [];
+  const rowIdx = rows.findIndex(r => r[0] === key);
+
+  if (rowIdx >= 0) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `${SETTINGS_SHEET}!A${rowIdx + 1}:B${rowIdx + 1}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [[key, value]] },
+    });
+  } else {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: `${SETTINGS_SHEET}!A:B`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [[key, value]] },
+    });
+  }
+}
+
+module.exports = { getAllProducts, getNextUnsent, markSent, addProduct, updateProductText, getSetting, setSetting };
