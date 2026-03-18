@@ -67,13 +67,13 @@ app.get('*', (req, res) => {
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`\n🎯 Affiliate Heaven running at http://localhost:${PORT}\n`);
 
   // Wire the workflow runner into the scheduler
   scheduler.setWorkflowRunner(() => workflow.run());
 
-  // Start all cron jobs
-  const count = scheduler.startAll();
+  // Start all cron jobs (loads from Google Sheets)
+  const count = await scheduler.startAll();
   console.log(`📅 ${count} schedule(s) loaded\n`);
 });

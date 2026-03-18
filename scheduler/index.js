@@ -1,115 +1,92 @@
 const cron = require('node-cron');
-const fs = require('fs');
-const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-
-const SCHEDULES_FILE = path.join(__dirname, '../config/schedules.json');
+const { getSetting, setSetting } = require('../services/googleSheets');
 
 let activeJobs = {}; // id → cron.ScheduledTask
-let _runWorkflow = null; // injected by server.js
+let _schedules = []; // in-memory cache
+let _runWorkflow = null;
 
 function setWorkflowRunner(fn) {
   _runWorkflow = fn;
 }
 
-function loadSchedules() {
+async function loadSchedules() {
   try {
-    return JSON.parse(fs.readFileSync(SCHEDULES_FILE, 'utf8'));
+    const raw = await getSetting('schedules');
+    _schedules = raw ? JSON.parse(raw) : [];
   } catch {
-    return [];
+    _schedules = [];
   }
+  return _schedules;
 }
 
-function saveSchedules(schedules) {
-  const dir = path.dirname(SCHEDULES_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(schedules, null, 2));
+async function saveSchedules() {
+  await setSetting('schedules', JSON.stringify(_schedules));
 }
 
 function stopAll() {
-  for (const [id, job] of Object.entries(activeJobs)) {
-    job.stop();
-  }
+  for (const job of Object.values(activeJobs)) job.stop();
   activeJobs = {};
 }
 
-function startAll() {
-  const schedules = loadSchedules();
+async function startAll() {
+  await loadSchedules();
   stopAll();
 
-  for (const s of schedules) {
+  for (const s of _schedules) {
     if (!s.enabled) continue;
     if (!cron.validate(s.cron)) {
       console.warn(`[scheduler] Invalid cron: "${s.cron}" (id: ${s.id})`);
       continue;
     }
-
     activeJobs[s.id] = cron.schedule(s.cron, async () => {
       console.log(`[scheduler] Firing job: ${s.label} (${s.cron})`);
       if (_runWorkflow) {
-        try {
-          await _runWorkflow();
-        } catch (err) {
+        try { await _runWorkflow(); } catch (err) {
           console.error(`[scheduler] Workflow error in job ${s.id}:`, err.message);
         }
       }
     }, { timezone: 'Asia/Jerusalem' });
-
     console.log(`[scheduler] Scheduled: ${s.label} → ${s.cron}`);
   }
 
-  return schedules.length;
+  return _schedules.length;
 }
 
 function list() {
-  const schedules = loadSchedules();
-  return schedules.map(s => ({
-    ...s,
-    active: s.enabled && !!activeJobs[s.id],
-  }));
+  return _schedules.map(s => ({ ...s, active: s.enabled && !!activeJobs[s.id] }));
 }
 
-function add({ label, cron: cronExpr, enabled = true }) {
+async function add({ label, cron: cronExpr, enabled = true }) {
   if (!cron.validate(cronExpr)) throw new Error(`Invalid cron expression: ${cronExpr}`);
-
-  const schedules = loadSchedules();
+  await loadSchedules();
   const entry = { id: uuidv4(), label, cron: cronExpr, enabled };
-  schedules.push(entry);
-  saveSchedules(schedules);
-  startAll(); // reload all jobs
+  _schedules.push(entry);
+  await saveSchedules();
+  await startAll();
   return entry;
 }
 
-function update(id, { label, cron: cronExpr, enabled }) {
-  const schedules = loadSchedules();
-  const idx = schedules.findIndex(s => s.id === id);
+async function update(id, { label, cron: cronExpr, enabled }) {
+  await loadSchedules();
+  const idx = _schedules.findIndex(s => s.id === id);
   if (idx === -1) throw new Error(`Schedule not found: ${id}`);
-
-  if (cronExpr !== undefined && !cron.validate(cronExpr)) {
-    throw new Error(`Invalid cron expression: ${cronExpr}`);
-  }
-
-  if (label !== undefined) schedules[idx].label = label;
-  if (cronExpr !== undefined) schedules[idx].cron = cronExpr;
-  if (enabled !== undefined) schedules[idx].enabled = enabled;
-
-  saveSchedules(schedules);
-  startAll();
-  return schedules[idx];
+  if (cronExpr !== undefined && !cron.validate(cronExpr)) throw new Error(`Invalid cron expression: ${cronExpr}`);
+  if (label !== undefined) _schedules[idx].label = label;
+  if (cronExpr !== undefined) _schedules[idx].cron = cronExpr;
+  if (enabled !== undefined) _schedules[idx].enabled = enabled;
+  await saveSchedules();
+  await startAll();
+  return _schedules[idx];
 }
 
-function remove(id) {
-  const schedules = loadSchedules();
-  const idx = schedules.findIndex(s => s.id === id);
+async function remove(id) {
+  await loadSchedules();
+  const idx = _schedules.findIndex(s => s.id === id);
   if (idx === -1) throw new Error(`Schedule not found: ${id}`);
-
-  schedules.splice(idx, 1);
-  saveSchedules(schedules);
-
-  if (activeJobs[id]) {
-    activeJobs[id].stop();
-    delete activeJobs[id];
-  }
+  _schedules.splice(idx, 1);
+  await saveSchedules();
+  if (activeJobs[id]) { activeJobs[id].stop(); delete activeJobs[id]; }
 }
 
 module.exports = { startAll, stopAll, list, add, update, remove, setWorkflowRunner };
