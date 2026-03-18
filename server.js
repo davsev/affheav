@@ -47,6 +47,7 @@ app.use('/api/send', require('./routes/send'));
 app.use('/api/schedules', require('./routes/schedules'));
 app.use('/api/scrape', require('./routes/scrape'));
 app.use('/api/facebook', require('./routes/facebook'));
+app.use('/api/prompt', require('./routes/prompt'));
 
 // Fallback: serve index.html for any unmatched route
 app.get('*', (req, res) => {

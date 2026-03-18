@@ -330,6 +330,44 @@ function showLogTab() {
   document.getElementById('tab-logs').classList.add('active');
 }
 
+// ── Prompt Editor ─────────────────────────────────────────────────────────────
+async function loadPrompt() {
+  const data = await api('/api/prompt');
+  document.getElementById('prompt-editor').value = data.prompt;
+}
+
+document.getElementById('btn-save-prompt').addEventListener('click', async () => {
+  const prompt = document.getElementById('prompt-editor').value.trim();
+  const res = document.getElementById('prompt-save-result');
+  if (!prompt) return;
+  try {
+    await api('/api/prompt', { method: 'POST', body: JSON.stringify({ prompt }) });
+    res.style.color = '#4ade80';
+    res.textContent = '✓ הפרומפט נשמר בהצלחה';
+  } catch (e) {
+    res.style.color = '#f87171';
+    res.textContent = '✗ שגיאה בשמירה';
+  }
+  setTimeout(() => { res.textContent = ''; }, 3000);
+});
+
+document.getElementById('btn-reset-prompt').addEventListener('click', async () => {
+  const res = document.getElementById('prompt-save-result');
+  try {
+    const data = await api('/api/prompt/reset', { method: 'POST' });
+    document.getElementById('prompt-editor').value = data.prompt;
+    res.style.color = '#4ade80';
+    res.textContent = '✓ הפרומפט אופס לברירת המחדל';
+  } catch (e) {
+    res.style.color = '#f87171';
+    res.textContent = '✗ שגיאה באיפוס';
+  }
+  setTimeout(() => { res.textContent = ''; }, 3000);
+});
+
+// Load prompt when settings tab is opened
+document.querySelector('[data-tab="settings"]').addEventListener('click', loadPrompt);
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadProducts();
 loadSchedules();

@@ -46,9 +46,13 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
   // Step 2: Generate message (or reuse saved Hebrew message)
   const isHebrew = /[\u05D0-\u05EA]/.test(product.Text);
   let message;
-  if (isHebrew) {
+  if (isHebrew && product.Text.includes(product.Link)) {
     message = product.Text;
     log(`Using saved Hebrew message (${message.length} chars)`);
+  } else if (isHebrew) {
+    // Saved Hebrew text exists but link is missing — append it
+    message = `${product.Text}\n\nקישור למוצר:\n${product.Link}\n\nקישור להצטרפות לקבוצה:\n${product.join_link}`;
+    log(`Using saved Hebrew message + appended links (${message.length} chars)`);
   } else {
     log('Generating Hebrew marketing message via OpenAI...');
     message = await openai.generateMessage({

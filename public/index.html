@@ -250,6 +250,7 @@
     <button class="tab-btn" data-tab="scraper">🔍 סריקת AliExpress</button>
     <button class="tab-btn" data-tab="add-product">➕ הוסף מוצר</button>
     <button class="tab-btn" data-tab="logs">📋 לוג</button>
+    <button class="tab-btn" data-tab="settings">⚙️ הגדרות</button>
   </div>
 
   <!-- Products Tab -->
@@ -387,6 +388,27 @@
       <p style="font-size:13px;color:#64748b;margin-bottom:12px;">טוקן הגישה לפייסבוק תקף ל-60 יום. לחץ כאן כדי להחליף אותו לטוקן חדש.</p>
       <button class="btn btn-neutral" id="btn-refresh-fb">🔄 רענן טוקן FB</button>
       <div id="fb-token-result" style="margin-top:12px;font-size:12px;font-family:monospace;word-break:break-all;color:#94a3b8;"></div>
+    </div>
+  </div>
+
+  <!-- Settings Tab -->
+  <div class="tab-panel" id="tab-settings">
+    <div class="card">
+      <h2>פרומפט OpenAI</h2>
+      <p style="font-size:13px;color:#64748b;margin-bottom:12px;">
+        השתמש ב-<code>{{Text}}</code>, <code>{{Link}}</code>, <code>{{join_link}}</code> ו-<code>{{dayInstruction}}</code> כמשתנים.
+        שינויים נשמרים בזיכרון ומתאפסים עם הפעלה מחדש של השרת.
+      </p>
+      <textarea id="prompt-editor" dir="rtl" style="
+        width:100%;height:420px;background:#0f172a;border:1px solid #334155;
+        border-radius:6px;padding:12px;color:#e2e8f0;font-size:13px;
+        font-family:'SF Mono',monospace;line-height:1.6;resize:vertical;
+      "></textarea>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn btn-success" id="btn-save-prompt">💾 שמור</button>
+        <button class="btn btn-neutral" id="btn-reset-prompt">↩️ אפס לברירת מחדל</button>
+      </div>
+      <div id="prompt-save-result" style="margin-top:8px;font-size:13px;"></div>
     </div>
   </div>
 
