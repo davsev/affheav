@@ -341,7 +341,7 @@ document.getElementById('btn-save-prompt').addEventListener('click', async () =>
   const res = document.getElementById('prompt-save-result');
   if (!prompt) return;
   try {
-    await api('/api/prompt', { method: 'POST', body: JSON.stringify({ prompt }) });
+    await api('/api/prompt', { method: 'POST', body: { prompt } });
     res.style.color = '#4ade80';
     res.textContent = '✓ הפרומפט נשמר בהצלחה';
   } catch (e) {
