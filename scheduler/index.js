@@ -21,6 +21,8 @@ function loadSchedules() {
 }
 
 function saveSchedules(schedules) {
+  const dir = path.dirname(SCHEDULES_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(schedules, null, 2));
 }
 
