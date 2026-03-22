@@ -330,6 +330,40 @@ function showLogTab() {
   document.getElementById('tab-logs').classList.add('active');
 }
 
+// ── Fishing Product Search ────────────────────────────────────────────────────
+document.getElementById('btn-fishing-search').addEventListener('click', async () => {
+  const limit     = parseInt(document.getElementById('fishing-limit').value) || 10;
+  const wa_group  = document.getElementById('fishing-wa-group').value.trim();
+  const join_link = document.getElementById('fishing-join-link').value.trim();
+  const status    = document.getElementById('fishing-search-status');
+  const result    = document.getElementById('fishing-search-result');
+  const btn       = document.getElementById('btn-fishing-search');
+
+  btn.disabled = true;
+  status.textContent = 'מחפש מוצרים... (עשוי לקחת 1-2 דקות)';
+  result.style.display = 'none';
+
+  try {
+    const data = await api('/api/scrape/fishing-search', {
+      method: 'POST',
+      body: JSON.stringify({ limit, wa_group, join_link }),
+    });
+
+    status.textContent = '';
+    result.style.display = 'block';
+    result.style.color = '#4ade80';
+    result.innerHTML = `✓ נוספו <strong>${data.saved}</strong> מוצרים לגוגל שיטס${data.skipped ? ` (${data.skipped} דולגו)` : ''}`;
+    loadProducts();
+  } catch (err) {
+    status.textContent = '';
+    result.style.display = 'block';
+    result.style.color = '#f87171';
+    result.textContent = `✗ שגיאה: ${err.message || err}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ── Prompt Editor ─────────────────────────────────────────────────────────────
 async function loadPrompt() {
   const data = await api('/api/prompt');

@@ -314,8 +314,35 @@
 
   <!-- Scraper Tab -->
   <div class="tab-panel" id="tab-scraper">
+
     <div class="card">
-      <h2>סריקת AliExpress 🔍</h2>
+      <h2>🎣 חיפוש מוצרי דיג אוטומטי</h2>
+      <p style="font-size:13px;color:#64748b;margin-bottom:16px;">
+        מחפש מוצרי דיג פופולריים באליאקספרס, מפיק קישורי אפיליאציה דרך הפורטל (Tracking ID: TechSalebuy) ומוסיף לגוגל שיטס.
+      </p>
+      <div class="form-grid" style="max-width:600px;">
+        <div class="form-group">
+          <label>כמות מוצרים</label>
+          <input id="fishing-limit" type="number" value="10" min="1" max="30" />
+        </div>
+        <div class="form-group">
+          <label>שם קבוצת WA</label>
+          <input id="fishing-wa-group" placeholder="fishing" />
+        </div>
+        <div class="form-group form-full">
+          <label>קישור הצטרפות לקבוצה</label>
+          <input id="fishing-join-link" placeholder="https://chat.whatsapp.com/..." dir="ltr" />
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-primary" id="btn-fishing-search">🔍 חפש והוסף לגוגל שיטס</button>
+        <span id="fishing-search-status" style="font-size:13px;color:#94a3b8;"></span>
+      </div>
+      <div id="fishing-search-result" style="margin-top:12px;display:none;font-size:13px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>סריקת מוצר בודד 🔍</h2>
       <p style="font-size:13px;color:#64748b;margin-bottom:16px;">הדבק קישור מוצר מ-AliExpress — המערכת תחלץ את שם המוצר, תמונה וקישור שותף</p>
       <div class="form-grid">
         <div class="form-group form-full">
@@ -340,6 +367,7 @@
       </div>
       <div id="scrape-result" style="margin-top:16px;display:none;" class="card" style="background:#0f172a;"></div>
     </div>
+
   </div>
 
   <!-- Add Product Tab -->
