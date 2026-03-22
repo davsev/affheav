@@ -346,7 +346,7 @@ document.getElementById('btn-fishing-search').addEventListener('click', async ()
   try {
     const data = await api('/api/scrape/fishing-search', {
       method: 'POST',
-      body: JSON.stringify({ limit, wa_group, join_link }),
+      body: { limit, wa_group, join_link },
     });
 
     status.textContent = '';
