@@ -3,452 +3,1067 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Affiliate Heaven 🎣</title>
+  <title>Affiliate Heaven</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Noto+Sans+Hebrew:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    /* ── Reset & Variables ───────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
-      min-height: 100vh;
+    :root {
+      --teal:       #00FFD4;
+      --teal-mid:   rgba(0, 255, 212, 0.18);
+      --teal-dim:   rgba(0, 255, 212, 0.07);
+      --teal-glow:  0 0 24px rgba(0, 255, 212, 0.25);
+      --amber:      #FFA040;
+      --coral:      #FF4466;
+      --blue:       #38BDF8;
+      --bg:         #020C18;
+      --bg-nav:     #010810;
+      --card:       rgba(0, 255, 212, 0.04);
+      --card-hover: rgba(0, 255, 212, 0.08);
+      --border:     rgba(0, 255, 212, 0.12);
+      --border-bright: rgba(0, 255, 212, 0.35);
+      --text:       #D4EDE8;
+      --text-muted: #4A7A8A;
+      --text-dim:   #1E4455;
+      --font-display: 'Chakra Petch', sans-serif;
+      --font-body:    'Noto Sans Hebrew', sans-serif;
+      --font-mono:    'JetBrains Mono', monospace;
+      --sidebar-w:    240px;
+      --radius:       10px;
     }
 
-    header {
-      background: #1e293b;
-      padding: 16px 24px;
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+    }
+
+    /* ── Animated deep-ocean background ─────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 20% 30%, rgba(0,180,140,0.07) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 60% at 80% 70%, rgba(0,100,200,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 80% 40% at 50% 100%, rgba(0,60,100,0.08) 0%, transparent 60%);
+      animation: caustic 18s ease-in-out infinite alternate;
+      pointer-events: none;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background-image:
+        linear-gradient(rgba(0,255,212,0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,212,0.015) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+    }
+
+    @keyframes caustic {
+      0%   { opacity: 1; filter: hue-rotate(0deg); }
+      50%  { opacity: 0.7; filter: hue-rotate(15deg); }
+      100% { opacity: 1; filter: hue-rotate(-10deg); }
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────────────────────── */
+    .sidebar {
+      position: relative;
+      z-index: 10;
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      background: var(--bg-nav);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .sidebar::before {
+      content: '';
+      position: absolute;
+      top: 0; bottom: 0; left: 0;
+      width: 1px;
+      background: linear-gradient(180deg, transparent 0%, var(--teal) 30%, rgba(0,255,212,0.3) 70%, transparent 100%);
+      opacity: 0.4;
+    }
+
+    /* Brand */
+    .brand {
+      padding: 28px 22px 20px;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon-wrap {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .brand-icon-wrap::before,
+    .brand-icon-wrap::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid var(--teal);
+      animation: sonar 3s ease-out infinite;
+    }
+
+    .brand-icon-wrap::before { width: 100%; height: 100%; animation-delay: 0s; }
+    .brand-icon-wrap::after  { width: 140%; height: 140%; left: -20%; top: -20%; animation-delay: 1s; }
+
+    @keyframes sonar {
+      0%   { opacity: 0.8; transform: scale(0.8); }
+      100% { opacity: 0;   transform: scale(1.6); }
+    }
+
+    .brand-fish { font-size: 20px; position: relative; z-index: 1; }
+
+    .brand-text { line-height: 1.1; }
+    .brand-name {
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--teal);
+    }
+    .brand-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    /* Nav */
+    .nav { flex: 1; padding: 16px 0; overflow-y: auto; }
+
+    .nav-section-label {
+      font-family: var(--font-display);
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      color: var(--text-dim);
+      padding: 12px 22px 6px;
+      text-transform: uppercase;
+    }
+
+    .tab-btn {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      width: 100%;
+      padding: 11px 22px;
+      background: none;
+      border: none;
+      border-left: 2px solid transparent;
+      color: var(--text-muted);
+      font-family: var(--font-body);
+      font-size: 13.5px;
+      font-weight: 400;
+      cursor: pointer;
+      text-align: right;
+      transition: all 0.2s;
+      position: relative;
+    }
+
+    .tab-btn .nav-icon {
+      font-size: 15px;
+      width: 20px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .tab-btn:hover {
+      color: var(--text);
+      background: var(--teal-dim);
+      border-left-color: var(--border-bright);
+    }
+
+    .tab-btn.active {
+      color: var(--teal);
+      background: linear-gradient(90deg, var(--teal-mid) 0%, transparent 100%);
+      border-left-color: var(--teal);
+      font-weight: 500;
+    }
+
+    .tab-btn.active .nav-icon { filter: drop-shadow(0 0 6px var(--teal)); }
+
+    /* Sidebar footer */
+    .sidebar-footer {
+      padding: 16px 22px;
+      border-top: 1px solid var(--border);
+    }
+
+    .time-display {
+      font-family: var(--font-mono);
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--teal);
+      letter-spacing: 0.05em;
+      text-shadow: 0 0 12px rgba(0,255,212,0.5);
+    }
+
+    .time-label {
+      font-size: 9px;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    /* ── Main Content ────────────────────────────────────────────────────── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+      z-index: 5;
+    }
+
+    /* Top bar */
+    .topbar {
+      padding: 14px 28px;
+      border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-bottom: 1px solid #334155;
+      background: rgba(2, 12, 24, 0.8);
+      backdrop-filter: blur(12px);
+      flex-shrink: 0;
     }
 
-    header h1 { font-size: 22px; font-weight: 700; color: #38bdf8; }
-    header span { font-size: 13px; color: #94a3b8; }
-
-    .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
-
-    /* Tabs */
-    .tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 1px solid #334155; }
-    .tab-btn {
-      padding: 10px 20px;
-      background: none;
-      border: none;
-      color: #94a3b8;
-      cursor: pointer;
-      font-size: 14px;
-      border-bottom: 2px solid transparent;
-      margin-bottom: -1px;
-      transition: all 0.15s;
+    .topbar-title {
+      font-family: var(--font-display);
+      font-size: 12px;
+      letter-spacing: 0.2em;
+      color: var(--text-muted);
+      text-transform: uppercase;
     }
-    .tab-btn.active { color: #38bdf8; border-bottom-color: #38bdf8; }
-    .tab-btn:hover { color: #e2e8f0; }
 
-    .tab-panel { display: none; }
+    .topbar-title span {
+      color: var(--teal);
+    }
+
+    /* Execute action */
+    .execute-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .execute-label {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Content area */
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .content::-webkit-scrollbar { width: 4px; }
+    .content::-webkit-scrollbar-track { background: transparent; }
+    .content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* Tab panels */
+    .tab-panel { display: none; animation: fadeSlide 0.25s ease; }
     .tab-panel.active { display: block; }
 
-    /* Cards */
-    .card {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 10px;
-      padding: 20px;
-      margin-bottom: 20px;
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateX(-10px); }
+      to   { opacity: 1; transform: translateX(0); }
     }
 
-    .card h2 { font-size: 15px; font-weight: 600; color: #94a3b8; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.05em; }
+    /* ── Cards ───────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      margin-bottom: 18px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
 
-    /* Buttons */
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; right: 0;
+      width: 60%; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--teal));
+      opacity: 0.3;
+    }
+
+    .card:hover {
+      border-color: rgba(0,255,212,0.22);
+      box-shadow: var(--teal-glow);
+    }
+
+    .card-title {
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Buttons ─────────────────────────────────────────────────────────── */
     .btn {
-      padding: 8px 16px;
-      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 18px;
+      border: 1px solid transparent;
       border-radius: 6px;
       cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
-      transition: opacity 0.15s;
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      transition: all 0.18s;
+      white-space: nowrap;
     }
-    .btn:hover { opacity: 0.85; }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn-primary { background: #38bdf8; color: #0f172a; }
-    .btn-success { background: #22c55e; color: #fff; }
-    .btn-danger  { background: #ef4444; color: #fff; }
-    .btn-neutral { background: #334155; color: #e2e8f0; }
-    .btn-sm { padding: 5px 10px; font-size: 12px; }
 
-    /* Products table */
-    .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .btn-primary {
+      background: var(--teal);
+      border-color: var(--teal);
+      color: #010C18;
+    }
+    .btn-primary:hover:not(:disabled) {
+      box-shadow: 0 0 20px rgba(0,255,212,0.4);
+      background: #20FFDD;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border-color: var(--border-bright);
+      color: var(--teal);
+    }
+    .btn-outline:hover:not(:disabled) {
+      background: var(--teal-dim);
+      border-color: var(--teal);
+      box-shadow: 0 0 12px rgba(0,255,212,0.15);
+    }
+
+    .btn-ghost {
+      background: rgba(255,255,255,0.04);
+      border-color: var(--border);
+      color: var(--text-muted);
+    }
+    .btn-ghost:hover:not(:disabled) { background: rgba(255,255,255,0.07); color: var(--text); }
+
+    .btn-danger {
+      background: transparent;
+      border-color: rgba(255,68,102,0.3);
+      color: var(--coral);
+    }
+    .btn-danger:hover:not(:disabled) { background: rgba(255,68,102,0.1); border-color: var(--coral); }
+
+    .btn-success {
+      background: rgba(0,255,212,0.12);
+      border-color: var(--teal);
+      color: var(--teal);
+    }
+    .btn-success:hover:not(:disabled) { background: rgba(0,255,212,0.2); box-shadow: 0 0 12px rgba(0,255,212,0.2); }
+
+    .btn-sm { padding: 5px 12px; font-size: 11px; }
+
+    /* Execute pulse button */
+    .btn-execute {
+      background: var(--teal);
+      border: none;
+      color: #010C18;
+      padding: 10px 22px;
+      border-radius: 6px;
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.18s;
+    }
+
+    .btn-execute::before {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 10px;
+      border: 1px solid var(--teal);
+      animation: executePulse 2.5s ease-in-out infinite;
+    }
+
+    .btn-execute:hover { box-shadow: 0 0 24px rgba(0,255,212,0.5); }
+    .btn-execute:disabled { opacity: 0.4; }
+    .btn-execute:disabled::before { animation: none; }
+
+    @keyframes executePulse {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50%       { opacity: 0;   transform: scale(1.15); }
+    }
+
+    /* ── Table ───────────────────────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; margin: 0 -4px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
     thead th {
       text-align: right;
       padding: 10px 12px;
-      background: #0f172a;
-      color: #64748b;
+      font-family: var(--font-display);
+      font-size: 10px;
       font-weight: 600;
-      border-bottom: 1px solid #334155;
+      letter-spacing: 0.15em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
     }
-    tbody tr { border-bottom: 1px solid #1e293b; transition: background 0.1s; }
-    tbody tr:hover { background: #1e293b; }
-    td { padding: 10px 12px; vertical-align: middle; }
 
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 600;
+    tbody tr {
+      border-bottom: 1px solid rgba(0,255,212,0.04);
+      transition: background 0.15s;
     }
-    .badge-sent  { background: #14532d; color: #4ade80; }
-    .badge-unsent{ background: #431407; color: #fb923c; }
-    .badge-fb    { background: #1e3a5f; color: #60a5fa; }
+
+    tbody tr:hover { background: var(--teal-dim); }
+
+    td {
+      padding: 11px 12px;
+      vertical-align: middle;
+      color: var(--text);
+    }
 
     .img-thumb {
-      width: 48px;
-      height: 48px;
+      width: 44px;
+      height: 44px;
       object-fit: cover;
       border-radius: 6px;
-      border: 1px solid #334155;
+      border: 1px solid var(--border);
+      display: block;
     }
 
-    /* Forms */
-    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .form-group { display: flex; flex-direction: column; gap: 4px; }
-    .form-group label { font-size: 12px; color: #94a3b8; }
-    .form-group input, .form-group select {
-      background: #0f172a;
-      border: 1px solid #334155;
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+    }
+
+    .badge-sent   { background: rgba(0,255,212,0.1); border: 1px solid rgba(0,255,212,0.25); color: var(--teal); }
+    .badge-unsent { background: rgba(255,160,64,0.1); border: 1px solid rgba(255,160,64,0.25); color: var(--amber); }
+    .badge-fb     { background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.25); color: var(--blue); }
+
+    /* Filter tabs */
+    .filter-group {
+      display: flex;
+      gap: 4px;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 3px;
+    }
+
+    .filter-btn {
+      padding: 5px 14px;
+      border: none;
       border-radius: 6px;
-      padding: 8px 12px;
-      color: #e2e8f0;
-      font-size: 13px;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      transition: all 0.15s;
     }
-    .form-group input:focus, .form-group select:focus {
-      outline: none;
-      border-color: #38bdf8;
+
+    .filter-btn.active {
+      background: var(--teal);
+      color: #010C18;
     }
+
+    .filter-btn:not(.active):hover { color: var(--text); background: var(--teal-dim); }
+
+    /* Summary chip */
+    .summary-chip {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+    }
+
+    /* ── Forms ───────────────────────────────────────────────────────────── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .form-full { grid-column: 1 / -1; }
 
-    /* Schedule list */
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+
+    .form-label {
+      font-family: var(--font-display);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .form-input {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 9px 13px;
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 13px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(0,255,212,0.08);
+    }
+
+    .form-input::placeholder { color: var(--text-dim); }
+
+    textarea.form-input {
+      resize: vertical;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.65;
+    }
+
+    /* ── Schedules ───────────────────────────────────────────────────────── */
     .schedule-item {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 0;
-      border-bottom: 1px solid #334155;
+      padding: 13px 0;
+      border-bottom: 1px solid var(--border);
     }
-    .schedule-item:last-child { border-bottom: none; }
-    .schedule-label { font-size: 14px; font-weight: 500; }
-    .schedule-cron { font-size: 12px; color: #64748b; font-family: monospace; }
-    .schedule-actions { display: flex; gap: 6px; }
 
-    /* Toggle switch */
+    .schedule-item:last-child { border-bottom: none; }
+
+    .schedule-label { font-size: 14px; font-weight: 500; }
+
+    .schedule-cron {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .schedule-actions { display: flex; align-items: center; gap: 8px; }
+
+    /* Toggle */
     .toggle { position: relative; display: inline-block; width: 40px; height: 22px; }
     .toggle input { opacity: 0; width: 0; height: 0; }
+
     .slider {
       position: absolute; cursor: pointer; inset: 0;
-      background: #334155; border-radius: 22px; transition: 0.2s;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      transition: 0.2s;
     }
+
     .slider:before {
       content: '';
       position: absolute;
-      width: 16px; height: 16px;
+      width: 14px; height: 14px;
       left: 3px; bottom: 3px;
-      background: #fff;
+      background: var(--text-muted);
       border-radius: 50%;
       transition: 0.2s;
     }
-    input:checked + .slider { background: #38bdf8; }
-    input:checked + .slider:before { transform: translateX(18px); }
 
-    /* Log panel */
+    input:checked + .slider { background: rgba(0,255,212,0.2); border-color: var(--teal); }
+    input:checked + .slider:before { transform: translateX(18px); background: var(--teal); box-shadow: 0 0 8px rgba(0,255,212,0.6); }
+
+    /* ── Log panel ───────────────────────────────────────────────────────── */
     #log-panel {
-      background: #020617;
-      border: 1px solid #334155;
-      border-radius: 10px;
+      background: #010810;
+      border: 1px solid var(--border);
+      border-radius: 8px;
       padding: 16px;
-      height: 320px;
+      height: 340px;
       overflow-y: auto;
-      font-family: 'SF Mono', 'Monaco', monospace;
-      font-size: 12px;
-      line-height: 1.6;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      line-height: 1.7;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
     }
-    .log-entry { display: flex; gap: 10px; margin-bottom: 2px; }
-    .log-ts    { color: #475569; flex-shrink: 0; }
-    .log-info  { color: #94a3b8; }
-    .log-warn  { color: #fbbf24; }
-    .log-error { color: #f87171; }
 
-    /* Execute banner */
-    #execute-banner {
+    .log-entry { display: flex; gap: 12px; }
+    .log-ts    { color: var(--text-dim); flex-shrink: 0; }
+    .log-info  { color: var(--text-muted); }
+    .log-warn  { color: var(--amber); }
+    .log-error { color: var(--coral); }
+
+    /* Status dot */
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--teal);
+      display: inline-block;
+      margin-right: 6px;
+      box-shadow: 0 0 8px var(--teal);
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    .status-dot.idle { background: var(--text-dim); box-shadow: none; animation: none; }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* ── Modal ───────────────────────────────────────────────────────────── */
+    #send-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(1,8,16,0.85);
+      backdrop-filter: blur(8px);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-box {
+      background: #04101E;
+      border: 1px solid var(--border-bright);
+      border-radius: 14px;
+      padding: 32px;
+      min-width: 300px;
+      box-shadow: var(--teal-glow), 0 0 80px rgba(0,0,0,0.6);
+      animation: modalIn 0.2s ease;
+    }
+
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.95) translateY(-10px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-title {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--teal);
+      margin-bottom: 24px;
+      text-align: center;
+      letter-spacing: 0.08em;
+    }
+
+    .modal-options { display: flex; flex-direction: column; gap: 14px; margin-bottom: 28px; }
+
+    .modal-option {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       gap: 12px;
-      padding: 14px 20px;
-      background: linear-gradient(135deg, #1e3a5f, #1e293b);
-      border: 1px solid #334155;
-      border-radius: 10px;
-      margin-bottom: 20px;
+      cursor: pointer;
+      font-size: 15px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      transition: all 0.15s;
     }
-    #execute-banner p { font-size: 14px; color: #94a3b8; }
-    #execute-banner strong { color: #e2e8f0; }
 
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; display: inline-block; margin-left: 6px; }
-    .status-dot.idle { background: #475569; }
+    .modal-option:hover { background: var(--teal-dim); border-color: var(--border-bright); }
 
-    .empty-state { text-align: center; padding: 40px; color: #475569; font-size: 14px; }
+    .modal-option input { width: 17px; height: 17px; accent-color: var(--teal); cursor: pointer; }
 
-    /* Responsive */
-    @media (max-width: 640px) {
+    .modal-actions { display: flex; gap: 10px; justify-content: center; }
+
+    /* ── Empty state ─────────────────────────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 50px 20px;
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+
+    /* ── Token info grid ─────────────────────────────────────────────────── */
+    .token-grid {
+      display: grid;
+      grid-template-columns: 130px 1fr;
+      gap: 8px 16px;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .token-key {
+      color: var(--text-muted);
+      font-family: var(--font-display);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      align-self: center;
+    }
+
+    /* ── Divider ─────────────────────────────────────────────────────────── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 22px 0;
+    }
+
+    /* ── Responsive ──────────────────────────────────────────────────────── */
+    @media (max-width: 680px) {
       .form-grid { grid-template-columns: 1fr; }
+      :root { --sidebar-w: 64px; }
+      .brand-text, .nav-label, .nav-section-label, .time-label { display: none; }
+      .tab-btn { justify-content: center; padding: 12px; }
     }
   </style>
 </head>
 <body>
 
-<!-- Platform selector modal -->
-<div id="send-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;align-items:center;justify-content:center;">
-  <div style="background:#1e293b;border:1px solid #334155;border-radius:12px;padding:28px;min-width:280px;text-align:center;">
-    <h3 style="margin:0 0 18px;font-size:16px;color:#e2e8f0;">לאן לשלוח?</h3>
-    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:22px;text-align:right;">
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:15px;">
-        <input type="checkbox" id="modal-chk-wa" checked style="width:18px;height:18px;cursor:pointer;" />
+<!-- ── Platform selector modal ──────────────────────────────────────────── -->
+<div id="send-modal">
+  <div class="modal-box">
+    <div class="modal-title">לאן לשלוח?</div>
+    <div class="modal-options">
+      <label class="modal-option">
+        <input type="checkbox" id="modal-chk-wa" checked />
         💬 WhatsApp
       </label>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:15px;">
-        <input type="checkbox" id="modal-chk-fb" checked style="width:18px;height:18px;cursor:pointer;" />
+      <label class="modal-option">
+        <input type="checkbox" id="modal-chk-fb" checked />
         📘 Facebook
       </label>
     </div>
-    <div style="display:flex;gap:10px;justify-content:center;">
+    <div class="modal-actions">
       <button class="btn btn-primary" id="modal-confirm">▶ שלח</button>
-      <button class="btn btn-neutral" id="modal-cancel">ביטול</button>
+      <button class="btn btn-ghost" id="modal-cancel">ביטול</button>
     </div>
   </div>
 </div>
 
-<header>
-  <h1>🎣 Affiliate Heaven</h1>
-  <span id="server-time"></span>
-</header>
-
-<div class="container">
-
-  <!-- Execute Now Banner -->
-  <div id="execute-banner">
-    <div>
-      <strong>הרצה ידנית</strong>
-      <p>הרץ את ה-Workflow עכשיו על המוצר הבא שלא נשלח</p>
+<!-- ── Shell ─────────────────────────────────────────────────────────────── -->
+<nav class="sidebar">
+  <div class="brand">
+    <div class="brand-logo">
+      <div class="brand-icon-wrap">
+        <span class="brand-fish">🎣</span>
+      </div>
+      <div class="brand-text">
+        <div class="brand-name">AFFILIATE</div>
+        <div class="brand-sub">Heaven System</div>
+      </div>
     </div>
-    <button class="btn btn-primary" id="btn-execute">▶ הרץ עכשיו</button>
   </div>
 
-  <!-- Tabs -->
-  <div class="tabs">
-    <button class="tab-btn active" data-tab="products">📦 מוצרים</button>
-    <button class="tab-btn" data-tab="schedules">📅 לוחות זמנים</button>
-    <button class="tab-btn" data-tab="scraper">🔍 סריקת AliExpress</button>
-    <button class="tab-btn" data-tab="add-product">➕ הוסף מוצר</button>
-    <button class="tab-btn" data-tab="logs">📋 לוג</button>
-    <button class="tab-btn" data-tab="settings">⚙️ הגדרות</button>
+  <div class="nav">
+    <div class="nav-section-label">ניווט</div>
+    <button class="tab-btn active" data-tab="products">
+      <span class="nav-icon">📦</span>
+      <span class="nav-label">מוצרים</span>
+    </button>
+    <button class="tab-btn" data-tab="schedules">
+      <span class="nav-icon">📅</span>
+      <span class="nav-label">לוחות זמנים</span>
+    </button>
+    <button class="tab-btn" data-tab="scraper">
+      <span class="nav-icon">🔍</span>
+      <span class="nav-label">סריקת AliExpress</span>
+    </button>
+    <button class="tab-btn" data-tab="add-product">
+      <span class="nav-icon">➕</span>
+      <span class="nav-label">הוסף מוצר</span>
+    </button>
+    <div class="nav-section-label" style="margin-top:8px;">מערכת</div>
+    <button class="tab-btn" data-tab="logs">
+      <span class="nav-icon">📋</span>
+      <span class="nav-label">לוג פעילות</span>
+    </button>
+    <button class="tab-btn" data-tab="settings">
+      <span class="nav-icon">⚙️</span>
+      <span class="nav-label">הגדרות</span>
+    </button>
   </div>
 
-  <!-- Products Tab -->
-  <div class="tab-panel active" id="tab-products">
-    <div class="card">
-      <h2>מוצרים בגיליון</h2>
-      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
-        <button class="btn btn-neutral btn-sm" id="btn-refresh-products">🔄 רענן</button>
-        <div style="display:flex;gap:4px;">
-          <button class="btn btn-sm btn-primary" id="filter-unsent" onclick="setFilter('unsent')">טרם נשלחו</button>
-          <button class="btn btn-sm btn-neutral" id="filter-sent" onclick="setFilter('sent')">נשלחו</button>
-          <button class="btn btn-sm btn-neutral" id="filter-all" onclick="setFilter('all')">הכל</button>
+  <div class="sidebar-footer">
+    <div class="time-display" id="server-time">00:00:00</div>
+    <div class="time-label">שעת שרת</div>
+  </div>
+</nav>
+
+<div class="main">
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-title">Affiliate Heaven / <span id="topbar-section">מוצרים</span></div>
+    <div class="execute-row">
+      <span class="execute-label">הרצה ידנית:</span>
+      <button class="btn-execute" id="btn-execute">▶ הרץ עכשיו</button>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+
+    <!-- ── Products Tab ─────────────────────────────────────────────── -->
+    <div class="tab-panel active" id="tab-products">
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+          <div class="card-title" style="margin:0;">מוצרים בגיליון</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span class="summary-chip" id="products-summary"></span>
+            <div class="filter-group">
+              <button class="filter-btn active" id="filter-unsent" onclick="setFilter('unsent')">טרם נשלחו</button>
+              <button class="filter-btn" id="filter-sent" onclick="setFilter('sent')">נשלחו</button>
+              <button class="filter-btn" id="filter-all" onclick="setFilter('all')">הכל</button>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="btn-refresh-products">🔄 רענן</button>
+          </div>
         </div>
-        <span id="products-summary" style="font-size:12px;color:#64748b;line-height:28px;"></span>
-      </div>
-      <div class="table-wrap">
-        <table id="products-table">
-          <thead>
-            <tr>
-              <th>תמונה</th>
-              <th>שם מוצר</th>
-              <th>קישור</th>
-              <th>קבוצת WA</th>
-              <th>נשלח</th>
-              <th>פייסבוק</th>
-              <th>פעולה</th>
-            </tr>
-          </thead>
-          <tbody id="products-body">
-            <tr><td colspan="7" class="empty-state">טוען...</td></tr>
-          </tbody>
-        </table>
+        <div class="table-wrap">
+          <table id="products-table">
+            <thead>
+              <tr>
+                <th>תמונה</th>
+                <th>שם מוצר</th>
+                <th>קישור</th>
+                <th>קבוצת WA</th>
+                <th>נשלח</th>
+                <th>פייסבוק</th>
+                <th>פעולה</th>
+              </tr>
+            </thead>
+            <tbody id="products-body">
+              <tr><td colspan="7" class="empty-state">טוען...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- Schedules Tab -->
-  <div class="tab-panel" id="tab-schedules">
-    <div class="card">
-      <h2>לוחות זמנים (Cron)</h2>
-      <div id="schedules-list"></div>
-      <div style="margin-top:20px;border-top:1px solid #334155;padding-top:20px;">
-        <h2 style="margin-bottom:12px;">הוסף לוח זמנים חדש</h2>
+    <!-- ── Schedules Tab ────────────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-schedules">
+      <div class="card">
+        <div class="card-title">לוחות זמנים פעילים</div>
+        <div id="schedules-list"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">הוסף לוח זמנים חדש</div>
         <div class="form-grid">
           <div class="form-group">
-            <label>שם</label>
-            <input id="sched-label" placeholder="למשל: שישי בצהריים" />
+            <label class="form-label">שם</label>
+            <input class="form-input" id="sched-label" placeholder="למשל: שישי בצהריים" />
           </div>
           <div class="form-group">
-            <label>Cron Expression</label>
-            <input id="sched-cron" placeholder="0 12 * * 5" dir="ltr" />
+            <label class="form-label">Cron Expression</label>
+            <input class="form-input" id="sched-cron" placeholder="0 12 * * 5" dir="ltr" />
           </div>
         </div>
-        <div style="margin-top:10px;font-size:11px;color:#64748b;">
-          דוגמאות: <code>0 11 * * *</code> = כל יום ב-11:00 | <code>0 17 * * *</code> = כל יום ב-17:00 | <code>0 11 * * 5</code> = כל שישי ב-11:00
+        <div style="margin-top:10px;font-size:11px;color:var(--text-dim);font-family:var(--font-mono);">
+          0 11 * * * = כל יום ב-11:00 &nbsp;|&nbsp; 0 17 * * * = כל יום ב-17:00 &nbsp;|&nbsp; 0 11 * * 5 = כל שישי ב-11:00
         </div>
-        <button class="btn btn-success" style="margin-top:12px;" id="btn-add-schedule">הוסף</button>
+        <button class="btn btn-success" style="margin-top:16px;" id="btn-add-schedule">+ הוסף לוח זמנים</button>
       </div>
     </div>
-  </div>
 
-  <!-- Scraper Tab -->
-  <div class="tab-panel" id="tab-scraper">
+    <!-- ── Scraper Tab ──────────────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-scraper">
+      <div class="card">
+        <div class="card-title">🎣 חיפוש מוצרי דיג אוטומטי</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px;line-height:1.6;">
+          מחפש מוצרי דיג פופולריים באליאקספרס, מפיק קישורי אפיליאציה דרך הפורטל
+          <span style="color:var(--teal);font-family:var(--font-mono);">TechSalebuy</span> ומוסיף לגוגל שיטס.
+        </p>
+        <div class="form-grid" style="max-width:600px;">
+          <div class="form-group">
+            <label class="form-label">כמות מוצרים</label>
+            <input class="form-input" id="fishing-limit" type="number" value="10" min="1" max="30" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">שם קבוצת WA</label>
+            <input class="form-input" id="fishing-wa-group" placeholder="fishing" />
+          </div>
+          <div class="form-group form-full">
+            <label class="form-label">קישור הצטרפות לקבוצה</label>
+            <input class="form-input" id="fishing-join-link" placeholder="https://chat.whatsapp.com/..." dir="ltr" />
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-primary" id="btn-fishing-search">🔍 חפש והוסף לגוגל שיטס</button>
+          <span id="fishing-search-status" style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);"></span>
+        </div>
+        <div id="fishing-search-result" style="margin-top:14px;display:none;font-size:13px;"></div>
+      </div>
 
-    <div class="card">
-      <h2>🎣 חיפוש מוצרי דיג אוטומטי</h2>
-      <p style="font-size:13px;color:#64748b;margin-bottom:16px;">
-        מחפש מוצרי דיג פופולריים באליאקספרס, מפיק קישורי אפיליאציה דרך הפורטל (Tracking ID: TechSalebuy) ומוסיף לגוגל שיטס.
-      </p>
-      <div class="form-grid" style="max-width:600px;">
-        <div class="form-group">
-          <label>כמות מוצרים</label>
-          <input id="fishing-limit" type="number" value="10" min="1" max="30" />
+      <div class="card">
+        <div class="card-title">סריקת מוצר בודד</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px;">הדבק קישור מוצר מ-AliExpress — המערכת תחלץ את שם המוצר, תמונה וקישור שותף</p>
+        <div class="form-grid">
+          <div class="form-group form-full">
+            <label class="form-label">קישור מוצר AliExpress</label>
+            <input class="form-input" id="scrape-url" placeholder="https://www.aliexpress.com/item/..." dir="ltr" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">קישור להצטרפות לקבוצה</label>
+            <input class="form-input" id="scrape-join" placeholder="https://chat.whatsapp.com/..." dir="ltr" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">שם קבוצת WA</label>
+            <input class="form-input" id="scrape-wa-group" placeholder="fishing" />
+          </div>
         </div>
-        <div class="form-group">
-          <label>שם קבוצת WA</label>
-          <input id="fishing-wa-group" placeholder="fishing" />
+        <div style="margin-top:14px;display:flex;gap:12px;align-items:center;">
+          <button class="btn btn-primary" id="btn-scrape">סרוק ושמור</button>
+          <label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;color:var(--text-muted);">
+            <input type="checkbox" id="scrape-auto-send" style="accent-color:var(--teal);" />
+            שלח מיד לאחר הסריקה
+          </label>
         </div>
-        <div class="form-group form-full">
-          <label>קישור הצטרפות לקבוצה</label>
-          <input id="fishing-join-link" placeholder="https://chat.whatsapp.com/..." dir="ltr" />
-        </div>
+        <div id="scrape-result" style="margin-top:16px;display:none;" class="card"></div>
       </div>
-      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
-        <button class="btn btn-primary" id="btn-fishing-search">🔍 חפש והוסף לגוגל שיטס</button>
-        <span id="fishing-search-status" style="font-size:13px;color:#94a3b8;"></span>
-      </div>
-      <div id="fishing-search-result" style="margin-top:12px;display:none;font-size:13px;"></div>
     </div>
 
-    <div class="card">
-      <h2>סריקת מוצר בודד 🔍</h2>
-      <p style="font-size:13px;color:#64748b;margin-bottom:16px;">הדבק קישור מוצר מ-AliExpress — המערכת תחלץ את שם המוצר, תמונה וקישור שותף</p>
-      <div class="form-grid">
-        <div class="form-group form-full">
-          <label>קישור מוצר AliExpress</label>
-          <input id="scrape-url" placeholder="https://www.aliexpress.com/item/..." dir="ltr" />
+    <!-- ── Add Product Tab ──────────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-add-product">
+      <div class="card">
+        <div class="card-title">הוסף מוצר ידנית</div>
+        <div class="form-grid">
+          <div class="form-group form-full">
+            <label class="form-label">שם מוצר *</label>
+            <input class="form-input" id="new-text" placeholder="Fishing Rod Ultralight 2.7m" />
+          </div>
+          <div class="form-group form-full">
+            <label class="form-label">קישור שותף *</label>
+            <input class="form-input" id="new-link" placeholder="https://s.click.aliexpress.com/..." dir="ltr" />
+          </div>
+          <div class="form-group form-full">
+            <label class="form-label">קישור תמונה</label>
+            <input class="form-input" id="new-image" placeholder="https://..." dir="ltr" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">קישור הצטרפות לקבוצה</label>
+            <input class="form-input" id="new-join" placeholder="https://chat.whatsapp.com/..." dir="ltr" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">שם קבוצת WA</label>
+            <input class="form-input" id="new-wa-group" placeholder="fishing" />
+          </div>
         </div>
-        <div class="form-group">
-          <label>קישור להצטרפות לקבוצה (join_link)</label>
-          <input id="scrape-join" placeholder="https://chat.whatsapp.com/..." dir="ltr" />
-        </div>
-        <div class="form-group">
-          <label>שם קבוצת WA (wa_group)</label>
-          <input id="scrape-wa-group" placeholder="fishing" />
-        </div>
+        <button class="btn btn-success" style="margin-top:20px;" id="btn-add-product">+ הוסף לגיליון</button>
+        <div id="add-product-result" style="margin-top:12px;font-size:13px;"></div>
       </div>
-      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
-        <button class="btn btn-primary" id="btn-scrape">סרוק ושמור</button>
-        <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer;">
-          <input type="checkbox" id="scrape-auto-send" />
-          שלח מיד לאחר הסריקה
-        </label>
+    </div>
+
+    <!-- ── Logs Tab ─────────────────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-logs">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div class="card-title" style="margin:0;">
+            <span class="status-dot" id="log-dot"></span>
+            לוג פעילות
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" id="btn-clear-log">נקה</button>
+          </div>
+        </div>
+        <div id="log-panel"></div>
       </div>
-      <div id="scrape-result" style="margin-top:16px;display:none;" class="card" style="background:#0f172a;"></div>
-    </div>
 
-  </div>
-
-  <!-- Add Product Tab -->
-  <div class="tab-panel" id="tab-add-product">
-    <div class="card">
-      <h2>הוסף מוצר ידנית</h2>
-      <div class="form-grid">
-        <div class="form-group form-full">
-          <label>שם מוצר (Text) *</label>
-          <input id="new-text" placeholder="Fishing Rod Ultralight 2.7m" />
-        </div>
-        <div class="form-group form-full">
-          <label>קישור שותף (Link) *</label>
-          <input id="new-link" placeholder="https://s.click.aliexpress.com/..." dir="ltr" />
-        </div>
-        <div class="form-group form-full">
-          <label>קישור תמונה (image)</label>
-          <input id="new-image" placeholder="https://..." dir="ltr" />
-        </div>
-        <div class="form-group">
-          <label>קישור הצטרפות לקבוצה (join_link)</label>
-          <input id="new-join" placeholder="https://chat.whatsapp.com/..." dir="ltr" />
-        </div>
-        <div class="form-group">
-          <label>שם קבוצת WA (wa_group)</label>
-          <input id="new-wa-group" placeholder="fishing" />
-        </div>
+      <div class="card">
+        <div class="card-title">רענון טוקן פייסבוק</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">
+          מחליף את הטוקן הנוכחי לטוקן חדש בתוקף של 60 יום.
+        </p>
+        <button class="btn btn-outline" id="btn-refresh-fb">🔄 רענן טוקן FB</button>
+        <div id="fb-token-result" style="margin-top:14px;font-size:12px;font-family:var(--font-mono);word-break:break-all;color:var(--text-muted);"></div>
       </div>
-      <button class="btn btn-success" style="margin-top:16px;" id="btn-add-product">הוסף לגיליון</button>
-      <div id="add-product-result" style="margin-top:10px;font-size:13px;"></div>
     </div>
-  </div>
 
-  <!-- Logs Tab -->
-  <div class="tab-panel" id="tab-logs">
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <h2 style="margin:0;">לוג פעילות <span class="status-dot" id="log-dot"></span></h2>
-        <button class="btn btn-neutral btn-sm" id="btn-clear-log">נקה</button>
+    <!-- ── Settings Tab ─────────────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-settings">
+      <div class="card">
+        <div class="card-title">טוקן פייסבוק</div>
+        <div id="fb-token-info" style="font-size:13px;color:var(--text-muted);">טוען...</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:14px;" id="btn-check-token">🔍 בדוק טוקן</button>
       </div>
-      <div id="log-panel"></div>
-    </div>
 
-    <div class="card">
-      <h2>רענון טוקן פייסבוק</h2>
-      <p style="font-size:13px;color:#64748b;margin-bottom:12px;">טוקן הגישה לפייסבוק תקף ל-60 יום. לחץ כאן כדי להחליף אותו לטוקן חדש.</p>
-      <button class="btn btn-neutral" id="btn-refresh-fb">🔄 רענן טוקן FB</button>
-      <div id="fb-token-result" style="margin-top:12px;font-size:12px;font-family:monospace;word-break:break-all;color:#94a3b8;"></div>
-    </div>
-  </div>
-
-  <!-- Settings Tab -->
-  <div class="tab-panel" id="tab-settings">
-
-    <div class="card">
-      <h2>טוקן פייסבוק</h2>
-      <div id="fb-token-info" style="font-size:13px;color:#94a3b8;">טוען...</div>
-      <button class="btn btn-neutral btn-sm" style="margin-top:12px;" id="btn-check-token">🔍 בדוק טוקן</button>
-    </div>
-
-    <div class="card">
-      <h2>פרומפט OpenAI</h2>
-      <p style="font-size:13px;color:#64748b;margin-bottom:12px;">
-        השתמש ב-<code>{{Text}}</code>, <code>{{Link}}</code>, <code>{{join_link}}</code> ו-<code>{{dayInstruction}}</code> כמשתנים.
-        שינויים נשמרים בזיכרון ומתאפסים עם הפעלה מחדש של השרת.
-      </p>
-      <textarea id="prompt-editor" dir="rtl" style="
-        width:100%;height:420px;background:#0f172a;border:1px solid #334155;
-        border-radius:6px;padding:12px;color:#e2e8f0;font-size:13px;
-        font-family:'SF Mono',monospace;line-height:1.6;resize:vertical;
-      "></textarea>
-      <div style="display:flex;gap:8px;margin-top:12px;">
-        <button class="btn btn-success" id="btn-save-prompt">💾 שמור</button>
-        <button class="btn btn-neutral" id="btn-reset-prompt">↩️ אפס לברירת מחדל</button>
+      <div class="card">
+        <div class="card-title">פרומפט OpenAI</div>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;font-family:var(--font-mono);line-height:1.6;">
+          משתנים: <span style="color:var(--teal);">{{Text}}</span> &nbsp;
+          <span style="color:var(--teal);">{{Link}}</span> &nbsp;
+          <span style="color:var(--teal);">{{join_link}}</span> &nbsp;
+          <span style="color:var(--teal);">{{dayInstruction}}</span>
+        </p>
+        <textarea class="form-input" id="prompt-editor" style="height:400px;" dir="rtl"></textarea>
+        <div style="display:flex;gap:10px;margin-top:14px;">
+          <button class="btn btn-success" id="btn-save-prompt">💾 שמור</button>
+          <button class="btn btn-ghost" id="btn-reset-prompt">↩ אפס לברירת מחדל</button>
+        </div>
+        <div id="prompt-save-result" style="margin-top:10px;font-size:13px;"></div>
       </div>
-      <div id="prompt-save-result" style="margin-top:8px;font-size:13px;"></div>
     </div>
-  </div>
 
-</div>
+  </div><!-- /content -->
+</div><!-- /main -->
 
+<script>
+  // Update topbar section name on tab switch
+  const tabNames = {
+    products: 'מוצרים', schedules: 'לוחות זמנים', scraper: 'סריקת AliExpress',
+    'add-product': 'הוסף מוצר', logs: 'לוג פעילות', settings: 'הגדרות'
+  };
+</script>
 <script src="app.js"></script>
 </body>
 </html>

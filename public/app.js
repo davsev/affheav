@@ -5,6 +5,9 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    // Update topbar section name
+    const el = document.getElementById('topbar-section');
+    if (el && typeof tabNames !== 'undefined') el.textContent = tabNames[btn.dataset.tab] || '';
   });
 });
 
@@ -46,7 +49,9 @@ window.setFilter = (f) => {
   _currentFilter = f;
   ['unsent','sent','all'].forEach(id => {
     const btn = document.getElementById('filter-' + id);
-    if (btn) btn.className = 'btn btn-sm ' + (id === f ? 'btn-primary' : 'btn-neutral');
+    if (btn) {
+      btn.className = 'filter-btn' + (id === f ? ' active' : '');
+    }
   });
   loadProducts();
 };
@@ -74,7 +79,7 @@ function renderProducts(products) {
       <td>${escHtml(p.wa_group)}</td>
       <td>${p.sent ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>` : '<span class="badge badge-unsent">טרם נשלח</span>'}</td>
       <td>${p.facebook ? `<span class="badge badge-fb">${fmtDate(p.facebook)}</span>` : '—'}</td>
-      <td><button class="btn btn-sm ${p.sent ? 'btn-neutral' : 'btn-primary'}" onclick="sendProduct(${p.row_number}, this)" title="${p.sent ? 'שלח שוב' : 'שלח'}">▶ שלח</button></td>
+      <td><button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct(${p.row_number}, this)" title="${p.sent ? 'שלח שוב' : 'שלח'}">▶ שלח</button></td>
     </tr>
   `).join('');
 }
@@ -328,6 +333,8 @@ function showLogTab() {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelector('[data-tab="logs"]').classList.add('active');
   document.getElementById('tab-logs').classList.add('active');
+  const el = document.getElementById('topbar-section');
+  if (el && typeof tabNames !== 'undefined') el.textContent = tabNames['logs'] || '';
 }
 
 // ── Fishing Product Search ────────────────────────────────────────────────────
