@@ -124,7 +124,7 @@ function initDragAndDrop(tbody) {
       else                  tbody.insertBefore(dragSrc, row);
 
       try {
-        await api('/api/products/reorder', { method: 'POST', body: JSON.stringify({ fromRow, toRow }) });
+        await api('/api/products/reorder', { method: 'POST', body: { fromRow, toRow } });
       } catch (err) {
         alert('שגיאה בסידור מחדש: ' + err.message);
         loadProducts(); // revert on failure
