@@ -26,4 +26,19 @@ router.post('/', async (req, res) => {
   }
 });
 
+// POST /api/products/reorder — move a row to a new position
+// Body: { fromRow, toRow }  (1-based row numbers including header row)
+router.post('/reorder', async (req, res) => {
+  const { fromRow, toRow } = req.body;
+  if (!fromRow || !toRow || fromRow === toRow) {
+    return res.status(400).json({ success: false, error: 'fromRow and toRow required and must differ' });
+  }
+  try {
+    await googleSheets.moveRow(fromRow, toRow);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;

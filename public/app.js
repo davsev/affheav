@@ -67,26 +67,75 @@ function renderProducts(products) {
   else filtered = products;
 
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">${_currentFilter === 'unsent' ? 'כל המוצרים נשלחו ✓' : 'אין מוצרים'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${_currentFilter === 'unsent' ? 'כל המוצרים נשלחו ✓' : 'אין מוצרים'}</td></tr>`;
     return;
   }
 
   tbody.innerHTML = filtered.map(p => `
-    <tr>
+    <tr draggable="true" data-row="${p.row_number}">
+      <td><span class="drag-handle" title="גרור לסידור מחדש">⠿</span></td>
       <td>${p.image ? `<img class="img-thumb" src="${escHtml(p.image)}" onerror="this.style.display='none'" />` : '—'}</td>
       <td style="max-width:200px;word-break:break-word;">${escHtml(p.Text)}</td>
-      <td><a href="${escHtml(p.Link)}" target="_blank" style="color:#38bdf8;font-size:12px;" dir="ltr">🔗 קישור</a></td>
+      <td><a href="${escHtml(p.Link)}" target="_blank" style="color:var(--blue);font-size:12px;" dir="ltr">🔗 קישור</a></td>
       <td>${escHtml(p.wa_group)}</td>
       <td>${p.sent ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>` : '<span class="badge badge-unsent">טרם נשלח</span>'}</td>
       <td>${p.facebook ? `<span class="badge badge-fb">${fmtDate(p.facebook)}</span>` : '—'}</td>
       <td><button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct(${p.row_number}, this)" title="${p.sent ? 'שלח שוב' : 'שלח'}">▶ שלח</button></td>
     </tr>
   `).join('');
+
+  initDragAndDrop(tbody);
+}
+
+function initDragAndDrop(tbody) {
+  let dragSrc = null;
+
+  tbody.querySelectorAll('tr[draggable]').forEach(row => {
+    row.addEventListener('dragstart', e => {
+      dragSrc = row;
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
+      tbody.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over'));
+    });
+
+    row.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      tbody.querySelectorAll('tr').forEach(r => r.classList.remove('drag-over'));
+      if (row !== dragSrc) row.classList.add('drag-over');
+    });
+
+    row.addEventListener('drop', async e => {
+      e.preventDefault();
+      if (!dragSrc || dragSrc === row) return;
+
+      const fromRow = parseInt(dragSrc.dataset.row);
+      const toRow   = parseInt(row.dataset.row);
+
+      // Optimistic UI: move the row visually
+      const allRows = [...tbody.querySelectorAll('tr')];
+      const fromIdx = allRows.indexOf(dragSrc);
+      const toIdx   = allRows.indexOf(row);
+      if (fromIdx < toIdx) tbody.insertBefore(dragSrc, row.nextSibling);
+      else                  tbody.insertBefore(dragSrc, row);
+
+      try {
+        await api('/api/products/reorder', { method: 'POST', body: { fromRow, toRow } });
+      } catch (err) {
+        alert('שגיאה בסידור מחדש: ' + err.message);
+        loadProducts(); // revert on failure
+      }
+    });
+  });
 }
 
 async function loadProducts() {
   const tbody = document.getElementById('products-body');
-  tbody.innerHTML = '<tr><td colspan="7" class="empty-state">טוען...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="empty-state">טוען...</td></tr>';
 
   try {
     const { products } = await api('/api/products');

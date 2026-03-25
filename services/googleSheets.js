@@ -155,4 +155,36 @@ async function setSetting(key, value) {
   }
 }
 
-module.exports = { getAllProducts, getNextUnsent, markSent, addProduct, updateProductText, getSetting, setSetting };
+// Move a row from one position to another (1-based row numbers including header)
+async function moveRow(fromRowNumber, toRowNumber) {
+  const sheets = await getClient();
+
+  // Get the sheet (tab) ID
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+  const sheet = meta.data.sheets.find(s => s.properties.title === SHEET_NAME);
+  if (!sheet) throw new Error(`Sheet "${SHEET_NAME}" not found`);
+  const sheetId = sheet.properties.sheetId;
+
+  // Convert 1-based row numbers to 0-based indices
+  const sourceIndex = fromRowNumber - 1;
+  const destIndex   = toRowNumber - 1;
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: {
+      requests: [{
+        moveDimension: {
+          source: {
+            sheetId,
+            dimension: 'ROWS',
+            startIndex: sourceIndex,
+            endIndex:   sourceIndex + 1,
+          },
+          destinationIndex: destIndex,
+        },
+      }],
+    },
+  });
+}
+
+module.exports = { getAllProducts, getNextUnsent, markSent, addProduct, updateProductText, getSetting, setSetting, moveRow };
