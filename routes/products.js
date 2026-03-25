@@ -42,6 +42,7 @@ router.post('/shorten-all', async (req, res) => {
         await googleSheets.updateProductLink(product.row_number, shortLink);
         converted++;
       }
+      await new Promise(r => setTimeout(r, 60000)); // 1 min between requests
     }
 
     res.json({ success: true, converted, skipped });

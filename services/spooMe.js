@@ -1,5 +1,4 @@
 const https = require('https');
-const querystring = require('querystring');
 
 const API_KEY = process.env.SPOOME_API_KEY;
 const ENDPOINT = 'https://spoo.me/api/v1/shorten';
@@ -15,11 +14,11 @@ async function shortenUrl(url) {
   }
 
   return new Promise((resolve) => {
-    const body = querystring.stringify({ url });
+    const body = JSON.stringify({ url });
     const options = {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
         'X-API-Key': API_KEY,
         'Content-Length': Buffer.byteLength(body),
       },
