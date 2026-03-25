@@ -1,5 +1,6 @@
 const { google } = require('googleapis');
 const path = require('path');
+const { shortenUrl } = require('./spooMe');
 require('dotenv').config();
 
 let sheetsClient = null;
@@ -99,6 +100,7 @@ async function updateProductText(link, text) {
 }
 
 async function addProduct({ Link, image, Text, join_link, wa_group }) {
+  const shortLink = await shortenUrl(Link);
   const sheets = await getClient();
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
@@ -106,7 +108,7 @@ async function addProduct({ Link, image, Text, join_link, wa_group }) {
     valueInputOption: 'RAW',
     requestBody: {
       // A: Link, B: '', C: image, D: '', E: Text, F: join_link, G: wa_group, H: sent, I: facebook
-      values: [[Link, '', image, '', Text, join_link, wa_group, '', '']],
+      values: [[shortLink, '', image, '', Text, join_link, wa_group, '', '']],
     },
   });
 }
