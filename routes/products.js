@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const googleSheets = require('../services/googleSheets');
+const { shortenUrl } = require('../services/spooMe');
 
 // GET /api/products — list all
 router.get('/', async (req, res) => {
@@ -21,6 +22,29 @@ router.post('/', async (req, res) => {
   try {
     await googleSheets.addProduct({ Link, image, Text, join_link, wa_group });
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/products/shorten-all — convert all product links to spoo.me short links
+router.post('/shorten-all', async (req, res) => {
+  try {
+    const products = await googleSheets.getAllProducts();
+    const spoomePattern = /^https?:\/\/spoo\.me\//;
+    let converted = 0;
+    let skipped = 0;
+
+    for (const product of products) {
+      if (spoomePattern.test(product.Link)) { skipped++; continue; }
+      const shortLink = await shortenUrl(product.Link);
+      if (shortLink !== product.Link) {
+        await googleSheets.updateProductLink(product.row_number, shortLink);
+        converted++;
+      }
+    }
+
+    res.json({ success: true, converted, skipped });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

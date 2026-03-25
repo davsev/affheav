@@ -85,6 +85,16 @@ async function markSent(link, { sentAt, facebookAt } = {}) {
   });
 }
 
+async function updateProductLink(rowNumber, newLink) {
+  const sheets = await getClient();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `${SHEET_NAME}!A${rowNumber}`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [[newLink]] },
+  });
+}
+
 async function updateProductText(link, text) {
   const products = await getAllProducts();
   const product = products.find(p => p.Link === link);
@@ -189,4 +199,4 @@ async function moveRow(fromRowNumber, toRowNumber) {
   });
 }
 
-module.exports = { getAllProducts, getNextUnsent, markSent, addProduct, updateProductText, getSetting, setSetting, moveRow };
+module.exports = { getAllProducts, getNextUnsent, markSent, addProduct, updateProductText, updateProductLink, getSetting, setSetting, moveRow };

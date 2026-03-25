@@ -188,6 +188,25 @@ window.sendProduct = (rowNumber, btn) => {
 
 document.getElementById('btn-refresh-products').addEventListener('click', loadProducts);
 
+document.getElementById('btn-shorten-all').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  btn.textContent = '⏳ ממיר...';
+  try {
+    const res = await api('/api/products/shorten-all', { method: 'POST' });
+    if (res.success) {
+      btn.textContent = `✅ הומרו ${res.converted}`;
+      await loadProducts();
+    } else {
+      btn.textContent = '❌ שגיאה';
+      alert(res.error);
+    }
+  } catch (err) {
+    btn.textContent = '❌ שגיאה';
+  }
+  setTimeout(() => { btn.disabled = false; btn.textContent = '🔗 המר לspoo.me'; }, 3000);
+});
+
 document.getElementById('btn-execute').addEventListener('click', async (e) => {
   const btn = e.target;
   btn.disabled = true;
