@@ -2,8 +2,8 @@ const cron = require('node-cron');
 const { v4: uuidv4 } = require('uuid');
 const { getSetting, setSetting } = require('../services/googleSheets');
 
-let activeJobs = {}; // id → cron.ScheduledTask
-let _schedules = []; // in-memory cache
+let activeJobs  = {}; // id → cron.ScheduledTask
+let _schedules  = []; // flat list with channelId on each entry
 let _runWorkflow = null;
 
 function setWorkflowRunner(fn) {
@@ -14,6 +14,12 @@ async function loadSchedules() {
   try {
     const raw = await getSetting('schedules');
     _schedules = raw ? JSON.parse(raw) : [];
+    // Migrate: add channelId to old entries that don't have it
+    let migrated = false;
+    _schedules.forEach(s => {
+      if (!s.channelId) { s.channelId = 'fishing'; migrated = true; }
+    });
+    if (migrated) await saveSchedules();
   } catch {
     _schedules = [];
   }
@@ -39,28 +45,33 @@ async function startAll() {
       console.warn(`[scheduler] Invalid cron: "${s.cron}" (id: ${s.id})`);
       continue;
     }
+    const channelId = s.channelId || 'fishing';
     activeJobs[s.id] = cron.schedule(s.cron, async () => {
-      console.log(`[scheduler] Firing job: ${s.label} (${s.cron})`);
+      console.log(`[scheduler] Firing job: ${s.label} (${s.cron}) [channel: ${channelId}]`);
       if (_runWorkflow) {
-        try { await _runWorkflow(); } catch (err) {
+        try { await _runWorkflow(channelId); } catch (err) {
           console.error(`[scheduler] Workflow error in job ${s.id}:`, err.message);
         }
       }
     }, { timezone: 'Asia/Jerusalem' });
-    console.log(`[scheduler] Scheduled: ${s.label} → ${s.cron}`);
+    console.log(`[scheduler] Scheduled: ${s.label} → ${s.cron} [channel: ${channelId}]`);
   }
 
   return _schedules.length;
 }
 
-function list() {
-  return _schedules.map(s => ({ ...s, active: s.enabled && !!activeJobs[s.id] }));
+// list(channelId) — if channelId provided, filter; else return all
+function list(channelId = null) {
+  const items = channelId
+    ? _schedules.filter(s => s.channelId === channelId)
+    : _schedules;
+  return items.map(s => ({ ...s, active: s.enabled && !!activeJobs[s.id] }));
 }
 
-async function add({ label, cron: cronExpr, enabled = true }) {
+async function add({ label, cron: cronExpr, enabled = true, channelId = 'fishing' }) {
   if (!cron.validate(cronExpr)) throw new Error(`Invalid cron expression: ${cronExpr}`);
   await loadSchedules();
-  const entry = { id: uuidv4(), label, cron: cronExpr, enabled };
+  const entry = { id: uuidv4(), label, cron: cronExpr, enabled, channelId };
   _schedules.push(entry);
   await saveSchedules();
   await startAll();
@@ -72,8 +83,8 @@ async function update(id, { label, cron: cronExpr, enabled }) {
   const idx = _schedules.findIndex(s => s.id === id);
   if (idx === -1) throw new Error(`Schedule not found: ${id}`);
   if (cronExpr !== undefined && !cron.validate(cronExpr)) throw new Error(`Invalid cron expression: ${cronExpr}`);
-  if (label !== undefined) _schedules[idx].label = label;
-  if (cronExpr !== undefined) _schedules[idx].cron = cronExpr;
+  if (label   !== undefined) _schedules[idx].label   = label;
+  if (cronExpr!== undefined) _schedules[idx].cron    = cronExpr;
   if (enabled !== undefined) _schedules[idx].enabled = enabled;
   await saveSchedules();
   await startAll();

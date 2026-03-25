@@ -3,31 +3,33 @@ const router = express.Router();
 const promptStore = require('../services/promptStore');
 const { setSetting } = require('../services/googleSheets');
 
-// GET current prompt
+// GET /api/prompt?channel=fishing — get prompt for a channel
 router.get('/', (req, res) => {
-  res.json({ prompt: promptStore.get() });
+  const channelId = req.query.channel || 'fishing';
+  res.json({ prompt: promptStore.get(channelId) });
 });
 
-// POST update prompt — persists to Google Sheets
+// POST /api/prompt — update prompt for a channel, persists to Google Sheets
 router.post('/', async (req, res) => {
-  const { prompt } = req.body;
+  const { prompt, channel: channelId = 'fishing' } = req.body;
   if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'prompt is required' });
   }
-  promptStore.set(prompt);
+  promptStore.set(channelId, prompt);
   try {
-    await setSetting('openai_prompt', prompt);
+    await setSetting(`openai_prompt_${channelId}`, prompt);
   } catch (e) {
     console.warn('Could not persist prompt to Sheets:', e.message);
   }
   res.json({ ok: true });
 });
 
-// POST reset to default — also clears from Sheets
+// POST /api/prompt/reset — reset to default for a channel
 router.post('/reset', async (req, res) => {
-  promptStore.reset();
+  const { channel: channelId = 'fishing' } = req.body;
+  promptStore.reset(channelId);
   try {
-    await setSetting('openai_prompt', promptStore.getDefault());
+    await setSetting(`openai_prompt_${channelId}`, promptStore.getDefault());
   } catch (e) {
     console.warn('Could not persist reset prompt to Sheets:', e.message);
   }

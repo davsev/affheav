@@ -16,7 +16,7 @@ function getDayContext() {
   return 'regular';
 }
 
-async function generateMessage({ Text, Link, join_link }) {
+async function generateMessage({ Text, Link, join_link, channelId = 'fishing' }) {
   const dayContext = getDayContext();
 
   let dayInstruction = '';
@@ -27,7 +27,7 @@ async function generateMessage({ Text, Link, join_link }) {
   }
 
   const promptStore = require('./promptStore');
-  const prompt = promptStore.get()
+  const prompt = promptStore.get(channelId)
     .replace('{{Text}}', Text)
     .replace('{{Link}}', Link)
     .replace('{{join_link}}', join_link)

@@ -1,6 +1,6 @@
 /**
- * Prompt store — holds the OpenAI prompt template in memory.
- * Editable at runtime via the Settings tab. Resets to default on server restart.
+ * Prompt store — holds OpenAI prompt templates in memory, keyed by channel ID.
+ * Editable at runtime via the Settings tab. Persisted to Google Sheets.
  */
 
 const DEFAULT_PROMPT = `נסח הודעת וואטסאפ שיווקית וקצרה למוצר, שמטרתה לעודד רכישה מיידית.
@@ -40,18 +40,19 @@ const DEFAULT_PROMPT = `נסח הודעת וואטסאפ שיווקית וקצר
 
 {{dayInstruction}}`;
 
-let currentPrompt = DEFAULT_PROMPT;
+// channelId -> prompt string
+const prompts = {};
 
-function get() {
-  return currentPrompt;
+function get(channelId = 'fishing') {
+  return prompts[channelId] || DEFAULT_PROMPT;
 }
 
-function set(prompt) {
-  currentPrompt = prompt;
+function set(channelId = 'fishing', prompt) {
+  prompts[channelId] = prompt;
 }
 
-function reset() {
-  currentPrompt = DEFAULT_PROMPT;
+function reset(channelId = 'fishing') {
+  delete prompts[channelId];
 }
 
 function getDefault() {

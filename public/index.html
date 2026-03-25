@@ -198,6 +198,44 @@
 
     .empty-state { text-align: center; padding: 40px; color: #475569; font-size: 14px; }
 
+    /* Channel switcher */
+    .channel-bar {
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      overflow-x: auto;
+    }
+    .channel-btn {
+      padding: 10px 18px;
+      background: none;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .channel-btn.active { color: #38bdf8; border-bottom-color: #38bdf8; }
+    .channel-btn:hover  { color: #e2e8f0; }
+    .channel-btn-add {
+      padding: 6px 12px;
+      margin-left: 4px;
+      background: #334155;
+      border: none;
+      border-radius: 6px;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.15s;
+    }
+    .channel-btn-add:hover { background: #475569; color: #e2e8f0; }
+
     /* Responsive */
     @media (max-width: 640px) {
       .form-grid { grid-template-columns: 1fr; }
@@ -227,10 +265,38 @@
   </div>
 </div>
 
+<!-- Add Channel Modal -->
+<div id="add-channel-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:#1e293b;border:1px solid #334155;border-radius:12px;padding:28px;min-width:320px;">
+    <h3 style="margin:0 0 18px;font-size:16px;color:#e2e8f0;">הוסף ערוץ חדש</h3>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;">
+      <div class="form-group">
+        <label>שם הערוץ (למשל: אקווריום)</label>
+        <input id="new-channel-name" placeholder="אקווריום" />
+      </div>
+      <div class="form-group">
+        <label>שם לשונית בגיליון (Sheet Tab)</label>
+        <input id="new-channel-sheet" placeholder="aquarium" dir="ltr" />
+      </div>
+    </div>
+    <div id="add-channel-error" style="font-size:12px;color:#f87171;margin-bottom:10px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-success" id="add-channel-confirm">הוסף</button>
+      <button class="btn btn-neutral" id="add-channel-cancel">ביטול</button>
+    </div>
+  </div>
+</div>
+
 <header>
   <h1>🎣 Affiliate Heaven</h1>
   <span id="server-time"></span>
 </header>
+
+<!-- Channel Switcher -->
+<div class="channel-bar" id="channel-bar">
+  <span style="font-size:12px;color:#475569;margin-left:8px;">ערוץ:</span>
+  <!-- populated by app.js -->
+</div>
 
 <div class="container">
 
@@ -421,6 +487,27 @@
 
   <!-- Settings Tab -->
   <div class="tab-panel" id="tab-settings">
+
+    <div class="card">
+      <h2>ניהול ערוצים</h2>
+      <div id="channels-list" style="margin-bottom:16px;"></div>
+      <div style="border-top:1px solid #334155;padding-top:16px;">
+        <h2 style="margin-bottom:12px;">פייסבוק לערוץ הנוכחי</h2>
+        <p style="font-size:13px;color:#64748b;margin-bottom:12px;">הגדר Page ID וטוקן עבור ערוץ <strong id="fb-channel-label" style="color:#e2e8f0;"></strong></p>
+        <div class="form-grid" style="max-width:600px;">
+          <div class="form-group">
+            <label>Facebook Page ID</label>
+            <input id="fb-page-id" placeholder="123456789" dir="ltr" />
+          </div>
+          <div class="form-group">
+            <label>Page Access Token</label>
+            <input id="fb-page-token" type="password" placeholder="EAA..." dir="ltr" />
+          </div>
+        </div>
+        <button class="btn btn-success btn-sm" style="margin-top:10px;" id="btn-save-fb-config">💾 שמור הגדרות פייסבוק</button>
+        <div id="fb-config-result" style="margin-top:8px;font-size:13px;"></div>
+      </div>
+    </div>
 
     <div class="card">
       <h2>טוקן פייסבוק</h2>

@@ -14,19 +14,25 @@ function log(msg, level = 'info') {
 }
 
 /**
- * Run one full product send cycle:
- * 1. Get next unsent product from Google Sheets
- * 2. Generate Hebrew message via OpenAI
- * 3. Send to WhatsApp via MacroDroid
- * 4. Post to Facebook page
- * 5. Mark row as sent in Google Sheets
+ * Run one full product send cycle for a given channel.
  *
- * @param {object} [overrideProduct] - If provided, use this product instead of fetching next unsent
+ * @param {object|null} overrideProduct - If provided, use this product instead of fetching next unsent
+ * @param {object} options
+ * @param {string[]} options.platforms - ['whatsapp', 'facebook']
+ * @param {object|null} options.channel - Channel config: { id, sheetName, facebookPageId, facebookPageToken }
+ *                                        If null, falls back to env-var defaults (fishing channel)
  */
-async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'] } = {}) {
+async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'], channel = null } = {}) {
   const sendWA = platforms.includes('whatsapp');
   const sendFB = platforms.includes('facebook');
-  log('▶ Workflow started');
+
+  const channelId   = channel?.id        || 'fishing';
+  const sheetName   = channel?.sheetName || undefined; // undefined = googleSheets default
+  const fbCfg       = channel
+    ? { pageId: channel.facebookPageId, pageToken: channel.facebookPageToken }
+    : {};
+
+  log(`▶ Workflow started [channel: ${channelId}]`);
 
   // Step 1: Get product
   let product;
@@ -35,7 +41,7 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
     log(`Using provided product: ${product.Text}`);
   } else {
     log('Fetching next unsent product from Google Sheets...');
-    product = await googleSheets.getNextUnsent();
+    product = await googleSheets.getNextUnsent(sheetName);
     if (!product) {
       log('No unsent products found. Workflow complete.', 'warn');
       return { success: false, reason: 'no_unsent_products' };
@@ -44,7 +50,6 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
   }
 
   // Step 2: Generate message (or reuse saved Hebrew message)
-  // Only reuse if the saved text is a fully generated message (contains the product link)
   const isSavedMessage = /[\u05D0-\u05EA]/.test(product.Text) && product.Link && product.Text.includes(product.Link);
   let message;
   if (isSavedMessage) {
@@ -56,11 +61,11 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
       Text: product.Text,
       Link: product.Link,
       join_link: product.join_link,
+      channelId,
     });
     log(`Message generated (${message.length} chars)`);
-    // Save generated message back to sheet so resends don't regenerate
     try {
-      await googleSheets.updateProductText(product.Link, message);
+      await googleSheets.updateProductText(product.Link, message, sheetName);
       log('✓ Generated message saved to sheet');
     } catch (err) {
       log(`⚠ Could not save message to sheet: ${err.message}`, 'warn');
@@ -96,10 +101,7 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
   if (sendFB) {
     try {
       log('Posting to Facebook page...');
-      const fbResult = await facebook.postPhoto({
-        message,
-        imageUrl: product.image,
-      });
+      const fbResult = await facebook.postPhoto({ message, imageUrl: product.image }, fbCfg);
       results.facebook = fbResult;
       log(`✓ Facebook post published (id: ${fbResult.data?.post_id || fbResult.data?.id})`);
     } catch (err) {
@@ -112,10 +114,9 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
 
   // Step 5: Mark sent
   try {
-    // null = platform was skipped (preserve existing value), '' = tried but failed
-    const sentAt    = !sendWA ? null : (results.whatsapp?.success  ? new Date().toISOString() : '');
-    const facebookAt = !sendFB ? null : (results.facebook?.success ? new Date().toISOString() : '');
-    await googleSheets.markSent(product.Link, { sentAt, facebookAt });
+    const sentAt     = !sendWA ? null : (results.whatsapp?.success  ? new Date().toISOString() : '');
+    const facebookAt = !sendFB ? null : (results.facebook?.success  ? new Date().toISOString() : '');
+    await googleSheets.markSent(product.Link, { sentAt, facebookAt }, sheetName);
     log('✓ Google Sheet updated');
   } catch (err) {
     log(`✗ Failed to update Google Sheet: ${err.message}`, 'error');

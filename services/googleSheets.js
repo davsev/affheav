@@ -35,11 +35,11 @@ const COL = {
   facebook: 8,   // I
 };
 
-async function getAllProducts() {
+async function getAllProducts(sheetName = SHEET_NAME) {
   const sheets = await getClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!A2:I`,
+    range: `${sheetName}!A2:I`,
   });
 
   const rows = res.data.values || [];
@@ -57,18 +57,18 @@ async function getAllProducts() {
     .filter(p => p.Link); // skip empty rows
 }
 
-async function getNextUnsent() {
-  const products = await getAllProducts();
+async function getNextUnsent(sheetName = SHEET_NAME) {
+  const products = await getAllProducts(sheetName);
   return products.find(p => !p.sent) || null;
 }
 
-async function markSent(link, { sentAt, facebookAt } = {}) {
-  const products = await getAllProducts();
+async function markSent(link, { sentAt, facebookAt } = {}, sheetName = SHEET_NAME) {
+  const products = await getAllProducts(sheetName);
   const product = products.find(p => p.Link === link);
   if (!product) throw new Error(`Product not found: ${link}`);
 
   const sheets = await getClient();
-  const rowRange = `${SHEET_NAME}!H${product.row_number}:I${product.row_number}`;
+  const rowRange = `${sheetName}!H${product.row_number}:I${product.row_number}`;
 
   // Preserve existing value if new value is null (platform was skipped)
   const newSentAt    = sentAt    !== null ? (sentAt    || product.sent    || new Date().toISOString()) : product.sent;
@@ -84,25 +84,25 @@ async function markSent(link, { sentAt, facebookAt } = {}) {
   });
 }
 
-async function updateProductText(link, text) {
-  const products = await getAllProducts();
+async function updateProductText(link, text, sheetName = SHEET_NAME) {
+  const products = await getAllProducts(sheetName);
   const product = products.find(p => p.Link === link);
   if (!product) throw new Error(`Product not found: ${link}`);
 
   const sheets = await getClient();
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!E${product.row_number}`,
+    range: `${sheetName}!E${product.row_number}`,
     valueInputOption: 'RAW',
     requestBody: { values: [[text]] },
   });
 }
 
-async function addProduct({ Link, image, Text, join_link, wa_group }) {
+async function addProduct({ Link, image, Text, join_link, wa_group }, sheetName = SHEET_NAME) {
   const sheets = await getClient();
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!A:G`,
+    range: `${sheetName}!A:G`,
     valueInputOption: 'RAW',
     requestBody: {
       // A: Link, B: '', C: image, D: '', E: Text, F: join_link, G: wa_group, H: sent, I: facebook

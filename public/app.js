@@ -1,3 +1,70 @@
+// ── Channel State ─────────────────────────────────────────────────────────────
+let _channels = [];
+let _currentChannel = null; // { id, name, sheetName }
+
+async function initChannels() {
+  try {
+    const data = await api('/api/channels');
+    _channels = data.channels || [];
+    _currentChannel = _channels[0] || null;
+    renderChannelBar();
+  } catch (err) {
+    console.error('Failed to load channels:', err);
+  }
+}
+
+function renderChannelBar() {
+  const bar = document.getElementById('channel-bar');
+  const btns = _channels.map(ch => `
+    <button class="channel-btn ${ch.id === _currentChannel?.id ? 'active' : ''}"
+            onclick="switchChannel('${ch.id}')">
+      ${escHtml(ch.name)}
+    </button>
+  `).join('');
+  bar.innerHTML = `
+    <span style="font-size:12px;color:#475569;margin-left:8px;">ערוץ:</span>
+    ${btns}
+    <button class="channel-btn-add" onclick="openAddChannelModal()">+ ערוץ חדש</button>
+  `;
+}
+
+window.switchChannel = (channelId) => {
+  _currentChannel = _channels.find(c => c.id === channelId) || _currentChannel;
+  renderChannelBar();
+  loadProducts();
+  loadSchedules();
+};
+
+// ── Add Channel Modal ─────────────────────────────────────────────────────────
+window.openAddChannelModal = () => {
+  document.getElementById('new-channel-name').value = '';
+  document.getElementById('new-channel-sheet').value = '';
+  document.getElementById('add-channel-error').textContent = '';
+  document.getElementById('add-channel-modal').style.display = 'flex';
+};
+
+document.getElementById('add-channel-cancel').addEventListener('click', () => {
+  document.getElementById('add-channel-modal').style.display = 'none';
+});
+
+document.getElementById('add-channel-confirm').addEventListener('click', async () => {
+  const name = document.getElementById('new-channel-name').value.trim();
+  const sheetName = document.getElementById('new-channel-sheet').value.trim();
+  const errEl = document.getElementById('add-channel-error');
+  if (!name || !sheetName) { errEl.textContent = 'יש למלא את כל השדות'; return; }
+  try {
+    const data = await api('/api/channels', { method: 'POST', body: { name, sheetName } });
+    _channels.push(data.channel);
+    _currentChannel = data.channel;
+    renderChannelBar();
+    document.getElementById('add-channel-modal').style.display = 'none';
+    loadProducts();
+    loadSchedules();
+  } catch (err) {
+    errEl.textContent = '✗ ' + err.message;
+  }
+});
+
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -84,7 +151,8 @@ async function loadProducts() {
   tbody.innerHTML = '<tr><td colspan="7" class="empty-state">טוען...</td></tr>';
 
   try {
-    const { products } = await api('/api/products');
+    const channelParam = _currentChannel ? `?channel=${_currentChannel.id}` : '';
+    const { products } = await api('/api/products' + channelParam);
     if (!products.length) {
       tbody.innerHTML = '<tr><td colspan="7" class="empty-state">אין מוצרים בגיליון</td></tr>';
       return;
@@ -110,7 +178,7 @@ window.sendProduct = (rowNumber, btn) => {
     btn.textContent = '...';
     showLogTab();
     try {
-      await api(`/api/send/${rowNumber}`, { method: 'POST', body: { platforms } });
+      await api(`/api/send/${rowNumber}`, { method: 'POST', body: { platforms, channel: _currentChannel?.id } });
       await loadProducts();
     } catch (err) {
       alert('שגיאה: ' + err.message);
@@ -140,7 +208,7 @@ document.getElementById('btn-execute').addEventListener('click', async (e) => {
   btn.textContent = '...מריץ';
   showLogTab();
   try {
-    const result = await api('/api/send/execute', { method: 'POST' });
+    const result = await api('/api/send/execute', { method: 'POST', body: { channel: _currentChannel?.id } });
     if (!result.success && result.reason === 'no_unsent_products') {
       alert('אין מוצרים שלא נשלחו');
     } else {
@@ -158,9 +226,10 @@ document.getElementById('btn-execute').addEventListener('click', async (e) => {
 async function loadSchedules() {
   const container = document.getElementById('schedules-list');
   try {
-    const { schedules } = await api('/api/schedules');
+    const channelParam = _currentChannel ? `?channel=${_currentChannel.id}` : '';
+    const { schedules } = await api('/api/schedules' + channelParam);
     if (!schedules.length) {
-      container.innerHTML = '<div class="empty-state">אין לוחות זמנים</div>';
+      container.innerHTML = '<div class="empty-state">אין לוחות זמנים לערוץ זה</div>';
       return;
     }
     container.innerHTML = schedules.map(s => `
@@ -207,7 +276,7 @@ document.getElementById('btn-add-schedule').addEventListener('click', async () =
   const cron  = document.getElementById('sched-cron').value.trim();
   if (!label || !cron) return alert('יש למלא שם וביטוי cron');
   try {
-    await api('/api/schedules', { method: 'POST', body: { label, cron } });
+    await api('/api/schedules', { method: 'POST', body: { label, cron, channel: _currentChannel?.id } });
     document.getElementById('sched-label').value = '';
     document.getElementById('sched-cron').value  = '';
     await loadSchedules();
@@ -275,7 +344,7 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
   if (!Text || !Link) { result.textContent = '⚠ שם מוצר וקישור הם שדות חובה'; result.style.color='#fbbf24'; return; }
 
   try {
-    await api('/api/products', { method: 'POST', body: { Link, image, Text, join_link, wa_group } });
+    await api('/api/products', { method: 'POST', body: { Link, image, Text, join_link, wa_group, channel: _currentChannel?.id } });
     result.textContent = '✓ מוצר נוסף בהצלחה';
     result.style.color = '#4ade80';
     ['new-text','new-link','new-image','new-join','new-wa-group'].forEach(id => document.getElementById(id).value = '');
@@ -298,6 +367,69 @@ document.getElementById('btn-refresh-fb').addEventListener('click', async () => 
   }
 });
 
+// ── Channels Management (Settings Tab) ────────────────────────────────────────
+async function loadChannelSettings() {
+  const list = document.getElementById('channels-list');
+  const label = document.getElementById('fb-channel-label');
+  if (label && _currentChannel) label.textContent = _currentChannel.name;
+
+  list.innerHTML = _channels.map(ch => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #334155;">
+      <div>
+        <span style="font-weight:500;">${escHtml(ch.name)}</span>
+        <span style="font-size:12px;color:#64748b;margin-right:8px;">(${escHtml(ch.sheetName)})</span>
+      </div>
+      <div style="display:flex;gap:6px;">
+        ${ch.id === _currentChannel?.id ? '<span style="font-size:11px;color:#38bdf8;padding:3px 8px;background:#1e3a5f;border-radius:20px;">פעיל</span>' : ''}
+        ${_channels.length > 1 ? `<button class="btn btn-danger btn-sm" onclick="deleteChannel('${ch.id}')">🗑</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+
+  // Load FB config for current channel
+  if (_currentChannel) {
+    try {
+      const fb = await api(`/api/channels/${_currentChannel.id}/facebook`);
+      document.getElementById('fb-page-id').value = fb.pageId || '';
+      document.getElementById('fb-page-token').value = '';
+      document.getElementById('fb-page-token').placeholder = fb.hasToken ? '••••••• (שמור — הזן שוב לעדכון)' : 'EAA...';
+    } catch {}
+  }
+}
+
+window.deleteChannel = async (id) => {
+  if (!confirm('למחוק ערוץ זה? הנתונים בגיליון לא יימחקו.')) return;
+  try {
+    await api(`/api/channels/${id}`, { method: 'DELETE' });
+    _channels = _channels.filter(c => c.id !== id);
+    if (_currentChannel?.id === id) _currentChannel = _channels[0] || null;
+    renderChannelBar();
+    loadChannelSettings();
+    loadProducts();
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
+
+document.getElementById('btn-save-fb-config').addEventListener('click', async () => {
+  const pageId    = document.getElementById('fb-page-id').value.trim();
+  const pageToken = document.getElementById('fb-page-token').value.trim();
+  const res = document.getElementById('fb-config-result');
+  if (!_currentChannel) return;
+  try {
+    const body = {};
+    if (pageId) body.pageId = pageId;
+    if (pageToken) body.pageToken = pageToken;
+    await api(`/api/channels/${_currentChannel.id}/facebook`, { method: 'POST', body });
+    res.style.color = '#4ade80';
+    res.textContent = '✓ הוגדרות פייסבוק נשמרו';
+  } catch (err) {
+    res.style.color = '#f87171';
+    res.textContent = '✗ שגיאה: ' + err.message;
+  }
+  setTimeout(() => { res.textContent = ''; }, 3000);
+});
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 async function api(url, opts = {}) {
   const res = await fetch(url, {
@@ -318,7 +450,7 @@ function fmtDate(iso) {
   if (!iso) return '';
   try {
     const d = new Date(iso);
-    if (isNaN(d.getTime())) return iso; // show raw value if unparseable
+    if (isNaN(d.getTime())) return iso;
     return d.toLocaleDateString('he-IL', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
   } catch { return iso; }
 }
@@ -366,7 +498,8 @@ document.getElementById('btn-fishing-search').addEventListener('click', async ()
 
 // ── Prompt Editor ─────────────────────────────────────────────────────────────
 async function loadPrompt() {
-  const data = await api('/api/prompt');
+  const channelParam = _currentChannel ? `?channel=${_currentChannel.id}` : '';
+  const data = await api('/api/prompt' + channelParam);
   document.getElementById('prompt-editor').value = data.prompt;
 }
 
@@ -375,7 +508,7 @@ document.getElementById('btn-save-prompt').addEventListener('click', async () =>
   const res = document.getElementById('prompt-save-result');
   if (!prompt) return;
   try {
-    await api('/api/prompt', { method: 'POST', body: { prompt } });
+    await api('/api/prompt', { method: 'POST', body: { prompt, channel: _currentChannel?.id } });
     res.style.color = '#4ade80';
     res.textContent = '✓ הפרומפט נשמר בהצלחה';
   } catch (e) {
@@ -388,7 +521,7 @@ document.getElementById('btn-save-prompt').addEventListener('click', async () =>
 document.getElementById('btn-reset-prompt').addEventListener('click', async () => {
   const res = document.getElementById('prompt-save-result');
   try {
-    const data = await api('/api/prompt/reset', { method: 'POST' });
+    const data = await api('/api/prompt/reset', { method: 'POST', body: { channel: _currentChannel?.id } });
     document.getElementById('prompt-editor').value = data.prompt;
     res.style.color = '#4ade80';
     res.textContent = '✓ הפרומפט אופס לברירת המחדל';
@@ -423,12 +556,15 @@ async function loadTokenInfo() {
 
 document.getElementById('btn-check-token').addEventListener('click', loadTokenInfo);
 
-// Load prompt + token info when settings tab is opened
+// Load prompt + token info + channel settings when settings tab is opened
 document.querySelector('[data-tab="settings"]').addEventListener('click', () => {
   loadPrompt();
   loadTokenInfo();
+  loadChannelSettings();
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-loadProducts();
-loadSchedules();
+initChannels().then(() => {
+  loadProducts();
+  loadSchedules();
+});
