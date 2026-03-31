@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const googleSheets = require('../services/googleSheets');
 const { shortenUrl, getAllClickStats } = require('../services/spooMe');
+const log = (...a) => console.log('[products]', ...a);
 
 // GET /api/products — list all
 router.get('/', async (req, res) => {
@@ -27,11 +28,16 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/products/clicks — fetch click counts for all spoo.me links
-router.get('/clicks', async (req, res) => {
+// POST /api/products/sync-clicks — fetch click counts from spoo.me and save to sheet Column J
+router.post('/sync-clicks', async (req, res) => {
   try {
+    log('Fetching click stats from spoo.me...');
     const clicks = await getAllClickStats();
-    res.json({ success: true, clicks });
+    log(`Got ${Object.keys(clicks).length} links from spoo.me`);
+    const synced = await googleSheets.syncClicks(clicks);
+    log(`Synced ${synced} rows to sheet`);
+    const products = await googleSheets.getAllProducts();
+    res.json({ success: true, synced, products });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

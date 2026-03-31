@@ -24,8 +24,8 @@ async function getClient() {
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const SHEET_NAME = process.env.GOOGLE_SHEET_NAME || 'fishing';
 
-// Actual column order in sheet (A–I):
-// A: Link, B: image(short), C: image(cdn), D: empty, E: Text, F: join_link, G: wa_group, H: sent, I: facebook
+// Actual column order in sheet (A–J):
+// A: Link, B: image(short), C: image(cdn), D: empty, E: Text, F: join_link, G: wa_group, H: sent, I: facebook, J: clicks
 const COL = {
   Link: 0,
   image: 2,      // C — direct CDN image URL
@@ -34,13 +34,14 @@ const COL = {
   wa_group: 6,   // G
   sent: 7,       // H
   facebook: 8,   // I
+  clicks: 9,     // J — spoo.me click count (synced on demand)
 };
 
 async function getAllProducts() {
   const sheets = await getClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!A2:I`,
+    range: `${SHEET_NAME}!A2:J`,
   });
 
   const rows = res.data.values || [];
@@ -54,6 +55,7 @@ async function getAllProducts() {
       wa_group: row[COL.wa_group] || '',
       sent: row[COL.sent] || '',
       facebook: row[COL.facebook] || '',
+      clicks: row[COL.clicks] !== undefined && row[COL.clicks] !== '' ? parseInt(row[COL.clicks]) : null,
     }))
     .filter(p => p.Link); // skip empty rows
 }
@@ -199,4 +201,26 @@ async function moveRow(fromRowNumber, toRowNumber) {
   });
 }
 
-module.exports = { getAllProducts, getNextUnsent, markSent, addProduct, updateProductText, updateProductLink, getSetting, setSetting, moveRow };
+// Sync click counts from spoo.me into Column J for all matching products
+async function syncClicks(clicksMap) {
+  const products = await getAllProducts();
+  const sheets = await getClient();
+
+  const data = products
+    .filter(p => p.Link && clicksMap[p.Link] !== undefined)
+    .map(p => ({
+      range: `${SHEET_NAME}!J${p.row_number}`,
+      values: [[clicksMap[p.Link]]],
+    }));
+
+  if (!data.length) return 0;
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: { valueInputOption: 'RAW', data },
+  });
+
+  return data.length;
+}
+
+module.exports = { getAllProducts, getNextUnsent, markSent, addProduct, updateProductText, updateProductLink, getSetting, setSetting, moveRow, syncClicks };

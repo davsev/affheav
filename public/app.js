@@ -45,7 +45,6 @@ document.getElementById('btn-clear-log').addEventListener('click', () => {
 // ── Products ──────────────────────────────────────────────────────────────────
 let _currentFilter = 'unsent';
 let _currentSort = 'none';
-let _clicksCache = {}; // link -> click count
 
 window.setSort = (s) => {
   _currentSort = s;
@@ -89,11 +88,7 @@ function renderProducts(products) {
       return new Date(b.sent) - new Date(a.sent);
     });
   } else if (_currentSort === 'clicks') {
-    filtered.sort((a, b) => {
-      const ca = _clicksCache[a.Link] ?? -1;
-      const cb = _clicksCache[b.Link] ?? -1;
-      return cb - ca;
-    });
+    filtered.sort((a, b) => (b.clicks ?? -1) - (a.clicks ?? -1));
   }
 
   if (!filtered.length) {
@@ -102,10 +97,9 @@ function renderProducts(products) {
   }
 
   tbody.innerHTML = filtered.map(p => {
-    const clicks = _clicksCache[p.Link];
-    const clicksCell = clicks == null
+    const clicksCell = p.clicks == null
       ? '<span style="color:var(--label-4);font-size:11px;">—</span>'
-      : `<span style="font-weight:600;color:var(--blue);">${clicks}</span>`;
+      : `<span style="font-weight:600;color:var(--blue);">${p.clicks}</span>`;
     return `
     <tr draggable="true" data-row="${p.row_number}">
       <td><span class="drag-handle" title="גרור לסידור מחדש">⠿</span></td>
@@ -180,13 +174,6 @@ async function loadProducts() {
       return;
     }
     renderProducts(products);
-    // Fetch clicks in background and re-render when ready
-    api('/api/products/clicks').then(res => {
-      if (res.clicks) {
-        _clicksCache = res.clicks;
-        renderProducts(_lastProducts);
-      }
-    }).catch(() => {});
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="9" class="empty-state" style="color:#f87171;">${escHtml(err.message)}</td></tr>`;
   }
@@ -230,6 +217,24 @@ window.sendProduct = (rowNumber, btn) => {
 };
 
 document.getElementById('btn-refresh-products').addEventListener('click', loadProducts);
+
+document.getElementById('btn-sync-clicks').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  btn.textContent = '⏳ מסנכרן...';
+  try {
+    const res = await api('/api/products/sync-clicks', { method: 'POST' });
+    if (res.success) {
+      btn.textContent = `✅ סונכרנו ${res.synced}`;
+      renderProducts(res.products);
+    } else {
+      btn.textContent = '❌ שגיאה';
+    }
+  } catch {
+    btn.textContent = '❌ שגיאה';
+  }
+  setTimeout(() => { btn.disabled = false; btn.textContent = '📊 סנכרן קליקים'; }, 3000);
+});
 
 document.getElementById('btn-shorten-all').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
