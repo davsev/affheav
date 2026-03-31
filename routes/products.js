@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const googleSheets = require('../services/googleSheets');
-const { shortenUrl } = require('../services/spooMe');
+const { shortenUrl, getAllClickStats } = require('../services/spooMe');
 
 // GET /api/products — list all
 router.get('/', async (req, res) => {
@@ -27,22 +27,37 @@ router.post('/', async (req, res) => {
   }
 });
 
-// POST /api/products/shorten-all — convert all product links to spoo.me short links
+// GET /api/products/clicks — fetch click counts for all spoo.me links
+router.get('/clicks', async (req, res) => {
+  try {
+    const clicks = await getAllClickStats();
+    res.json({ success: true, clicks });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/products/shorten-all — convert all product links to account-linked spoo.me short links
 router.post('/shorten-all', async (req, res) => {
   try {
-    const products = await googleSheets.getAllProducts();
-    const spoomePattern = /^https?:\/\/spoo\.me\//;
+    const [products, accountClicks] = await Promise.all([
+      googleSheets.getAllProducts(),
+      getAllClickStats(),
+    ]);
+
     let converted = 0;
     let skipped = 0;
 
     for (const product of products) {
-      if (spoomePattern.test(product.Link)) { skipped++; continue; }
+      // Skip if already an account-linked spoo.me link (trackable)
+      if (accountClicks[product.Link] !== undefined) { skipped++; continue; }
+
       const shortLink = await shortenUrl(product.Link);
       if (shortLink !== product.Link) {
         await googleSheets.updateProductLink(product.row_number, shortLink);
         converted++;
       }
-      await new Promise(r => setTimeout(r, 60000)); // 1 min between requests
+      await new Promise(r => setTimeout(r, 1500)); // small delay between requests
     }
 
     res.json({ success: true, converted, skipped });

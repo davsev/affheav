@@ -99,6 +99,11 @@
               <button class="filter-btn" id="filter-sent" onclick="setFilter('sent')">נשלחו</button>
               <button class="filter-btn" id="filter-all" onclick="setFilter('all')">הכל</button>
             </div>
+            <div class="filter-group">
+              <button class="filter-btn" id="sort-none" onclick="setSort('none')">ללא מיון</button>
+              <button class="filter-btn" id="sort-sent" onclick="setSort('sent')">תאריך שליחה</button>
+              <button class="filter-btn" id="sort-clicks" onclick="setSort('clicks')">קליקים</button>
+            </div>
             <button class="btn btn-ghost btn-sm" id="btn-shorten-all">🔗 המר לspoo.me</button>
             <button class="btn btn-ghost btn-sm" id="btn-refresh-products">🔄 רענן</button>
           </div>
@@ -109,7 +114,7 @@
               <tr>
                 <th style="width:32px;"></th>
                 <th>תמונה</th><th>שם מוצר</th><th>קישור</th>
-                <th>קבוצת WA</th><th>נשלח</th><th>פייסבוק</th><th>פעולה</th>
+                <th>קבוצת WA</th><th>נשלח</th><th>פייסבוק</th><th>קליקים</th><th>פעולה</th>
               </tr>
             </thead>
             <tbody id="products-body">

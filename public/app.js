@@ -44,6 +44,19 @@ document.getElementById('btn-clear-log').addEventListener('click', () => {
 
 // ── Products ──────────────────────────────────────────────────────────────────
 let _currentFilter = 'unsent';
+let _currentSort = 'none';
+let _clicksCache = {}; // link -> click count
+
+window.setSort = (s) => {
+  _currentSort = s;
+  ['none', 'sent', 'clicks'].forEach(id => {
+    const btn = document.getElementById('sort-' + id);
+    if (btn) btn.className = 'filter-btn' + (id === s ? ' active' : '');
+  });
+  renderProducts(_lastProducts);
+};
+
+let _lastProducts = [];
 
 window.setFilter = (f) => {
   _currentFilter = f;
@@ -57,6 +70,7 @@ window.setFilter = (f) => {
 };
 
 function renderProducts(products) {
+  _lastProducts = products;
   const tbody = document.getElementById('products-body');
   const sentCount = products.filter(p => p.sent).length;
   document.getElementById('products-summary').textContent = `${sentCount} נשלחו מתוך ${products.length} סה"כ`;
@@ -64,14 +78,35 @@ function renderProducts(products) {
   let filtered;
   if (_currentFilter === 'unsent') filtered = products.filter(p => !p.sent);
   else if (_currentFilter === 'sent') filtered = products.filter(p => p.sent);
-  else filtered = products;
+  else filtered = [...products];
+
+  // Sort
+  if (_currentSort === 'sent') {
+    filtered.sort((a, b) => {
+      if (!a.sent && !b.sent) return 0;
+      if (!a.sent) return 1;
+      if (!b.sent) return -1;
+      return new Date(b.sent) - new Date(a.sent);
+    });
+  } else if (_currentSort === 'clicks') {
+    filtered.sort((a, b) => {
+      const ca = _clicksCache[a.Link] ?? -1;
+      const cb = _clicksCache[b.Link] ?? -1;
+      return cb - ca;
+    });
+  }
 
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${_currentFilter === 'unsent' ? 'כל המוצרים נשלחו ✓' : 'אין מוצרים'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${_currentFilter === 'unsent' ? 'כל המוצרים נשלחו ✓' : 'אין מוצרים'}</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = filtered.map(p => `
+  tbody.innerHTML = filtered.map(p => {
+    const clicks = _clicksCache[p.Link];
+    const clicksCell = clicks == null
+      ? '<span style="color:var(--label-4);font-size:11px;">—</span>'
+      : `<span style="font-weight:600;color:var(--blue);">${clicks}</span>`;
+    return `
     <tr draggable="true" data-row="${p.row_number}">
       <td><span class="drag-handle" title="גרור לסידור מחדש">⠿</span></td>
       <td>${p.image ? `<img class="img-thumb" src="${escHtml(p.image)}" onerror="this.style.display='none'" />` : '—'}</td>
@@ -80,9 +115,10 @@ function renderProducts(products) {
       <td>${escHtml(p.wa_group)}</td>
       <td>${p.sent ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>` : '<span class="badge badge-unsent">טרם נשלח</span>'}</td>
       <td>${p.facebook ? `<span class="badge badge-fb">${fmtDate(p.facebook)}</span>` : '—'}</td>
+      <td>${clicksCell}</td>
       <td><button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct(${p.row_number}, this)" title="${p.sent ? 'שלח שוב' : 'שלח'}">▶ שלח</button></td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 
   initDragAndDrop(tbody);
 }
@@ -135,17 +171,24 @@ function initDragAndDrop(tbody) {
 
 async function loadProducts() {
   const tbody = document.getElementById('products-body');
-  tbody.innerHTML = '<tr><td colspan="8" class="empty-state">טוען...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="empty-state">טוען...</td></tr>';
 
   try {
     const { products } = await api('/api/products');
     if (!products.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="empty-state">אין מוצרים בגיליון</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="empty-state">אין מוצרים בגיליון</td></tr>';
       return;
     }
     renderProducts(products);
+    // Fetch clicks in background and re-render when ready
+    api('/api/products/clicks').then(res => {
+      if (res.clicks) {
+        _clicksCache = res.clicks;
+        renderProducts(_lastProducts);
+      }
+    }).catch(() => {});
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color:#f87171;">${escHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state" style="color:#f87171;">${escHtml(err.message)}</td></tr>`;
   }
 }
 
