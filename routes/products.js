@@ -58,9 +58,10 @@ router.post('/shorten-all', async (req, res) => {
       // Skip if Link column already has a tracked spoo.me link
       if (product.Link && accountClicks[product.Link] !== undefined) { skipped++; continue; }
 
-      // Use long_url as source; fall back to Link if long_url is missing
-      const source = product.long_url || product.Link;
+      // Use long_url as source — skip if missing or not a valid URL
+      const source = product.long_url;
       if (!source) { skipped++; continue; }
+      try { new URL(source); } catch { skipped++; continue; }
 
       const shortLink = await shortenUrl(source);
       if (shortLink !== source) {
