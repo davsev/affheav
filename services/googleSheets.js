@@ -59,7 +59,7 @@ async function getAllProducts() {
       facebook: row[COL.facebook] || '',
       clicks: row[COL.clicks] !== undefined && row[COL.clicks] !== '' ? parseInt(row[COL.clicks]) : null,
     }))
-    .filter(p => p.long_url || p.Link); // skip fully empty rows
+    .filter(p => p.Link && p.Link.startsWith('https://spoo.me/')); // only show products with a spoo.me link
 }
 
 async function getNextUnsent() {
