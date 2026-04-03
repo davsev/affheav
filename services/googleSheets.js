@@ -25,10 +25,11 @@ const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const SHEET_NAME = process.env.GOOGLE_SHEET_NAME || 'fishing';
 
 // Actual column order in sheet (A–J):
-// A: Link, B: image(short), C: image(cdn), D: empty, E: Text, F: join_link, G: wa_group, H: sent, I: facebook, J: clicks
+// A: long_url, B: Link (spoo.me), C: image, D: empty, E: Text, F: join_link, G: wa_group, H: sent, I: facebook, J: clicks
 const COL = {
-  Link: 0,
-  image: 2,      // C — direct CDN image URL
+  long_url: 0,   // A — original affiliate URL
+  Link: 1,       // B — spoo.me short link
+  image: 2,      // C — product image URL
   Text: 4,       // E — product title
   join_link: 5,  // F
   wa_group: 6,   // G
@@ -48,6 +49,7 @@ async function getAllProducts() {
   return rows
     .map((row, idx) => ({
       row_number: idx + 2,
+      long_url: row[COL.long_url] || '',
       Link: row[COL.Link] || '',
       image: row[COL.image] || '',
       Text: row[COL.Text] || '',
@@ -57,7 +59,7 @@ async function getAllProducts() {
       facebook: row[COL.facebook] || '',
       clicks: row[COL.clicks] !== undefined && row[COL.clicks] !== '' ? parseInt(row[COL.clicks]) : null,
     }))
-    .filter(p => p.Link); // skip empty rows
+    .filter(p => p.long_url || p.Link); // skip fully empty rows
 }
 
 async function getNextUnsent() {
@@ -91,7 +93,7 @@ async function updateProductLink(rowNumber, newLink) {
   const sheets = await getClient();
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!A${rowNumber}`,
+    range: `${SHEET_NAME}!B${rowNumber}`,
     valueInputOption: 'RAW',
     requestBody: { values: [[newLink]] },
   });
@@ -116,11 +118,11 @@ async function addProduct({ Link, image, Text, join_link, wa_group }) {
   const sheets = await getClient();
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!A:G`,
+    range: `${SHEET_NAME}!A:I`,
     valueInputOption: 'RAW',
     requestBody: {
-      // A: Link, B: '', C: image, D: '', E: Text, F: join_link, G: wa_group, H: sent, I: facebook
-      values: [[shortLink, '', image, '', Text, join_link, wa_group, '', '']],
+      // A: long_url, B: Link (spoo.me), C: image, D: '', E: Text, F: join_link, G: wa_group, H: sent, I: facebook
+      values: [[Link, shortLink, image, '', Text, join_link, wa_group, '', '']],
     },
   });
 }

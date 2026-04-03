@@ -55,15 +55,19 @@ router.post('/shorten-all', async (req, res) => {
     let skipped = 0;
 
     for (const product of products) {
-      // Skip if already an account-linked spoo.me link (trackable)
-      if (accountClicks[product.Link] !== undefined) { skipped++; continue; }
+      // Skip if Link column already has a tracked spoo.me link
+      if (product.Link && accountClicks[product.Link] !== undefined) { skipped++; continue; }
 
-      const shortLink = await shortenUrl(product.Link);
-      if (shortLink !== product.Link) {
+      // Use long_url as source; fall back to Link if long_url is missing
+      const source = product.long_url || product.Link;
+      if (!source) { skipped++; continue; }
+
+      const shortLink = await shortenUrl(source);
+      if (shortLink !== source) {
         await googleSheets.updateProductLink(product.row_number, shortLink);
         converted++;
       }
-      await new Promise(r => setTimeout(r, 1500)); // small delay between requests
+      await new Promise(r => setTimeout(r, 1500));
     }
 
     res.json({ success: true, converted, skipped });
