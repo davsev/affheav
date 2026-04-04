@@ -4,11 +4,21 @@ const googleSheets = require('../services/googleSheets');
 const { shortenUrl, getAllClickStats } = require('../services/spooMe');
 const log = (...a) => console.log('[products]', ...a);
 
-// GET /api/products — list all
+// GET /api/products — list all (optional ?subject=id filter)
 router.get('/', async (req, res) => {
   try {
-    const products = await googleSheets.getAllProducts();
-    res.json({ success: true, products });
+    const { subject } = req.query;
+    if (subject !== undefined && subject !== '') {
+      // Look up subject to get its waGroupName for matching
+      const subjects = await googleSheets.getSubjects();
+      const subjectObj = subjects.find(s => s.id === subject);
+      const waGroupName = subjectObj?.waGroupName || '';
+      const products = await googleSheets.getAllProducts({ subject, waGroupName });
+      res.json({ success: true, products });
+    } else {
+      const products = await googleSheets.getAllProducts({});
+      res.json({ success: true, products });
+    }
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -16,12 +26,12 @@ router.get('/', async (req, res) => {
 
 // POST /api/products — add new product manually
 router.post('/', async (req, res) => {
-  const { Link, image, Text, join_link, wa_group } = req.body;
+  const { Link, image, Text, join_link, wa_group, subject } = req.body;
   if (!Link || !Text) {
     return res.status(400).json({ success: false, error: 'Link and Text are required' });
   }
   try {
-    await googleSheets.addProduct({ Link, image, Text, join_link, wa_group });
+    await googleSheets.addProduct({ Link, image, Text, join_link, wa_group, subject: subject || '' });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

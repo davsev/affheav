@@ -161,6 +161,14 @@ function renderSubjectBar() {
       const sel = document.getElementById('subject-select');
       if (sel) sel.value = id;
 
+      // Navigate to products tab when a subject is selected
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelector('[data-tab="products"]').classList.add('active');
+      document.getElementById('tab-products').classList.add('active');
+      const topbarEl = document.getElementById('topbar-section');
+      if (topbarEl) topbarEl.textContent = tabNames['products'] || 'מוצרים';
+
       loadProducts();
     });
   });
@@ -204,17 +212,88 @@ function renderSubjectsList() {
       <div class="subject-settings-info">
         <div class="subject-settings-name">${escHtml(s.name)}</div>
         <div class="subject-settings-meta">
-          ${s.whatsappUrl ? `💬 ${escHtml(s.whatsappUrl.slice(0,55))}…` : '💬 WhatsApp לא הוגדר'}
+          ${s.waGroupName ? `📋 <strong>${escHtml(s.waGroupName)}</strong>` : '<span style="color:#ea580c;">📋 קבוצת WA לא הוגדרה</span>'}
           &nbsp;·&nbsp;
-          ${s.facebookPageId ? `📘 Page ${escHtml(s.facebookPageId)}` : '📘 Facebook לא הוגדר'}
+          ${s.whatsappUrl ? '💬 Webhook ✓' : '💬 Webhook —'}
+          &nbsp;·&nbsp;
+          ${s.facebookPageId ? `📘 Page ${escHtml(s.facebookPageId)}` : '📘 Facebook —'}
+        </div>
+        <div id="subject-edit-${s.id}" style="display:none;margin-top:10px;">
+          <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="form-group">
+              <label class="form-label">שם קבוצת WA (לסינון)</label>
+              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-wa-group-${s.id}" value="${escHtml(s.waGroupName||'')}" placeholder="שם הקבוצה מדויק" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Webhook URL</label>
+              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-wa-url-${s.id}" value="${escHtml(s.whatsappUrl||'')}" placeholder="https://trigger.macrodroid.com/..." dir="ltr" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Facebook Page ID</label>
+              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-fb-page-${s.id}" value="${escHtml(s.facebookPageId||'')}" dir="ltr" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Facebook Token</label>
+              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-fb-token-${s.id}" value="${escHtml(s.facebookToken||'')}" dir="ltr" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">App ID</label>
+              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-fb-app-id-${s.id}" value="${escHtml(s.facebookAppId||'')}" dir="ltr" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">App Secret</label>
+              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-fb-app-secret-${s.id}" value="${escHtml(s.facebookAppSecret||'')}" dir="ltr" />
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+            <button class="btn btn-primary btn-sm" onclick="saveSubject('${s.id}')">
+              <span class="material-symbols-outlined" style="font-size:13px;">save</span>שמור
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="toggleSubjectEdit('${s.id}')">ביטול</button>
+            <span id="subject-save-result-${s.id}" style="font-size:12px;"></span>
+          </div>
         </div>
       </div>
-      <button class="btn btn-danger btn-sm" onclick="deleteSubject('${s.id}')">
-        <span class="material-symbols-outlined" style="font-size:14px;">delete</span>
-      </button>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <button class="btn btn-ghost btn-sm" onclick="toggleSubjectEdit('${s.id}')">
+          <span class="material-symbols-outlined" style="font-size:14px;">edit</span>
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="deleteSubject('${s.id}')">
+          <span class="material-symbols-outlined" style="font-size:14px;">delete</span>
+        </button>
+      </div>
     </div>`;
   }).join('');
 }
+
+window.toggleSubjectEdit = (id) => {
+  const el = document.getElementById(`subject-edit-${id}`);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+
+window.saveSubject = async (id) => {
+  const result = document.getElementById(`subject-save-result-${id}`);
+  try {
+    await api(`/api/subjects/${id}`, {
+      method: 'PUT',
+      body: {
+        waGroupName:       document.getElementById(`edit-wa-group-${id}`)?.value.trim() || '',
+        whatsappUrl:       document.getElementById(`edit-wa-url-${id}`)?.value.trim() || '',
+        facebookPageId:    document.getElementById(`edit-fb-page-${id}`)?.value.trim() || '',
+        facebookToken:     document.getElementById(`edit-fb-token-${id}`)?.value.trim() || '',
+        facebookAppId:     document.getElementById(`edit-fb-app-id-${id}`)?.value.trim() || '',
+        facebookAppSecret: document.getElementById(`edit-fb-app-secret-${id}`)?.value.trim() || '',
+      },
+    });
+    result.style.color = '#16a34a';
+    result.textContent = '✓ נשמר';
+    await loadSubjects();
+  } catch (err) {
+    result.style.color = '#dc2626';
+    result.textContent = '✗ שגיאה: ' + err.message;
+  }
+  setTimeout(() => { if (result) result.textContent = ''; }, 3000);
+};
 
 window.deleteSubject = async (id) => {
   if (!confirm('למחוק נושא זה?')) return;
@@ -234,6 +313,7 @@ window.deleteSubject = async (id) => {
 
 document.getElementById('btn-add-subject').addEventListener('click', async () => {
   const name = document.getElementById('subj-name').value.trim();
+  const waGroupName = document.getElementById('subj-wa-group-name').value.trim();
   const whatsappUrl = document.getElementById('subj-wa-url').value.trim();
   const facebookPageId = document.getElementById('subj-fb-page-id').value.trim();
   const facebookToken = document.getElementById('subj-fb-token').value.trim();
@@ -244,10 +324,10 @@ document.getElementById('btn-add-subject').addEventListener('click', async () =>
   if (!name) { result.style.color = '#d97706'; result.textContent = '⚠ שם נושא הוא שדה חובה'; return; }
 
   try {
-    await api('/api/subjects', { method: 'POST', body: { name, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret } });
+    await api('/api/subjects', { method: 'POST', body: { name, waGroupName, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret } });
     result.style.color = '#16a34a';
     result.textContent = '✓ נושא נוסף בהצלחה';
-    ['subj-name','subj-wa-url','subj-fb-page-id','subj-fb-token','subj-fb-app-id','subj-fb-app-secret'].forEach(id => {
+    ['subj-name','subj-wa-group-name','subj-wa-url','subj-fb-page-id','subj-fb-token','subj-fb-app-id','subj-fb-app-secret'].forEach(id => {
       document.getElementById(id).value = '';
     });
     await loadSubjects();
