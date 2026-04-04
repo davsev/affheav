@@ -42,6 +42,181 @@ document.getElementById('btn-clear-log').addEventListener('click', () => {
   logPanel.innerHTML = '';
 });
 
+// ── Subjects ──────────────────────────────────────────────────────────────────
+let _subjects = [];
+let _currentSubject = ''; // empty = all subjects
+
+async function loadSubjects() {
+  try {
+    const { subjects } = await api('/api/subjects');
+    _subjects = subjects || [];
+    populateSubjectSelects();
+    renderSubjectsList();
+  } catch (err) {
+    console.error('Failed to load subjects:', err);
+  }
+}
+
+const SUBJECT_COLORS = [
+  '#34C759', // green  (index 0 — first real subject)
+  '#FF9500', // orange
+  '#AF52DE', // purple
+  '#FF2D55', // pink
+  '#5AC8FA', // teal
+  '#FF6B6B', // coral
+  '#64D2FF', // sky
+  '#30D158', // mint
+];
+
+function getSubjectColor(idx) {
+  return SUBJECT_COLORS[idx % SUBJECT_COLORS.length];
+}
+
+function setAccentColor(hexColor) {
+  const root = document.documentElement;
+  if (!hexColor) {
+    root.style.setProperty('--accent', '#007AFF');
+    root.style.setProperty('--accent-light', 'rgba(0,122,255,0.12)');
+    root.style.setProperty('--accent-mid',   'rgba(0,122,255,0.22)');
+    return;
+  }
+  const r = parseInt(hexColor.slice(1,3), 16);
+  const g = parseInt(hexColor.slice(3,5), 16);
+  const b = parseInt(hexColor.slice(5,7), 16);
+  root.style.setProperty('--accent', hexColor);
+  root.style.setProperty('--accent-light', `rgba(${r},${g},${b},0.12)`);
+  root.style.setProperty('--accent-mid',   `rgba(${r},${g},${b},0.22)`);
+}
+
+function renderSubjectBar() {
+  const bar = document.getElementById('subject-bar');
+  if (!bar) return;
+
+  const pills = [
+    `<button class="subject-pill ${_currentSubject === '' ? 'active' : ''}" data-subject="" data-color="#007AFF" style="--pill-color:#007AFF">
+      <span class="subject-pill-name">הכל</span>
+    </button>`
+  ];
+
+  _subjects.forEach((s, i) => {
+    const color = getSubjectColor(i);
+    const isActive = _currentSubject === s.id;
+    pills.push(`
+      <button class="subject-pill ${isActive ? 'active' : ''}"
+              data-subject="${escHtml(s.id)}"
+              data-color="${color}"
+              style="--pill-color:${color}">
+        <span class="subject-pill-name">${escHtml(s.name)}</span>
+      </button>
+    `);
+  });
+
+  bar.innerHTML = pills.join('');
+
+  bar.querySelectorAll('.subject-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const id    = pill.dataset.subject;
+      const color = pill.dataset.color;
+      _currentSubject = id;
+
+      bar.querySelectorAll('.subject-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+
+      setAccentColor(id === '' ? null : color);
+
+      // Sync hidden select
+      const sel = document.getElementById('subject-select');
+      if (sel) sel.value = id;
+
+      loadProducts();
+    });
+  });
+
+  // Apply current accent
+  const active = bar.querySelector('.subject-pill.active');
+  if (active) setAccentColor(_currentSubject === '' ? null : active.dataset.color);
+}
+
+function populateSubjectSelects() {
+  const options = _subjects.map(s => `<option value="${escHtml(s.id)}">${escHtml(s.name)}</option>`).join('');
+
+  // Render the visual pill bar
+  renderSubjectBar();
+
+  // Schedules form
+  const schedSel = document.getElementById('sched-subject');
+  if (schedSel) schedSel.innerHTML = '<option value="">כל הנושאים</option>' + options;
+
+  // Add-product form
+  const newSubj = document.getElementById('new-subject');
+  if (newSubj) newSubj.innerHTML = '<option value="">ללא נושא</option>' + options;
+}
+
+function renderSubjectsList() {
+  const container = document.getElementById('subjects-list');
+  if (!container) return;
+  if (!_subjects.length) {
+    container.innerHTML = '<div style="font-size:13px;color:var(--label-3);">אין נושאים מוגדרים עדיין.</div>';
+    return;
+  }
+  container.innerHTML = _subjects.map(s => `
+    <div class="schedule-item" id="subject-item-${s.id}" style="align-items:flex-start;gap:12px;">
+      <div style="flex:1;min-width:0;">
+        <div class="schedule-label">${escHtml(s.name)}</div>
+        <div style="font-size:11.5px;color:var(--label-3);margin-top:3px;font-family:monospace;word-break:break-all;">
+          ${s.whatsappUrl ? `WA: ${escHtml(s.whatsappUrl.slice(0, 60))}…` : '<span style="opacity:.5;">WA: לא הוגדר</span>'}
+        </div>
+        <div style="font-size:11.5px;color:var(--label-3);margin-top:1px;font-family:monospace;">
+          ${s.facebookPageId ? `FB Page: ${escHtml(s.facebookPageId)}` : '<span style="opacity:.5;">FB: לא הוגדר</span>'}
+        </div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteSubject('${s.id}')">🗑</button>
+    </div>
+  `).join('');
+}
+
+window.deleteSubject = async (id) => {
+  if (!confirm('למחוק נושא זה?')) return;
+  try {
+    await api(`/api/subjects/${id}`, { method: 'DELETE' });
+    if (_currentSubject === id) {
+      _currentSubject = '';
+      const sel = document.getElementById('subject-select');
+      if (sel) sel.value = '';
+    }
+    await loadSubjects();
+    await loadProducts();
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
+
+document.getElementById('btn-add-subject').addEventListener('click', async () => {
+  const name = document.getElementById('subj-name').value.trim();
+  const whatsappUrl = document.getElementById('subj-wa-url').value.trim();
+  const facebookPageId = document.getElementById('subj-fb-page-id').value.trim();
+  const facebookToken = document.getElementById('subj-fb-token').value.trim();
+  const facebookAppId = document.getElementById('subj-fb-app-id').value.trim();
+  const facebookAppSecret = document.getElementById('subj-fb-app-secret').value.trim();
+  const result = document.getElementById('subject-form-result');
+
+  if (!name) { result.style.color = '#fbbf24'; result.textContent = '⚠ שם נושא הוא שדה חובה'; return; }
+
+  try {
+    await api('/api/subjects', { method: 'POST', body: { name, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret } });
+    result.style.color = '#4ade80';
+    result.textContent = '✓ נושא נוסף בהצלחה';
+    ['subj-name','subj-wa-url','subj-fb-page-id','subj-fb-token','subj-fb-app-id','subj-fb-app-secret'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    await loadSubjects();
+  } catch (err) {
+    result.style.color = '#f87171';
+    result.textContent = '✗ שגיאה: ' + err.message;
+  }
+  setTimeout(() => { result.textContent = ''; }, 4000);
+});
+
 // ── Products ──────────────────────────────────────────────────────────────────
 let _currentFilter = 'unsent';
 let _currentSort = 'none';
@@ -168,7 +343,8 @@ async function loadProducts() {
   tbody.innerHTML = '<tr><td colspan="9" class="empty-state">טוען...</td></tr>';
 
   try {
-    const { products } = await api('/api/products');
+    const url = _currentSubject ? `/api/products?subject=${encodeURIComponent(_currentSubject)}` : '/api/products';
+    const { products } = await api(url);
     if (!products.length) {
       tbody.innerHTML = '<tr><td colspan="9" class="empty-state">אין מוצרים בגיליון</td></tr>';
       return;
@@ -194,7 +370,9 @@ window.sendProduct = (rowNumber, btn) => {
     btn.textContent = '...';
     showLogTab();
     try {
-      await api(`/api/send/${rowNumber}`, { method: 'POST', body: { platforms } });
+      const sendBody = { platforms };
+      if (_currentSubject) sendBody.subject = _currentSubject;
+      await api(`/api/send/${rowNumber}`, { method: 'POST', body: sendBody });
       await loadProducts();
     } catch (err) {
       alert('שגיאה: ' + err.message);
@@ -261,7 +439,8 @@ document.getElementById('btn-execute').addEventListener('click', async (e) => {
   btn.textContent = '...מריץ';
   showLogTab();
   try {
-    const result = await api('/api/send/execute', { method: 'POST' });
+    const body = _currentSubject ? { subject: _currentSubject } : {};
+    const result = await api('/api/send/execute', { method: 'POST', body });
     if (!result.success && result.reason === 'no_unsent_products') {
       alert('אין מוצרים שלא נשלחו');
     } else {
@@ -284,10 +463,13 @@ async function loadSchedules() {
       container.innerHTML = '<div class="empty-state">אין לוחות זמנים</div>';
       return;
     }
-    container.innerHTML = schedules.map(s => `
+    container.innerHTML = schedules.map(s => {
+      const subj = s.subject ? _subjects.find(x => x.id === s.subject) : null;
+      const subjChip = subj ? `<span style="font-size:10.5px;background:var(--blue-light);color:var(--blue);padding:1px 7px;border-radius:20px;margin-right:6px;">${escHtml(subj.name)}</span>` : '';
+      return `
       <div class="schedule-item" id="sched-${s.id}">
         <div>
-          <div class="schedule-label">${escHtml(s.label)}</div>
+          <div class="schedule-label">${subjChip}${escHtml(s.label)}</div>
           <div class="schedule-cron" dir="ltr">${escHtml(s.cron)}</div>
         </div>
         <div class="schedule-actions">
@@ -298,7 +480,7 @@ async function loadSchedules() {
           <button class="btn btn-danger btn-sm" onclick="deleteSchedule('${s.id}')">🗑</button>
         </div>
       </div>
-    `).join('');
+    `;}).join('');
   } catch (err) {
     container.innerHTML = `<div class="empty-state" style="color:#f87171;">${escHtml(err.message)}</div>`;
   }
@@ -324,13 +506,15 @@ window.deleteSchedule = async (id) => {
 };
 
 document.getElementById('btn-add-schedule').addEventListener('click', async () => {
-  const label = document.getElementById('sched-label').value.trim();
-  const cron  = document.getElementById('sched-cron').value.trim();
+  const label   = document.getElementById('sched-label').value.trim();
+  const cron    = document.getElementById('sched-cron').value.trim();
+  const subject = document.getElementById('sched-subject').value;
   if (!label || !cron) return alert('יש למלא שם וביטוי cron');
   try {
-    await api('/api/schedules', { method: 'POST', body: { label, cron } });
+    await api('/api/schedules', { method: 'POST', body: { label, cron, subject } });
     document.getElementById('sched-label').value = '';
     document.getElementById('sched-cron').value  = '';
+    document.getElementById('sched-subject').value = '';
     await loadSchedules();
   } catch (err) {
     alert('שגיאה: ' + err.message);
@@ -391,12 +575,13 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
   const image    = document.getElementById('new-image').value.trim();
   const join_link= document.getElementById('new-join').value.trim();
   const wa_group = document.getElementById('new-wa-group').value.trim();
+  const subject  = document.getElementById('new-subject').value;
   const result   = document.getElementById('add-product-result');
 
   if (!Text || !Link) { result.textContent = '⚠ שם מוצר וקישור הם שדות חובה'; result.style.color='#fbbf24'; return; }
 
   try {
-    await api('/api/products', { method: 'POST', body: { Link, image, Text, join_link, wa_group } });
+    await api('/api/products', { method: 'POST', body: { Link, image, Text, join_link, wa_group, subject } });
     result.textContent = '✓ מוצר נוסף בהצלחה';
     result.style.color = '#4ade80';
     ['new-text','new-link','new-image','new-join','new-wa-group'].forEach(id => document.getElementById(id).value = '');
@@ -546,12 +731,16 @@ async function loadTokenInfo() {
 
 document.getElementById('btn-check-token').addEventListener('click', loadTokenInfo);
 
-// Load prompt + token info when settings tab is opened
+// Load prompt + token info + subjects when settings tab is opened
 document.querySelector('[data-tab="settings"]').addEventListener('click', () => {
   loadPrompt();
   loadTokenInfo();
+  loadSubjects();
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-loadProducts();
-loadSchedules();
+// Load subjects first so selects are populated before products/schedules render
+loadSubjects().then(() => {
+  loadProducts();
+  loadSchedules();
+});
