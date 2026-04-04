@@ -1,3 +1,33 @@
+// ── Login ─────────────────────────────────────────────────────────────────────
+(function initLogin() {
+  const loginPage = document.getElementById('login-page');
+  if (!loginPage) return;
+
+  // Skip login if already authenticated in this session
+  if (sessionStorage.getItem('ah_auth') === '1') {
+    loginPage.style.display = 'none';
+    return;
+  }
+
+  const btnLogin = document.getElementById('btn-login');
+  const passInput = document.getElementById('login-pass');
+
+  function doLogin() {
+    sessionStorage.setItem('ah_auth', '1');
+    loginPage.style.animation = 'fadeOut 0.4s ease forwards';
+    setTimeout(() => { loginPage.style.display = 'none'; }, 400);
+  }
+
+  btnLogin.addEventListener('click', doLogin);
+  passInput.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  document.getElementById('login-user').addEventListener('keydown', e => { if (e.key === 'Enter') passInput.focus(); });
+
+  // Add fadeOut animation
+  const style = document.createElement('style');
+  style.textContent = '@keyframes fadeOut { to { opacity:0; transform:scale(1.02); } }';
+  document.head.appendChild(style);
+})();
+
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -8,6 +38,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     // Update topbar section name
     const el = document.getElementById('topbar-section');
     if (el && typeof tabNames !== 'undefined') el.textContent = tabNames[btn.dataset.tab] || '';
+    // Load dashboard when switching to it
+    if (btn.dataset.tab === 'dashboard') renderDashboard();
   });
 });
 
@@ -157,14 +189,18 @@ function renderSubjectsList() {
   const container = document.getElementById('subjects-list');
   if (!container) return;
   if (!_subjects.length) {
-    container.innerHTML = '<div style="font-size:13px;color:var(--text-tertiary);padding:8px 0;">אין נושאים מוגדרים עדיין.</div>';
+    container.innerHTML = `
+      <div style="text-align:center;padding:32px 20px;color:var(--on-surface-var);">
+        <span class="material-symbols-outlined" style="font-size:36px;opacity:0.3;display:block;margin-bottom:8px;">category</span>
+        <div style="font-size:13px;">אין נושאים מוגדרים עדיין.</div>
+      </div>`;
     return;
   }
   container.innerHTML = _subjects.map((s, i) => {
     const color = getSubjectColor(i);
     return `
     <div class="subject-settings-item" id="subject-item-${s.id}">
-      <span class="subject-settings-dot" style="background:${color};box-shadow:0 0 0 3px color-mix(in srgb,${color} 25%,transparent);"></span>
+      <span class="subject-settings-dot" style="background:${color};box-shadow:0 0 0 4px ${color}22;"></span>
       <div class="subject-settings-info">
         <div class="subject-settings-name">${escHtml(s.name)}</div>
         <div class="subject-settings-meta">
@@ -173,7 +209,9 @@ function renderSubjectsList() {
           ${s.facebookPageId ? `📘 Page ${escHtml(s.facebookPageId)}` : '📘 Facebook לא הוגדר'}
         </div>
       </div>
-      <button class="btn btn-danger btn-sm" onclick="deleteSubject('${s.id}')">🗑</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteSubject('${s.id}')">
+        <span class="material-symbols-outlined" style="font-size:14px;">delete</span>
+      </button>
     </div>`;
   }).join('');
 }
@@ -203,18 +241,18 @@ document.getElementById('btn-add-subject').addEventListener('click', async () =>
   const facebookAppSecret = document.getElementById('subj-fb-app-secret').value.trim();
   const result = document.getElementById('subject-form-result');
 
-  if (!name) { result.style.color = '#fbbf24'; result.textContent = '⚠ שם נושא הוא שדה חובה'; return; }
+  if (!name) { result.style.color = '#d97706'; result.textContent = '⚠ שם נושא הוא שדה חובה'; return; }
 
   try {
     await api('/api/subjects', { method: 'POST', body: { name, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret } });
-    result.style.color = '#4ade80';
+    result.style.color = '#16a34a';
     result.textContent = '✓ נושא נוסף בהצלחה';
     ['subj-name','subj-wa-url','subj-fb-page-id','subj-fb-token','subj-fb-app-id','subj-fb-app-secret'].forEach(id => {
       document.getElementById(id).value = '';
     });
     await loadSubjects();
   } catch (err) {
-    result.style.color = '#f87171';
+    result.style.color = '#dc2626';
     result.textContent = '✗ שגיאה: ' + err.message;
   }
   setTimeout(() => { result.textContent = ''; }, 4000);
@@ -464,38 +502,38 @@ document.getElementById('btn-refresh-products').addEventListener('click', loadPr
 document.getElementById('btn-sync-clicks').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   btn.disabled = true;
-  btn.textContent = '⏳ מסנכרן...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="animation:spin 1s linear infinite;font-size:17px;">sync</span>';
   try {
     const res = await api('/api/products/sync-clicks', { method: 'POST' });
     if (res.success) {
-      btn.textContent = `✅ סונכרנו ${res.synced}`;
+      btn.innerHTML = `<span style="font-size:12px;font-weight:700;">✓ ${res.synced}</span>`;
       renderProducts(res.products);
     } else {
-      btn.textContent = '❌ שגיאה';
+      btn.innerHTML = '<span style="font-size:12px;">✗</span>';
     }
   } catch {
-    btn.textContent = '❌ שגיאה';
+    btn.innerHTML = '<span style="font-size:12px;">✗</span>';
   }
-  setTimeout(() => { btn.disabled = false; btn.textContent = '📊 סנכרן קליקים'; }, 3000);
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">sync</span>'; }, 3000);
 });
 
 document.getElementById('btn-shorten-all').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   btn.disabled = true;
-  btn.textContent = '⏳ ממיר...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="animation:spin 1s linear infinite;font-size:17px;">sync</span>';
   try {
     const res = await api('/api/products/shorten-all', { method: 'POST' });
     if (res.success) {
-      btn.textContent = `✅ הומרו ${res.converted}`;
+      btn.innerHTML = `<span style="font-size:12px;font-weight:700;">✓ ${res.converted}</span>`;
       await loadProducts();
     } else {
-      btn.textContent = '❌ שגיאה';
+      btn.innerHTML = '<span style="font-size:12px;">✗</span>';
       alert(res.error);
     }
   } catch (err) {
-    btn.textContent = '❌ שגיאה';
+    btn.innerHTML = '<span style="font-size:12px;">✗</span>';
   }
-  setTimeout(() => { btn.disabled = false; btn.textContent = '🔗 המר לspoo.me'; }, 3000);
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">link</span>'; }, 3000);
 });
 
 document.getElementById('btn-execute').addEventListener('click', async (e) => {
@@ -643,16 +681,16 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
   const subject  = document.getElementById('new-subject').value;
   const result   = document.getElementById('add-product-result');
 
-  if (!Text || !Link) { result.textContent = '⚠ שם מוצר וקישור הם שדות חובה'; result.style.color='#fbbf24'; return; }
+  if (!Text || !Link) { result.textContent = '⚠ שם מוצר וקישור הם שדות חובה'; result.style.color='#d97706'; return; }
 
   try {
     await api('/api/products', { method: 'POST', body: { Link, image, Text, join_link, wa_group, subject } });
     result.textContent = '✓ מוצר נוסף בהצלחה';
-    result.style.color = '#4ade80';
+    result.style.color = '#16a34a';
     ['new-text','new-link','new-image','new-join','new-wa-group'].forEach(id => document.getElementById(id).value = '');
   } catch (err) {
     result.textContent = '✗ שגיאה: ' + err.message;
-    result.style.color = '#f87171';
+    result.style.color = '#dc2626';
   }
 });
 
@@ -749,10 +787,10 @@ document.getElementById('btn-save-prompt').addEventListener('click', async () =>
   if (!prompt) return;
   try {
     await api('/api/prompt', { method: 'POST', body: { prompt } });
-    res.style.color = '#4ade80';
+    res.style.color = '#16a34a';
     res.textContent = '✓ הפרומפט נשמר בהצלחה';
   } catch (e) {
-    res.style.color = '#f87171';
+    res.style.color = '#dc2626';
     res.textContent = '✗ שגיאה בשמירה';
   }
   setTimeout(() => { res.textContent = ''; }, 3000);
@@ -763,10 +801,10 @@ document.getElementById('btn-reset-prompt').addEventListener('click', async () =
   try {
     const data = await api('/api/prompt/reset', { method: 'POST' });
     document.getElementById('prompt-editor').value = data.prompt;
-    res.style.color = '#4ade80';
+    res.style.color = '#16a34a';
     res.textContent = '✓ הפרומפט אופס לברירת המחדל';
   } catch (e) {
-    res.style.color = '#f87171';
+    res.style.color = '#dc2626';
     res.textContent = '✗ שגיאה באיפוס';
   }
   setTimeout(() => { res.textContent = ''; }, 3000);
@@ -803,7 +841,135 @@ document.querySelector('[data-tab="settings"]').addEventListener('click', () => 
   loadSubjects();
 });
 
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+async function renderDashboard() {
+  const grid = document.getElementById('dashboard-subjects-grid');
+  if (!grid) return;
+
+  // Fetch products for all subjects
+  let allProducts = [];
+  try {
+    const { products } = await api('/api/products');
+    allProducts = products || [];
+  } catch (e) { /* ignore */ }
+
+  const SUBJECT_ICONS = ['🐠','🎣','🌿','🐾','🏋️','🍳','📱','🎮','👗','🏕️','🌸','⚽'];
+  const SUBJECT_BG    = [
+    'rgba(112,42,225,0.08)','rgba(0,122,255,0.08)','rgba(22,163,74,0.08)',
+    'rgba(234,88,12,0.08)', 'rgba(160,45,112,0.08)','rgba(14,165,233,0.08)',
+  ];
+
+  const cards = [];
+
+  // "All" summary card
+  const totalSent   = allProducts.filter(p => p.sent).length;
+  const totalUnsent = allProducts.length - totalSent;
+  const totalClicks = allProducts.reduce((s,p) => s + (p.clicks||0), 0);
+  cards.push(`
+    <div class="dashboard-subject-card" onclick="navigateTo('products','')">
+      <div class="dashboard-subject-icon" style="background:rgba(112,42,225,0.1);">🌐</div>
+      <div class="dashboard-subject-name">כלל הנושאים</div>
+      <div class="dashboard-subject-stat">${allProducts.length} מוצרים</div>
+      <div class="dashboard-subject-kpi">
+        <div class="dashboard-kpi-item">
+          <div class="dashboard-kpi-label">ממתינים</div>
+          <div class="dashboard-kpi-val" style="color:#ea580c;">${totalUnsent}</div>
+        </div>
+        <div class="dashboard-kpi-item">
+          <div class="dashboard-kpi-label">נשלחו</div>
+          <div class="dashboard-kpi-val" style="color:#16a34a;">${totalSent}</div>
+        </div>
+        <div class="dashboard-kpi-item">
+          <div class="dashboard-kpi-label">קליקים</div>
+          <div class="dashboard-kpi-val" style="color:#702ae1;">${totalClicks}</div>
+        </div>
+      </div>
+    </div>
+  `);
+
+  if (_subjects.length === 0) {
+    cards.push(`
+      <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--on-surface-var);">
+        <span class="material-symbols-outlined" style="font-size:48px;opacity:0.3;display:block;margin-bottom:12px;">category</span>
+        <div style="font-size:14px;">אין נושאים מוגדרים — הוסף נושאים בהגדרות</div>
+      </div>
+    `);
+  } else {
+    _subjects.forEach((s, i) => {
+      const color   = getSubjectColor(i);
+      const subProds= allProducts.filter(p => p.subject === s.id);
+      const sent    = subProds.filter(p => p.sent).length;
+      const unsent  = subProds.length - sent;
+      const clicks  = subProds.reduce((sum,p) => sum + (p.clicks||0), 0);
+      const icon    = SUBJECT_ICONS[i % SUBJECT_ICONS.length];
+      const bg      = SUBJECT_BG[i % SUBJECT_BG.length];
+      cards.push(`
+        <div class="dashboard-subject-card" onclick="navigateTo('products','${escHtml(s.id)}')">
+          <div class="dashboard-subject-icon" style="background:${bg};">${icon}</div>
+          <div class="dashboard-subject-name">${escHtml(s.name)}</div>
+          <div class="dashboard-subject-stat">${subProds.length} מוצרים</div>
+          <div class="dashboard-subject-kpi">
+            <div class="dashboard-kpi-item">
+              <div class="dashboard-kpi-label">ממתינים</div>
+              <div class="dashboard-kpi-val" style="color:#ea580c;">${unsent}</div>
+            </div>
+            <div class="dashboard-kpi-item">
+              <div class="dashboard-kpi-label">נשלחו</div>
+              <div class="dashboard-kpi-val" style="color:#16a34a;">${sent}</div>
+            </div>
+            <div class="dashboard-kpi-item">
+              <div class="dashboard-kpi-label">קליקים</div>
+              <div class="dashboard-kpi-val" style="color:${color};">${clicks}</div>
+            </div>
+          </div>
+        </div>
+      `);
+    });
+  }
+
+  grid.innerHTML = cards.join('');
+  // Re-apply grid columns
+  grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(280px, 1fr))';
+}
+
+// Navigate to products page filtered by subject
+window.navigateTo = (tab, subjectId) => {
+  // Switch to products tab
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  const tabBtn = document.querySelector(`[data-tab="${tab}"]`);
+  if (tabBtn) tabBtn.classList.add('active');
+  const panel = document.getElementById('tab-' + tab);
+  if (panel) panel.classList.add('active');
+  const el = document.getElementById('topbar-section');
+  if (el && typeof tabNames !== 'undefined') el.textContent = tabNames[tab] || '';
+
+  // Set subject filter
+  if (tab === 'products') {
+    _currentSubject = subjectId;
+    // Update sidebar subject items
+    document.querySelectorAll('.subject-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.subject === subjectId);
+    });
+    // Update accent color
+    if (subjectId === '') {
+      setAccentColor(null);
+    } else {
+      const idx = _subjects.findIndex(s => s.id === subjectId);
+      if (idx >= 0) setAccentColor(getSubjectColor(idx));
+    }
+    loadProducts();
+  }
+};
+
 // ── Init ──────────────────────────────────────────────────────────────────────
+// Add spin keyframe for icon buttons
+(function() {
+  const s = document.createElement('style');
+  s.textContent = '@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }';
+  document.head.appendChild(s);
+})();
+
 // Load subjects first so selects are populated before products/schedules render
 loadSubjects().then(() => {
   loadProducts();
