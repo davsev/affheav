@@ -11,7 +11,7 @@
 </head>
 <body>
 
-<!-- ── Modal ──────────────────────────────────────────────────────────────── -->
+<!-- ── Send Modal ──────────────────────────────────────────────────────────── -->
 <div id="send-modal">
   <div class="modal-box">
     <div class="modal-title">לאן לשלוח?</div>
@@ -75,6 +75,8 @@
 
 <!-- ── Main ───────────────────────────────────────────────────────────────── -->
 <div class="main">
+
+  <!-- Topbar -->
   <div class="topbar">
     <div class="topbar-title">Affiliate Heaven / <span id="topbar-section">מוצרים</span></div>
     <div class="execute-row">
@@ -83,6 +85,17 @@
     </div>
   </div>
 
+  <!-- Hidden selects for forms (populated by JS) -->
+  <select id="subject-select" style="display:none;"></select>
+
+  <!-- Subject Pill Bar -->
+  <div class="subject-bar" id="subject-bar">
+    <button class="subject-pill active" data-subject="" data-color="#007AFF" style="--pill-color:#007AFF">
+      <span class="subject-pill-name">הכל</span>
+    </button>
+  </div>
+
+  <!-- Content -->
   <div class="content">
 
     <!-- ── Products ──────────────────────────────────────────────────── -->
@@ -100,13 +113,15 @@
               <button class="filter-btn" id="filter-all" onclick="setFilter('all')">הכל</button>
             </div>
             <div class="filter-group">
-              <button class="filter-btn" id="sort-none" onclick="setSort('none')">ללא מיון</button>
-              <button class="filter-btn" id="sort-sent" onclick="setSort('sent')">תאריך שליחה</button>
-              <button class="filter-btn" id="sort-clicks" onclick="setSort('clicks')">קליקים</button>
+              <button class="filter-btn active" id="sort-none" onclick="setSort('none')">ללא מיון</button>
+              <button class="filter-btn" id="sort-sent" onclick="setSort('sent')">תאריך שליחה ↓</button>
+              <button class="filter-btn" id="sort-clicks" onclick="setSort('clicks')">קליקים ↓</button>
             </div>
-            <button class="btn btn-ghost btn-sm" id="btn-sync-clicks">📊 סנכרן קליקים</button>
-            <button class="btn btn-ghost btn-sm" id="btn-shorten-all">🔗 המר לspoo.me</button>
-            <button class="btn btn-ghost btn-sm" id="btn-refresh-products">🔄 רענן</button>
+            <div class="icon-btn-group">
+              <button class="icon-btn" id="btn-sync-clicks" title="סנכרן קליקים מ-spoo.me">📊</button>
+              <button class="icon-btn" id="btn-shorten-all" title="המר קישורים לspoo.me">🔗</button>
+              <button class="icon-btn" id="btn-refresh-products" title="רענן רשימה">🔄</button>
+            </div>
           </div>
         </div>
         <div class="table-wrap">
@@ -114,12 +129,18 @@
             <thead>
               <tr>
                 <th style="width:32px;"></th>
-                <th>תמונה</th><th>שם מוצר</th><th>קישור</th>
-                <th>קבוצת WA</th><th>נשלח</th><th>פייסבוק</th><th>קליקים</th><th>פעולה</th>
+                <th>תמונה</th>
+                <th>שם מוצר</th>
+                <th>קישור</th>
+                <th>קבוצת WA</th>
+                <th>נשלח</th>
+                <th>פייסבוק</th>
+                <th>קליקים</th>
+                <th>פעולה</th>
               </tr>
             </thead>
             <tbody id="products-body">
-              <tr><td colspan="7" class="empty-state">טוען...</td></tr>
+              <tr><td colspan="9" class="empty-state">טוען...</td></tr>
             </tbody>
           </table>
         </div>
@@ -142,6 +163,12 @@
           <div class="form-group">
             <label class="form-label">Cron Expression</label>
             <input class="form-input" id="sched-cron" placeholder="0 12 * * 5" dir="ltr" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">נושא</label>
+            <select class="form-input" id="sched-subject">
+              <option value="">כל הנושאים</option>
+            </select>
           </div>
         </div>
         <div style="margin-top:10px;font-size:11.5px;color:var(--label-3);font-family:monospace;">
@@ -233,6 +260,12 @@
             <label class="form-label">שם קבוצת WA</label>
             <input class="form-input" id="new-wa-group" placeholder="fishing" />
           </div>
+          <div class="form-group">
+            <label class="form-label">נושא</label>
+            <select class="form-input" id="new-subject">
+              <option value="">ללא נושא</option>
+            </select>
+          </div>
         </div>
         <button class="btn btn-success" style="margin-top:20px;" id="btn-add-product">+ הוסף לגיליון</button>
         <div id="add-product-result" style="margin-top:12px;font-size:13px;"></div>
@@ -260,11 +293,55 @@
 
     <!-- ── Settings ───────────────────────────────────────────────────── -->
     <div class="tab-panel" id="tab-settings">
+
+      <!-- Subjects management -->
+      <div class="card">
+        <div class="card-title">ניהול נושאים</div>
+        <p style="font-size:13px;color:var(--label-3);margin-bottom:14px;">הגדר נושאים (דיג, אקווריום…) עם כתובת WhatsApp ופרטי Facebook נפרדים לכל אחד.</p>
+        <div id="subjects-list" style="margin-bottom:16px;"></div>
+        <details id="subject-form-details" style="margin-top:4px;">
+          <summary style="cursor:pointer;font-size:13px;color:var(--blue);user-select:none;">+ הוסף נושא חדש</summary>
+          <div style="margin-top:14px;">
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">שם נושא *</label>
+                <input class="form-input" id="subj-name" placeholder="aquarium" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">WhatsApp Webhook URL</label>
+                <input class="form-input" id="subj-wa-url" placeholder="https://trigger.macrodroid.com/..." dir="ltr" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Facebook Page ID</label>
+                <input class="form-input" id="subj-fb-page-id" placeholder="123456789" dir="ltr" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Facebook Access Token</label>
+                <input class="form-input" id="subj-fb-token" placeholder="EAAVWa..." dir="ltr" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Facebook App ID</label>
+                <input class="form-input" id="subj-fb-app-id" placeholder="150238..." dir="ltr" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Facebook App Secret</label>
+                <input class="form-input" id="subj-fb-app-secret" placeholder="c80fb6..." dir="ltr" />
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:14px;">
+              <button class="btn btn-success" id="btn-add-subject">+ הוסף נושא</button>
+              <div id="subject-form-result" style="font-size:13px;align-self:center;"></div>
+            </div>
+          </div>
+        </details>
+      </div>
+
       <div class="card">
         <div class="card-title">טוקן פייסבוק</div>
         <div id="fb-token-info" style="font-size:13px;color:var(--label-3);">טוען...</div>
         <button class="btn btn-ghost btn-sm" style="margin-top:14px;" id="btn-check-token">🔍 בדוק טוקן</button>
       </div>
+
       <div class="card">
         <div class="card-title">פרומפט OpenAI</div>
         <p style="font-size:12px;color:var(--label-3);margin-bottom:12px;">
@@ -281,7 +358,8 @@
         </div>
         <div id="prompt-save-result" style="margin-top:10px;font-size:13px;"></div>
       </div>
-    </div>
+
+    </div><!-- /tab-settings -->
 
   </div><!-- /content -->
 </div><!-- /main -->
