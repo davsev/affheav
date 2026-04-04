@@ -11,19 +11,13 @@
 </head>
 <body>
 
-<!-- ── Send Modal ──────────────────────────────────────────────────────────── -->
+<!-- ── Send Modal ──────────────────────────────────────────────────────── -->
 <div id="send-modal">
   <div class="modal-box">
     <div class="modal-title">לאן לשלוח?</div>
     <div class="modal-options">
-      <label class="modal-option">
-        <input type="checkbox" id="modal-chk-wa" checked />
-        💬 WhatsApp
-      </label>
-      <label class="modal-option">
-        <input type="checkbox" id="modal-chk-fb" checked />
-        📘 Facebook
-      </label>
+      <label class="modal-option"><input type="checkbox" id="modal-chk-wa" checked /> 💬 WhatsApp</label>
+      <label class="modal-option"><input type="checkbox" id="modal-chk-fb" checked /> 📘 Facebook</label>
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost btn-sm" id="modal-cancel">ביטול</button>
@@ -32,7 +26,7 @@
   </div>
 </div>
 
-<!-- ── Sidebar ─────────────────────────────────────────────────────────────── -->
+<!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
 <nav class="sidebar">
   <div class="brand">
     <div class="brand-logo">
@@ -46,25 +40,22 @@
 
   <div class="nav">
     <div class="nav-section-label">ניווט</div>
-    <button class="tab-btn active" data-tab="products">
-      <span class="nav-icon">📦</span>מוצרים
-    </button>
-    <button class="tab-btn" data-tab="schedules">
-      <span class="nav-icon">📅</span>לוחות זמנים
-    </button>
-    <button class="tab-btn" data-tab="scraper">
-      <span class="nav-icon">🔍</span>סריקת AliExpress
-    </button>
-    <button class="tab-btn" data-tab="add-product">
-      <span class="nav-icon">➕</span>הוסף מוצר
-    </button>
+    <button class="tab-btn active" data-tab="products"><span class="nav-icon">📦</span>מוצרים</button>
+    <button class="tab-btn" data-tab="schedules"><span class="nav-icon">📅</span>לוחות זמנים</button>
+    <button class="tab-btn" data-tab="scraper"><span class="nav-icon">🔍</span>סריקת AliExpress</button>
+    <button class="tab-btn" data-tab="add-product"><span class="nav-icon">➕</span>הוסף מוצר</button>
+
+    <div class="nav-section-label">נושאים</div>
+    <div class="sidebar-subjects" id="sidebar-subjects">
+      <button class="subject-item active" data-subject="" style="--item-color:#007AFF">
+        <span class="subject-dot" style="background:#007AFF;"></span>
+        <span class="subject-item-name">הכל</span>
+      </button>
+    </div>
+
     <div class="nav-section-label">מערכת</div>
-    <button class="tab-btn" data-tab="logs">
-      <span class="nav-icon">📋</span>לוג פעילות
-    </button>
-    <button class="tab-btn" data-tab="settings">
-      <span class="nav-icon">⚙️</span>הגדרות
-    </button>
+    <button class="tab-btn" data-tab="logs"><span class="nav-icon">📋</span>לוג פעילות</button>
+    <button class="tab-btn" data-tab="settings"><span class="nav-icon">⚙️</span>הגדרות</button>
   </div>
 
   <div class="sidebar-footer">
@@ -73,7 +64,7 @@
   </div>
 </nav>
 
-<!-- ── Main ───────────────────────────────────────────────────────────────── -->
+<!-- ── Main ───────────────────────────────────────────────────────────── -->
 <div class="main">
 
   <!-- Topbar -->
@@ -85,37 +76,58 @@
     </div>
   </div>
 
-  <!-- Hidden selects for forms (populated by JS) -->
-  <select id="subject-select" style="display:none;"></select>
-
-  <!-- Subject Pill Bar -->
-  <div class="subject-bar" id="subject-bar">
-    <button class="subject-pill active" data-subject="" data-color="#007AFF" style="--pill-color:#007AFF">
-      <span class="subject-pill-name">הכל</span>
-    </button>
+  <!-- KPI Strip -->
+  <div class="kpi-strip" id="kpi-strip">
+    <div class="kpi-card">
+      <div class="kpi-label">סה״כ מוצרים</div>
+      <div class="kpi-value" id="kpi-total">—</div>
+      <div class="kpi-sub">בגיליון</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">טרם נשלחו</div>
+      <div class="kpi-value" id="kpi-unsent" style="color:var(--orange)">—</div>
+      <div class="kpi-sub">ממתינים לשליחה</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">נשלחו</div>
+      <div class="kpi-value" id="kpi-sent" style="color:var(--green)">—</div>
+      <div class="kpi-sub">הושלמו</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">קליקים</div>
+      <div class="kpi-value" id="kpi-clicks" style="color:var(--accent)">—</div>
+      <div class="kpi-sub">סה״כ קליקים</div>
+    </div>
   </div>
+
+  <!-- Hidden select (for form compatibility) -->
+  <select id="subject-select" style="display:none;"></select>
 
   <!-- Content -->
   <div class="content">
 
-    <!-- ── Products ──────────────────────────────────────────────────── -->
+    <!-- ── Products ────────────────────────────────────────────────── -->
     <div class="tab-panel active" id="tab-products">
       <div class="card">
         <div class="toolbar">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <span class="card-title" style="margin:0;">מוצרים בגיליון</span>
+            <span class="card-title" style="margin:0;">מוצרים</span>
             <span class="summary-chip" id="products-summary"></span>
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <div class="filter-group">
-              <button class="filter-btn active" id="filter-unsent" onclick="setFilter('unsent')">טרם נשלחו</button>
+              <button class="filter-btn active" id="filter-unsent" onclick="setFilter('unsent')">ממתינים</button>
               <button class="filter-btn" id="filter-sent" onclick="setFilter('sent')">נשלחו</button>
               <button class="filter-btn" id="filter-all" onclick="setFilter('all')">הכל</button>
             </div>
             <div class="filter-group">
-              <button class="filter-btn active" id="sort-none" onclick="setSort('none')">ללא מיון</button>
+              <button class="filter-btn active" id="sort-none" onclick="setSort('none')">ברירת מחדל</button>
               <button class="filter-btn" id="sort-sent" onclick="setSort('sent')">תאריך שליחה ↓</button>
               <button class="filter-btn" id="sort-clicks" onclick="setSort('clicks')">קליקים ↓</button>
+            </div>
+            <div class="view-toggle">
+              <button class="view-btn active" id="view-table" onclick="setView('table')">☰ טבלה</button>
+              <button class="view-btn" id="view-cards" onclick="setView('cards')">⊞ כרטיסים</button>
             </div>
             <div class="icon-btn-group">
               <button class="icon-btn" id="btn-sync-clicks" title="סנכרן קליקים מ-spoo.me">📊</button>
@@ -124,30 +136,34 @@
             </div>
           </div>
         </div>
-        <div class="table-wrap">
-          <table id="products-table">
-            <thead>
-              <tr>
-                <th style="width:32px;"></th>
-                <th>תמונה</th>
-                <th>שם מוצר</th>
-                <th>קישור</th>
-                <th>קבוצת WA</th>
-                <th>נשלח</th>
-                <th>פייסבוק</th>
-                <th>קליקים</th>
-                <th>פעולה</th>
-              </tr>
-            </thead>
-            <tbody id="products-body">
-              <tr><td colspan="9" class="empty-state">טוען...</td></tr>
-            </tbody>
-          </table>
+
+        <!-- Table view -->
+        <div id="products-table-view">
+          <div class="table-wrap">
+            <table id="products-table">
+              <thead>
+                <tr>
+                  <th style="width:32px;"></th>
+                  <th>תמונה</th><th>שם מוצר</th><th>קישור</th>
+                  <th>קבוצת WA</th><th>נשלח</th><th>פייסבוק</th><th>קליקים</th><th>פעולה</th>
+                </tr>
+              </thead>
+              <tbody id="products-body">
+                <tr><td colspan="9" class="empty-state">טוען...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
+
+        <!-- Card view -->
+        <div id="products-card-view" style="display:none;">
+          <div class="products-grid" id="products-grid"></div>
+        </div>
+
       </div>
     </div>
 
-    <!-- ── Schedules ─────────────────────────────────────────────────── -->
+    <!-- ── Schedules ──────────────────────────────────────────────── -->
     <div class="tab-panel" id="tab-schedules">
       <div class="card">
         <div class="card-title">לוחות זמנים פעילים</div>
@@ -166,26 +182,20 @@
           </div>
           <div class="form-group">
             <label class="form-label">נושא</label>
-            <select class="form-input" id="sched-subject">
-              <option value="">כל הנושאים</option>
-            </select>
+            <select class="form-input" id="sched-subject"><option value="">כל הנושאים</option></select>
           </div>
         </div>
-        <div style="margin-top:10px;font-size:11.5px;color:var(--label-3);font-family:monospace;">
+        <div style="margin-top:10px;font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono);">
           0 11 * * * = כל יום ב-11:00 &nbsp;|&nbsp; 0 17 * * * = כל יום ב-17:00 &nbsp;|&nbsp; 0 11 * * 5 = כל שישי
         </div>
         <button class="btn btn-success" style="margin-top:16px;" id="btn-add-schedule">+ הוסף</button>
       </div>
     </div>
 
-    <!-- ── Scraper ────────────────────────────────────────────────────── -->
+    <!-- ── Scraper ────────────────────────────────────────────────── -->
     <div class="tab-panel" id="tab-scraper">
       <div class="card">
-        <div class="card-title">🎣 חיפוש מוצרי דיג אוטומטי</div>
-        <p style="font-size:13.5px;color:var(--label-2);margin-bottom:18px;line-height:1.6;">
-          מחפש מוצרי דיג פופולריים, מפיק קישורי אפיליאציה דרך הפורטל
-          (<span style="font-family:monospace;color:var(--blue);">TechSalebuy</span>) ומוסיף לגוגל שיטס.
-        </p>
+        <div class="card-title">🎣 חיפוש מוצרים אוטומטי</div>
         <div class="form-grid" style="max-width:580px;">
           <div class="form-group">
             <label class="form-label">כמות מוצרים</label>
@@ -201,22 +211,20 @@
           </div>
         </div>
         <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <button class="btn btn-primary" id="btn-fishing-search">🔍 חפש והוסף לגוגל שיטס</button>
-          <span id="fishing-search-status" style="font-size:12px;color:var(--label-3);"></span>
+          <button class="btn btn-primary" id="btn-fishing-search">🔍 חפש והוסף</button>
+          <span id="fishing-search-status" style="font-size:12px;color:var(--text-tertiary);"></span>
         </div>
         <div id="fishing-search-result" style="margin-top:12px;display:none;font-size:13px;"></div>
       </div>
-
       <div class="card">
         <div class="card-title">סריקת מוצר בודד</div>
-        <p style="font-size:13px;color:var(--label-3);margin-bottom:16px;">הדבק קישור מוצר מ-AliExpress לחילוץ שם, תמונה וקישור שותף</p>
         <div class="form-grid">
           <div class="form-group form-full">
             <label class="form-label">קישור מוצר AliExpress</label>
             <input class="form-input" id="scrape-url" placeholder="https://www.aliexpress.com/item/..." dir="ltr" />
           </div>
           <div class="form-group">
-            <label class="form-label">קישור הצטרפות לקבוצה</label>
+            <label class="form-label">קישור הצטרפות</label>
             <input class="form-input" id="scrape-join" placeholder="https://chat.whatsapp.com/..." dir="ltr" />
           </div>
           <div class="form-group">
@@ -226,8 +234,8 @@
         </div>
         <div style="margin-top:14px;display:flex;gap:12px;align-items:center;">
           <button class="btn btn-primary" id="btn-scrape">סרוק ושמור</button>
-          <label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;color:var(--label-3);">
-            <input type="checkbox" id="scrape-auto-send" style="accent-color:var(--blue);" />
+          <label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;color:var(--text-tertiary);">
+            <input type="checkbox" id="scrape-auto-send" style="accent-color:var(--accent);" />
             שלח מיד לאחר הסריקה
           </label>
         </div>
@@ -235,7 +243,7 @@
       </div>
     </div>
 
-    <!-- ── Add Product ────────────────────────────────────────────────── -->
+    <!-- ── Add Product ────────────────────────────────────────────── -->
     <div class="tab-panel" id="tab-add-product">
       <div class="card">
         <div class="card-title">הוסף מוצר ידנית</div>
@@ -253,7 +261,7 @@
             <input class="form-input" id="new-image" placeholder="https://..." dir="ltr" />
           </div>
           <div class="form-group">
-            <label class="form-label">קישור הצטרפות לקבוצה</label>
+            <label class="form-label">קישור הצטרפות</label>
             <input class="form-input" id="new-join" placeholder="https://chat.whatsapp.com/..." dir="ltr" />
           </div>
           <div class="form-group">
@@ -262,9 +270,7 @@
           </div>
           <div class="form-group">
             <label class="form-label">נושא</label>
-            <select class="form-input" id="new-subject">
-              <option value="">ללא נושא</option>
-            </select>
+            <select class="form-input" id="new-subject"><option value="">ללא נושא</option></select>
           </div>
         </div>
         <button class="btn btn-success" style="margin-top:20px;" id="btn-add-product">+ הוסף לגיליון</button>
@@ -272,36 +278,34 @@
       </div>
     </div>
 
-    <!-- ── Logs ───────────────────────────────────────────────────────── -->
+    <!-- ── Logs ──────────────────────────────────────────────────── -->
     <div class="tab-panel" id="tab-logs">
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-          <div class="card-title" style="margin:0;">
-            <span class="status-dot" id="log-dot"></span>לוג פעילות
+          <div class="card-title" style="margin:0;"><span class="status-dot" id="log-dot"></span>לוג פעילות</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" id="btn-refresh-fb">🔄 רענן טוקן FB</button>
+            <button class="btn btn-ghost btn-sm" id="btn-clear-log">נקה</button>
           </div>
-          <button class="btn btn-ghost btn-sm" id="btn-clear-log">נקה</button>
         </div>
         <div id="log-panel"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">רענון טוקן פייסבוק</div>
-        <p style="font-size:13px;color:var(--label-3);margin-bottom:14px;">מחליף את הטוקן הנוכחי לטוקן בתוקף של 60 יום.</p>
-        <button class="btn btn-outline" id="btn-refresh-fb">🔄 רענן טוקן FB</button>
-        <div id="fb-token-result" style="margin-top:12px;font-size:12px;font-family:monospace;word-break:break-all;color:var(--label-3);"></div>
+        <div id="fb-token-result" style="margin-top:10px;font-size:11.5px;font-family:var(--font-mono);word-break:break-all;color:var(--text-tertiary);"></div>
       </div>
     </div>
 
-    <!-- ── Settings ───────────────────────────────────────────────────── -->
+    <!-- ── Settings ──────────────────────────────────────────────── -->
     <div class="tab-panel" id="tab-settings">
 
-      <!-- Subjects management -->
+      <!-- Subjects -->
       <div class="card">
-        <div class="card-title">ניהול נושאים</div>
-        <p style="font-size:13px;color:var(--label-3);margin-bottom:14px;">הגדר נושאים (דיג, אקווריום…) עם כתובת WhatsApp ופרטי Facebook נפרדים לכל אחד.</p>
-        <div id="subjects-list" style="margin-bottom:16px;"></div>
-        <details id="subject-form-details" style="margin-top:4px;">
-          <summary style="cursor:pointer;font-size:13px;color:var(--blue);user-select:none;">+ הוסף נושא חדש</summary>
-          <div style="margin-top:14px;">
+        <div class="card-title">נושאים</div>
+        <p style="font-size:13px;color:var(--text-tertiary);margin-bottom:16px;line-height:1.6;">
+          כל נושא מקבל הגדרות WhatsApp ו-Facebook נפרדות, וניתן לסנן מוצרים לפיו.
+        </p>
+        <div id="subjects-list" style="margin-bottom:4px;"></div>
+        <details id="subject-form-details" style="margin-top:12px;">
+          <summary class="details-summary">+ הוסף נושא חדש</summary>
+          <div class="details-body">
             <div class="form-grid">
               <div class="form-group">
                 <label class="form-label">שם נושא *</label>
@@ -328,38 +332,41 @@
                 <input class="form-input" id="subj-fb-app-secret" placeholder="c80fb6..." dir="ltr" />
               </div>
             </div>
-            <div style="display:flex;gap:10px;margin-top:14px;">
-              <button class="btn btn-success" id="btn-add-subject">+ הוסף נושא</button>
-              <div id="subject-form-result" style="font-size:13px;align-self:center;"></div>
+            <div style="display:flex;gap:10px;margin-top:14px;align-items:center;">
+              <button class="btn btn-primary" id="btn-add-subject">+ הוסף נושא</button>
+              <div id="subject-form-result" style="font-size:13px;"></div>
             </div>
           </div>
         </details>
       </div>
 
+      <!-- Facebook Token -->
       <div class="card">
-        <div class="card-title">טוקן פייסבוק</div>
-        <div id="fb-token-info" style="font-size:13px;color:var(--label-3);">טוען...</div>
-        <button class="btn btn-ghost btn-sm" style="margin-top:14px;" id="btn-check-token">🔍 בדוק טוקן</button>
+        <div class="card-title">פייסבוק</div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+          <div id="fb-token-info" style="font-size:13px;color:var(--text-secondary);flex:1;">טוען...</div>
+          <button class="btn btn-ghost btn-sm" id="btn-check-token">🔍 בדוק טוקן</button>
+        </div>
       </div>
 
+      <!-- OpenAI Prompt -->
       <div class="card">
         <div class="card-title">פרומפט OpenAI</div>
-        <p style="font-size:12px;color:var(--label-3);margin-bottom:12px;">
-          משתנים:
-          <code style="background:var(--blue-light);color:var(--blue);padding:1px 6px;border-radius:5px;font-size:11px;">{{Text}}</code>
-          <code style="background:var(--blue-light);color:var(--blue);padding:1px 6px;border-radius:5px;font-size:11px;">{{Link}}</code>
-          <code style="background:var(--blue-light);color:var(--blue);padding:1px 6px;border-radius:5px;font-size:11px;">{{join_link}}</code>
-          <code style="background:var(--blue-light);color:var(--blue);padding:1px 6px;border-radius:5px;font-size:11px;">{{dayInstruction}}</code>
-        </p>
-        <textarea class="form-input" id="prompt-editor" style="height:400px;" dir="rtl"></textarea>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+          <code class="code-tag">{{Text}}</code>
+          <code class="code-tag">{{Link}}</code>
+          <code class="code-tag">{{join_link}}</code>
+          <code class="code-tag">{{dayInstruction}}</code>
+        </div>
+        <textarea class="form-input" id="prompt-editor" style="height:360px;" dir="rtl"></textarea>
         <div style="display:flex;gap:10px;margin-top:14px;">
           <button class="btn btn-primary" id="btn-save-prompt">💾 שמור</button>
           <button class="btn btn-ghost" id="btn-reset-prompt">↩ אפס</button>
+          <div id="prompt-save-result" style="font-size:13px;align-self:center;"></div>
         </div>
-        <div id="prompt-save-result" style="margin-top:10px;font-size:13px;"></div>
       </div>
 
-    </div><!-- /tab-settings -->
+    </div>
 
   </div><!-- /content -->
 </div><!-- /main -->

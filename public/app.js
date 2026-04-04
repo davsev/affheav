@@ -89,42 +89,43 @@ function setAccentColor(hexColor) {
 }
 
 function renderSubjectBar() {
-  const bar = document.getElementById('subject-bar');
-  if (!bar) return;
+  const container = document.getElementById('sidebar-subjects');
+  if (!container) return;
 
-  const pills = [
-    `<button class="subject-pill ${_currentSubject === '' ? 'active' : ''}" data-subject="" data-color="#007AFF" style="--pill-color:#007AFF">
-      <span class="subject-pill-name">הכל</span>
+  const items = [
+    `<button class="subject-item ${_currentSubject === '' ? 'active' : ''}" data-subject="" data-color="#007AFF" style="--item-color:#007AFF">
+      <span class="subject-dot" style="background:#007AFF;"></span>
+      <span class="subject-item-name">הכל</span>
     </button>`
   ];
 
   _subjects.forEach((s, i) => {
     const color = getSubjectColor(i);
     const isActive = _currentSubject === s.id;
-    pills.push(`
-      <button class="subject-pill ${isActive ? 'active' : ''}"
+    items.push(`
+      <button class="subject-item ${isActive ? 'active' : ''}"
               data-subject="${escHtml(s.id)}"
               data-color="${color}"
-              style="--pill-color:${color}">
-        <span class="subject-pill-name">${escHtml(s.name)}</span>
+              style="--item-color:${color}">
+        <span class="subject-dot" style="background:${color};"></span>
+        <span class="subject-item-name">${escHtml(s.name)}</span>
       </button>
     `);
   });
 
-  bar.innerHTML = pills.join('');
+  container.innerHTML = items.join('');
 
-  bar.querySelectorAll('.subject-pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      const id    = pill.dataset.subject;
-      const color = pill.dataset.color;
+  container.querySelectorAll('.subject-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const id    = item.dataset.subject;
+      const color = item.dataset.color;
       _currentSubject = id;
 
-      bar.querySelectorAll('.subject-pill').forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
+      container.querySelectorAll('.subject-item').forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
 
       setAccentColor(id === '' ? null : color);
 
-      // Sync hidden select
       const sel = document.getElementById('subject-select');
       if (sel) sel.value = id;
 
@@ -133,7 +134,7 @@ function renderSubjectBar() {
   });
 
   // Apply current accent
-  const active = bar.querySelector('.subject-pill.active');
+  const active = container.querySelector('.subject-item.active');
   if (active) setAccentColor(_currentSubject === '' ? null : active.dataset.color);
 }
 
@@ -156,23 +157,25 @@ function renderSubjectsList() {
   const container = document.getElementById('subjects-list');
   if (!container) return;
   if (!_subjects.length) {
-    container.innerHTML = '<div style="font-size:13px;color:var(--label-3);">אין נושאים מוגדרים עדיין.</div>';
+    container.innerHTML = '<div style="font-size:13px;color:var(--text-tertiary);padding:8px 0;">אין נושאים מוגדרים עדיין.</div>';
     return;
   }
-  container.innerHTML = _subjects.map(s => `
-    <div class="schedule-item" id="subject-item-${s.id}" style="align-items:flex-start;gap:12px;">
-      <div style="flex:1;min-width:0;">
-        <div class="schedule-label">${escHtml(s.name)}</div>
-        <div style="font-size:11.5px;color:var(--label-3);margin-top:3px;font-family:monospace;word-break:break-all;">
-          ${s.whatsappUrl ? `WA: ${escHtml(s.whatsappUrl.slice(0, 60))}…` : '<span style="opacity:.5;">WA: לא הוגדר</span>'}
-        </div>
-        <div style="font-size:11.5px;color:var(--label-3);margin-top:1px;font-family:monospace;">
-          ${s.facebookPageId ? `FB Page: ${escHtml(s.facebookPageId)}` : '<span style="opacity:.5;">FB: לא הוגדר</span>'}
+  container.innerHTML = _subjects.map((s, i) => {
+    const color = getSubjectColor(i);
+    return `
+    <div class="subject-settings-item" id="subject-item-${s.id}">
+      <span class="subject-settings-dot" style="background:${color};box-shadow:0 0 0 3px color-mix(in srgb,${color} 25%,transparent);"></span>
+      <div class="subject-settings-info">
+        <div class="subject-settings-name">${escHtml(s.name)}</div>
+        <div class="subject-settings-meta">
+          ${s.whatsappUrl ? `💬 ${escHtml(s.whatsappUrl.slice(0,55))}…` : '💬 WhatsApp לא הוגדר'}
+          &nbsp;·&nbsp;
+          ${s.facebookPageId ? `📘 Page ${escHtml(s.facebookPageId)}` : '📘 Facebook לא הוגדר'}
         </div>
       </div>
       <button class="btn btn-danger btn-sm" onclick="deleteSubject('${s.id}')">🗑</button>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 window.deleteSubject = async (id) => {
@@ -220,6 +223,33 @@ document.getElementById('btn-add-subject').addEventListener('click', async () =>
 // ── Products ──────────────────────────────────────────────────────────────────
 let _currentFilter = 'unsent';
 let _currentSort = 'none';
+let _currentView = 'table';
+
+window.setView = (v) => {
+  _currentView = v;
+  ['table','cards'].forEach(id => {
+    const btn = document.getElementById('view-' + id);
+    if (btn) btn.className = 'view-btn' + (id === v ? ' active' : '');
+  });
+  document.getElementById('products-table-view').style.display = v === 'table' ? '' : 'none';
+  document.getElementById('products-card-view').style.display  = v === 'cards' ? '' : 'none';
+  renderProducts(_lastProducts);
+};
+
+function updateKPIs(products) {
+  const total   = products.length;
+  const sent    = products.filter(p => p.sent).length;
+  const unsent  = total - sent;
+  const clicks  = products.reduce((sum, p) => sum + (p.clicks || 0), 0);
+  const kpiTotal  = document.getElementById('kpi-total');
+  const kpiUnsent = document.getElementById('kpi-unsent');
+  const kpiSent   = document.getElementById('kpi-sent');
+  const kpiClicks = document.getElementById('kpi-clicks');
+  if (kpiTotal)  kpiTotal.textContent  = total;
+  if (kpiUnsent) kpiUnsent.textContent = unsent;
+  if (kpiSent)   kpiSent.textContent   = sent;
+  if (kpiClicks) kpiClicks.textContent = clicks;
+}
 
 window.setSort = (s) => {
   _currentSort = s;
@@ -245,6 +275,7 @@ window.setFilter = (f) => {
 
 function renderProducts(products) {
   _lastProducts = products;
+  updateKPIs(products);
   const tbody = document.getElementById('products-body');
   const sentCount = products.filter(p => p.sent).length;
   document.getElementById('products-summary').textContent = `${sentCount} נשלחו מתוך ${products.length} סה"כ`;
@@ -290,6 +321,40 @@ function renderProducts(products) {
   }).join('');
 
   initDragAndDrop(tbody);
+
+  // Render card view
+  const grid = document.getElementById('products-grid');
+  if (grid) {
+    if (!filtered.length) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">${_currentFilter === 'unsent' ? 'כל המוצרים נשלחו ✓' : 'אין מוצרים'}</div>`;
+    } else {
+      grid.innerHTML = filtered.map(p => {
+        const clicksHtml = p.clicks != null
+          ? `<span class="product-card-clicks">👁 ${p.clicks} קליקים</span>`
+          : '';
+        const sentBadge = p.sent
+          ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>`
+          : `<span class="badge badge-unsent">ממתין</span>`;
+        return `
+        <div class="product-card">
+          ${p.image
+            ? `<img class="product-card-img" src="${escHtml(p.image)}" onerror="this.style.display='none'" loading="lazy" />`
+            : `<div class="product-card-img-placeholder">📦</div>`}
+          <div class="product-card-body">
+            <div class="product-card-title">${escHtml(p.Text)}</div>
+            <div class="product-card-meta">
+              ${sentBadge}
+              ${clicksHtml}
+            </div>
+          </div>
+          <div class="product-card-footer">
+            <a href="${escHtml(p.Link)}" target="_blank" style="color:var(--accent);font-size:12px;" dir="ltr">🔗 קישור</a>
+            <button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct(${p.row_number}, this)">▶ שלח</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
 }
 
 function initDragAndDrop(tbody) {
