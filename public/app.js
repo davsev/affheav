@@ -240,6 +240,7 @@ function renderActiveNicheCard() {
   const bg = hexToRgba(color, 0.1);
   const waEnabled = s.waEnabled !== false;
   const fbEnabled = s.fbEnabled !== false;
+  const igEnabled = s.instagramEnabled !== false;
 
   container.innerHTML = `
     <section style="margin-bottom:48px;">
@@ -284,20 +285,27 @@ function renderActiveNicheCard() {
                 <span class="material-symbols-outlined">hub</span>
                 ערוצי יעד
               </div>
-              <div class="channel-toggles-grid" style="margin-bottom:28px;">
+              <div class="channel-toggles-grid" style="margin-bottom:28px;grid-template-columns:1fr 1fr 1fr;">
                 <div class="channel-toggle-card">
                   <div class="channel-toggle-info">
                     <div class="channel-icon-box" style="background:rgba(37,211,102,0.1);">💬</div>
-                    <span style="font-weight:700;font-size:14px;">WhatsApp</span>
+                    <span style="font-weight:700;font-size:13px;">WhatsApp</span>
                   </div>
                   <div class="ios-toggle ${waEnabled ? 'active' : ''}" id="wa-toggle-${s.id}" onclick="this.classList.toggle('active')"></div>
                 </div>
                 <div class="channel-toggle-card">
                   <div class="channel-toggle-info">
                     <div class="channel-icon-box" style="background:rgba(66,103,178,0.1);">📘</div>
-                    <span style="font-weight:700;font-size:14px;">Facebook</span>
+                    <span style="font-weight:700;font-size:13px;">Facebook</span>
                   </div>
                   <div class="ios-toggle ${fbEnabled ? 'active' : ''}" id="fb-toggle-${s.id}" onclick="this.classList.toggle('active')"></div>
+                </div>
+                <div class="channel-toggle-card">
+                  <div class="channel-toggle-info">
+                    <div class="channel-icon-box" style="background:rgba(193,53,132,0.1);">📸</div>
+                    <span style="font-weight:700;font-size:13px;">Instagram</span>
+                  </div>
+                  <div class="ios-toggle ${igEnabled ? 'active' : ''}" id="ig-toggle-${s.id}" onclick="this.classList.toggle('active')"></div>
                 </div>
               </div>
 
@@ -316,11 +324,18 @@ function renderActiveNicheCard() {
                 </div>
               </div>
 
-              <div class="niche-field-label">
-                <span class="material-symbols-outlined">thumb_up</span>
-                הגדרות Facebook
+              <div class="niche-field-label" style="justify-content:space-between;">
+                <span style="display:flex;align-items:center;gap:6px;">
+                  <span class="material-symbols-outlined">thumb_up</span>
+                  הגדרות Facebook
+                </span>
+                <button class="btn btn-ghost btn-sm" onclick="checkNicheToken('${s.id}')" style="font-size:11px;padding:4px 12px;border-radius:20px;">
+                  <span class="material-symbols-outlined" style="font-size:14px;">manage_search</span>
+                  בדוק טוקן
+                </button>
               </div>
-              <div class="form-grid">
+              <div id="niche-token-info-${s.id}" style="margin-bottom:12px;font-size:12px;color:var(--on-surface-var);min-height:0;"></div>
+              <div class="form-grid" style="margin-bottom:24px;">
                 <div class="form-group">
                   <label class="form-label">Page ID</label>
                   <input class="form-input" id="niche-fb-page-${s.id}" value="${escHtml(s.facebookPageId||'')}" dir="ltr" style="font-size:13px;" />
@@ -336,6 +351,18 @@ function renderActiveNicheCard() {
                 <div class="form-group">
                   <label class="form-label">App Secret</label>
                   <input class="form-input" id="niche-fb-app-secret-${s.id}" value="${escHtml(s.facebookAppSecret||'')}" dir="ltr" style="font-size:13px;" />
+                </div>
+              </div>
+
+              <div class="niche-field-label">
+                <span class="material-symbols-outlined">photo_camera</span>
+                הגדרות Instagram
+              </div>
+              <div class="form-grid">
+                <div class="form-group form-full" style="grid-column:1/-1;">
+                  <label class="form-label">Instagram Business Account ID</label>
+                  <input class="form-input" id="niche-ig-account-${s.id}" value="${escHtml(s.instagramAccountId||'')}" placeholder="17841400000000000" dir="ltr" style="font-size:13px;" />
+                  <div style="font-size:10px;color:var(--on-surface-var);margin-top:4px;">נמצא ב-Meta Graph API Explorer: GET /me/accounts → Instagram Business Account ID. משתמש באותו Access Token של Facebook.</div>
                 </div>
               </div>
             </div>
@@ -397,21 +424,53 @@ window.selectSettingsSubject = (id) => {
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
+window.checkNicheToken = async (id) => {
+  const el = document.getElementById(`niche-token-info-${id}`);
+  if (!el) return;
+  el.textContent = 'בודק טוקן...';
+  el.style.color = 'var(--on-surface-var)';
+  try {
+    const d = await api(`/api/facebook/token-info?subjectId=${encodeURIComponent(id)}`);
+    const daysLeft = d.days_left;
+    const color = daysLeft === null ? '#16a34a' : daysLeft > 14 ? '#16a34a' : daysLeft > 3 ? '#d97706' : '#dc2626';
+    const validIcon = d.valid ? '✓' : '✗';
+    const expiry = daysLeft === null
+      ? '<span style="color:#16a34a">לא פג תוקף (Page Token ✓)</span>'
+      : `<span style="color:${color}">${d.expires_at} · ${daysLeft} ימים נותרו</span>`;
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;line-height:1.9;background:rgba(255,255,255,0.7);border-radius:1rem;padding:12px 14px;border:1px solid rgba(112,42,225,0.08);">
+        <span style="color:var(--on-surface-var);">תקף:</span>
+        <span style="color:${d.valid ? '#16a34a' : '#dc2626'};font-weight:700;">${validIcon} ${d.valid ? 'כן' : 'לא'}</span>
+        <span style="color:var(--on-surface-var);">אפליקציה:</span>
+        <span>${escHtml(d.app || '—')}</span>
+        <span style="color:var(--on-surface-var);">תפוגה:</span>
+        ${expiry}
+        <span style="color:var(--on-surface-var);">הרשאות:</span>
+        <span style="font-size:10px;font-family:var(--font-mono);">${(d.scopes || []).join(', ')}</span>
+      </div>`;
+  } catch (err) {
+    el.style.color = '#dc2626';
+    el.textContent = `✗ שגיאה: ${err.message}`;
+  }
+};
+
 window.saveNiche = async (id) => {
   const result = document.getElementById(`niche-save-result-${id}`);
   try {
     await api(`/api/subjects/${id}`, {
       method: 'PUT',
       body: {
-        prompt:            document.getElementById(`niche-prompt-${id}`)?.value || '',
-        waEnabled:         document.getElementById(`wa-toggle-${id}`)?.classList.contains('active') ?? true,
-        fbEnabled:         document.getElementById(`fb-toggle-${id}`)?.classList.contains('active') ?? true,
-        waGroupName:       document.getElementById(`niche-wa-group-${id}`)?.value.trim() || '',
-        whatsappUrl:       document.getElementById(`niche-wa-url-${id}`)?.value.trim() || '',
-        facebookPageId:    document.getElementById(`niche-fb-page-${id}`)?.value.trim() || '',
-        facebookToken:     document.getElementById(`niche-fb-token-${id}`)?.value.trim() || '',
-        facebookAppId:     document.getElementById(`niche-fb-app-id-${id}`)?.value.trim() || '',
-        facebookAppSecret: document.getElementById(`niche-fb-app-secret-${id}`)?.value.trim() || '',
+        prompt:              document.getElementById(`niche-prompt-${id}`)?.value || '',
+        waEnabled:           document.getElementById(`wa-toggle-${id}`)?.classList.contains('active') ?? true,
+        fbEnabled:           document.getElementById(`fb-toggle-${id}`)?.classList.contains('active') ?? true,
+        instagramEnabled:    document.getElementById(`ig-toggle-${id}`)?.classList.contains('active') ?? true,
+        waGroupName:         document.getElementById(`niche-wa-group-${id}`)?.value.trim() || '',
+        whatsappUrl:         document.getElementById(`niche-wa-url-${id}`)?.value.trim() || '',
+        facebookPageId:      document.getElementById(`niche-fb-page-${id}`)?.value.trim() || '',
+        facebookToken:       document.getElementById(`niche-fb-token-${id}`)?.value.trim() || '',
+        facebookAppId:       document.getElementById(`niche-fb-app-id-${id}`)?.value.trim() || '',
+        facebookAppSecret:   document.getElementById(`niche-fb-app-secret-${id}`)?.value.trim() || '',
+        instagramAccountId:  document.getElementById(`niche-ig-account-${id}`)?.value.trim() || '',
       },
     });
     if (result) { result.style.color = '#16a34a'; result.textContent = '✓ נשמר'; }
@@ -458,15 +517,16 @@ document.getElementById('btn-add-subject').addEventListener('click', async () =>
   const facebookAppId = document.getElementById('subj-fb-app-id').value.trim();
   const facebookAppSecret = document.getElementById('subj-fb-app-secret').value.trim();
   const prompt = document.getElementById('subj-prompt').value.trim();
+  const instagramAccountId = document.getElementById('subj-ig-account').value.trim();
   const result = document.getElementById('subject-form-result');
 
   if (!name) { result.style.color = '#d97706'; result.textContent = '⚠ שם נושא הוא שדה חובה'; return; }
 
   try {
-    const res = await api('/api/subjects', { method: 'POST', body: { name, waGroupName, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret, prompt } });
+    const res = await api('/api/subjects', { method: 'POST', body: { name, waGroupName, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret, prompt, instagramAccountId } });
     result.style.color = '#16a34a';
     result.textContent = '✓ נושא נוסף בהצלחה';
-    ['subj-name','subj-wa-group-name','subj-wa-url','subj-fb-page-id','subj-fb-token','subj-fb-app-id','subj-fb-app-secret','subj-prompt'].forEach(id => {
+    ['subj-name','subj-wa-group-name','subj-wa-url','subj-fb-page-id','subj-fb-token','subj-fb-app-id','subj-fb-app-secret','subj-prompt','subj-ig-account'].forEach(id => {
       document.getElementById(id).value = '';
     });
     document.getElementById('new-niche-form-section').style.display = 'none';
@@ -689,6 +749,7 @@ window.sendProduct = (rowNumber, btn) => {
     const platforms = [];
     if (document.getElementById('modal-chk-wa').checked) platforms.push('whatsapp');
     if (document.getElementById('modal-chk-fb').checked) platforms.push('facebook');
+    if (document.getElementById('modal-chk-ig').checked) platforms.push('instagram');
     if (!platforms.length) { alert('יש לבחור לפחות פלטפורמה אחת'); return; }
 
     btn.disabled = true;

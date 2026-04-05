@@ -24,26 +24,27 @@ async function getClient() {
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const SHEET_NAME = process.env.GOOGLE_SHEET_NAME || 'fishing';
 
-// Actual column order in sheet (A–K):
-// A: long_url, B: Link (spoo.me), C: image, D: empty, E: Text, F: join_link, G: wa_group, H: sent, I: facebook, J: clicks, K: subject
+// Actual column order in sheet (A–L):
+// A: long_url, B: Link (spoo.me), C: image, D: empty, E: Text, F: join_link, G: wa_group, H: sent, I: facebook, J: clicks, K: subject, L: instagram
 const COL = {
-  long_url: 0,   // A — original affiliate URL
-  Link: 1,       // B — spoo.me short link
-  image: 2,      // C — product image URL
-  Text: 4,       // E — product title
-  join_link: 5,  // F
-  wa_group: 6,   // G
-  sent: 7,       // H
-  facebook: 8,   // I
-  clicks: 9,     // J — spoo.me click count (synced on demand)
-  subject: 10,   // K — subject/niche identifier
+  long_url: 0,    // A — original affiliate URL
+  Link: 1,        // B — spoo.me short link
+  image: 2,       // C — product image URL
+  Text: 4,        // E — product title
+  join_link: 5,   // F
+  wa_group: 6,    // G
+  sent: 7,        // H
+  facebook: 8,    // I
+  clicks: 9,      // J — spoo.me click count (synced on demand)
+  subject: 10,    // K — subject/niche identifier
+  instagram: 11,  // L — instagram post timestamp
 };
 
 async function getAllProducts({ subject, waGroupName } = {}) {
   const sheets = await getClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!A2:K`,
+    range: `${SHEET_NAME}!A2:L`,
   });
 
   const rows = res.data.values || [];
@@ -60,6 +61,7 @@ async function getAllProducts({ subject, waGroupName } = {}) {
       facebook: row[COL.facebook] || '',
       clicks: row[COL.clicks] !== undefined && row[COL.clicks] !== '' ? parseInt(row[COL.clicks]) : null,
       subject: row[COL.subject] || '',
+      instagram: row[COL.instagram] || '',
     }))
     .filter(p => p.Link && p.Link.startsWith('https://spoo.me/')); // only show products with a spoo.me link
 
@@ -77,24 +79,30 @@ async function getNextUnsent({ subject } = {}) {
   return products.find(p => !p.sent) || null;
 }
 
-async function markSent(link, { sentAt, facebookAt } = {}) {
+async function markSent(link, { sentAt, facebookAt, instagramAt } = {}) {
   const products = await getAllProducts();
   const product = products.find(p => p.Link === link);
   if (!product) throw new Error(`Product not found: ${link}`);
 
   const sheets = await getClient();
-  const rowRange = `${SHEET_NAME}!H${product.row_number}:I${product.row_number}`;
+  const rowRange = `${SHEET_NAME}!H${product.row_number}:L${product.row_number}`;
 
   // Preserve existing value if new value is null (platform was skipped)
-  const newSentAt    = sentAt    !== null ? (sentAt    || product.sent    || new Date().toISOString()) : product.sent;
-  const newFacebookAt = facebookAt !== null ? (facebookAt || product.facebook || '') : product.facebook;
+  const newSentAt      = sentAt      !== null ? (sentAt      || product.sent      || new Date().toISOString()) : product.sent;
+  const newFacebookAt  = facebookAt  !== null ? (facebookAt  || product.facebook  || '') : product.facebook;
+  const newInstagramAt = instagramAt !== null ? (instagramAt || product.instagram || '') : product.instagram;
+
+  // Columns H=sent, I=facebook, J=clicks (don't overwrite), K=subject (don't overwrite), L=instagram
+  // We skip J and K by reading their current values
+  const clicksVal  = product.clicks  !== null ? String(product.clicks) : '';
+  const subjectVal = product.subject || '';
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
     range: rowRange,
     valueInputOption: 'RAW',
     requestBody: {
-      values: [[newSentAt, newFacebookAt]],
+      values: [[newSentAt, newFacebookAt, clicksVal, subjectVal, newInstagramAt]],
     },
   });
 }

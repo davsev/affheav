@@ -2,6 +2,7 @@ const googleSheets = require('./googleSheets');
 const openai = require('./openai');
 const whatsapp = require('./whatsapp');
 const facebook = require('./facebook');
+const instagram = require('./instagram');
 
 // Resolve subject config (credentials) by subject id
 async function resolveSubjectConfig(subjectId) {
@@ -33,9 +34,10 @@ function log(msg, level = 'info') {
  * @param {string[]} [opts.platforms]  - Which platforms to send to
  * @param {string}   [opts.subject]    - Subject/niche id to filter products and use credentials for
  */
-async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'], subject } = {}) {
+async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook', 'instagram'], subject } = {}) {
   const sendWA = platforms.includes('whatsapp');
   const sendFB = platforms.includes('facebook');
+  const sendIG = platforms.includes('instagram');
   log('▶ Workflow started');
 
   // Resolve subject credentials (if subject is specified)
@@ -83,7 +85,7 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
     }
   }
 
-  const results = { product, message, whatsapp: null, facebook: null };
+  const results = { product, message, whatsapp: null, facebook: null, instagram: null };
 
   // Step 3: WhatsApp
   if (sendWA) {
@@ -129,12 +131,43 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
     log('⏭ Facebook skipped');
   }
 
-  // Step 5: Mark sent
+  // Step 5: Instagram
+  if (sendIG) {
+    const igAccountId = subjectConfig?.instagramAccountId;
+    const igToken     = subjectConfig?.facebookToken; // same Page token works for IG
+    if (!igAccountId || !igToken) {
+      log('⏭ Instagram skipped — no Instagram Account ID or token configured for this niche', 'warn');
+      results.instagram = { success: false, error: 'not_configured' };
+    } else if (!product.image) {
+      log('⏭ Instagram skipped — product has no image', 'warn');
+      results.instagram = { success: false, error: 'no_image' };
+    } else {
+      try {
+        log(`Posting to Instagram (${igAccountId})...`);
+        const igResult = await instagram.postPhoto({
+          igUserId: igAccountId,
+          accessToken: igToken,
+          imageUrl: product.image,
+          caption: message,
+        });
+        results.instagram = igResult;
+        log(`✓ Instagram post published (id: ${igResult.data?.id})`);
+      } catch (err) {
+        log(`✗ Instagram failed: ${err.message}`, 'error');
+        results.instagram = { success: false, error: err.message };
+      }
+    }
+  } else {
+    log('⏭ Instagram skipped');
+  }
+
+  // Step 6: Mark sent
   try {
     // null = platform was skipped (preserve existing value), '' = tried but failed
-    const sentAt    = !sendWA ? null : (results.whatsapp?.success  ? new Date().toISOString() : '');
-    const facebookAt = !sendFB ? null : (results.facebook?.success ? new Date().toISOString() : '');
-    await googleSheets.markSent(product.Link, { sentAt, facebookAt });
+    const sentAt      = !sendWA ? null : (results.whatsapp?.success  ? new Date().toISOString() : '');
+    const facebookAt  = !sendFB ? null : (results.facebook?.success  ? new Date().toISOString() : '');
+    const instagramAt = !sendIG ? null : (results.instagram?.success  ? new Date().toISOString() : '');
+    await googleSheets.markSent(product.Link, { sentAt, facebookAt, instagramAt });
     log('✓ Google Sheet updated');
   } catch (err) {
     log(`✗ Failed to update Google Sheet: ${err.message}`, 'error');
