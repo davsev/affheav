@@ -42,7 +42,7 @@ async function startAll() {
     activeJobs[s.id] = cron.schedule(s.cron, async () => {
       console.log(`[scheduler] Firing job: ${s.label} (${s.cron})`);
       if (_runWorkflow) {
-        try { await _runWorkflow(); } catch (err) {
+        try { await _runWorkflow({ subject: s.subject || undefined }); } catch (err) {
           console.error(`[scheduler] Workflow error in job ${s.id}:`, err.message);
         }
       }
@@ -57,17 +57,17 @@ function list() {
   return _schedules.map(s => ({ ...s, active: s.enabled && !!activeJobs[s.id] }));
 }
 
-async function add({ label, cron: cronExpr, enabled = true }) {
+async function add({ label, cron: cronExpr, enabled = true, subject = '' }) {
   if (!cron.validate(cronExpr)) throw new Error(`Invalid cron expression: ${cronExpr}`);
   await loadSchedules();
-  const entry = { id: uuidv4(), label, cron: cronExpr, enabled };
+  const entry = { id: uuidv4(), label, cron: cronExpr, enabled, subject };
   _schedules.push(entry);
   await saveSchedules();
   await startAll();
   return entry;
 }
 
-async function update(id, { label, cron: cronExpr, enabled }) {
+async function update(id, { label, cron: cronExpr, enabled, subject }) {
   await loadSchedules();
   const idx = _schedules.findIndex(s => s.id === id);
   if (idx === -1) throw new Error(`Schedule not found: ${id}`);
@@ -75,6 +75,7 @@ async function update(id, { label, cron: cronExpr, enabled }) {
   if (label !== undefined) _schedules[idx].label = label;
   if (cronExpr !== undefined) _schedules[idx].cron = cronExpr;
   if (enabled !== undefined) _schedules[idx].enabled = enabled;
+  if (subject !== undefined) _schedules[idx].subject = subject;
   await saveSchedules();
   await startAll();
   return _schedules[idx];

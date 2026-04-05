@@ -23,9 +23,9 @@ async function getPageToken() {
   return page.access_token;
 }
 
-async function postPhoto({ message, imageUrl }) {
-  const pageId = process.env.FACEBOOK_PAGE_ID;
-  const pageToken = process.env.FACEBOOK_ACCESS_TOKEN;
+async function postPhoto({ message, imageUrl, facebookPageId, facebookToken }) {
+  const pageId = facebookPageId || process.env.FACEBOOK_PAGE_ID;
+  const pageToken = facebookToken || process.env.FACEBOOK_ACCESS_TOKEN;
 
   if (!pageId || !pageToken) {
     throw new Error('FACEBOOK_PAGE_ID or FACEBOOK_ACCESS_TOKEN not set in .env');
@@ -51,10 +51,10 @@ async function postPhoto({ message, imageUrl }) {
   }
 }
 
-async function getTokenInfo() {
-  const appId = process.env.FACEBOOK_APP_ID;
-  const appSecret = process.env.FACEBOOK_APP_SECRET;
-  const token = process.env.FACEBOOK_ACCESS_TOKEN;
+async function getTokenInfo({ facebookAppId, facebookAppSecret, facebookToken } = {}) {
+  const appId = facebookAppId || process.env.FACEBOOK_APP_ID;
+  const appSecret = facebookAppSecret || process.env.FACEBOOK_APP_SECRET;
+  const token = facebookToken || process.env.FACEBOOK_ACCESS_TOKEN;
 
   if (!appId || !appSecret || !token) {
     throw new Error('FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, and FACEBOOK_ACCESS_TOKEN must be set');
@@ -83,10 +83,10 @@ async function getTokenInfo() {
   };
 }
 
-async function refreshToken() {
-  const appId = process.env.FACEBOOK_APP_ID;
-  const appSecret = process.env.FACEBOOK_APP_SECRET;
-  const shortToken = process.env.FACEBOOK_ACCESS_TOKEN;
+async function refreshToken({ facebookAppId, facebookAppSecret, facebookToken } = {}) {
+  const appId = facebookAppId || process.env.FACEBOOK_APP_ID;
+  const appSecret = facebookAppSecret || process.env.FACEBOOK_APP_SECRET;
+  const shortToken = facebookToken || process.env.FACEBOOK_ACCESS_TOKEN;
 
   if (!appId || !appSecret || !shortToken) {
     throw new Error('FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, and FACEBOOK_ACCESS_TOKEN must be set');

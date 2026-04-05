@@ -3,10 +3,14 @@ const router = express.Router();
 const googleSheets = require('../services/googleSheets');
 const workflow = require('../services/workflow');
 
-// POST /api/execute — run next unsent product
+// POST /api/execute — run next unsent product (optional body: { subject, platforms })
 router.post('/execute', async (req, res) => {
   try {
-    const result = await workflow.run();
+    const { subject, platforms } = req.body || {};
+    const opts = {};
+    if (platforms) opts.platforms = platforms;
+    if (subject !== undefined) opts.subject = subject;
+    const result = await workflow.run(null, opts);
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -27,8 +31,10 @@ router.post('/:rowNumber', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Product not found' });
     }
 
-    const platforms = req.body?.platforms || ['whatsapp', 'facebook'];
-    const result = await workflow.run(product, { platforms });
+    const { platforms = ['whatsapp', 'facebook'], subject } = req.body || {};
+    const opts = { platforms };
+    if (subject !== undefined) opts.subject = subject;
+    const result = await workflow.run(product, opts);
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

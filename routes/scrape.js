@@ -7,7 +7,7 @@ const workflow = require('../services/workflow');
 // POST /api/scrape/aliexpress
 // Body: { url, join_link, wa_group, autoSend (bool) }
 router.post('/aliexpress', async (req, res) => {
-  const { url, join_link = '', wa_group = '', autoSend = false } = req.body;
+  const { url, join_link = '', wa_group = '', autoSend = false, subject = '' } = req.body;
 
   if (!url) {
     return res.status(400).json({ success: false, error: 'url is required' });
@@ -24,6 +24,7 @@ router.post('/aliexpress', async (req, res) => {
       Text: text,
       join_link,
       wa_group,
+      subject,
     };
 
     // Save to Google Sheet
@@ -47,7 +48,7 @@ router.post('/aliexpress', async (req, res) => {
 // POST /api/scrape/fishing-search
 // Body: { limit, wa_group, join_link }
 router.post('/fishing-search', async (req, res) => {
-  const { limit = 10, wa_group = '', join_link = '' } = req.body;
+  const { limit = 10, wa_group = '', join_link = '', subject = '' } = req.body;
 
   workflow.log(`🔍 Starting fishing product search (limit: ${limit})...`);
 
@@ -60,7 +61,7 @@ router.post('/fishing-search', async (req, res) => {
     let skipped = 0;
     for (const product of products) {
       try {
-        await googleSheets.addProduct(product);
+        await googleSheets.addProduct({ ...product, subject });
         workflow.log(`✓ Added: ${product.Text?.slice(0, 60)}${product.affiliateGenerated ? ' (affiliate ✓)' : ' (no affiliate)'}`);
         saved++;
       } catch (err) {

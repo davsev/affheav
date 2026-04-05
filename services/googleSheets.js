@@ -24,8 +24,8 @@ async function getClient() {
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const SHEET_NAME = process.env.GOOGLE_SHEET_NAME || 'fishing';
 
-// Actual column order in sheet (A–J):
-// A: long_url, B: Link (spoo.me), C: image, D: empty, E: Text, F: join_link, G: wa_group, H: sent, I: facebook, J: clicks
+// Actual column order in sheet (A–K):
+// A: long_url, B: Link (spoo.me), C: image, D: empty, E: Text, F: join_link, G: wa_group, H: sent, I: facebook, J: clicks, K: subject
 const COL = {
   long_url: 0,   // A — original affiliate URL
   Link: 1,       // B — spoo.me short link
@@ -36,17 +36,18 @@ const COL = {
   sent: 7,       // H
   facebook: 8,   // I
   clicks: 9,     // J — spoo.me click count (synced on demand)
+  subject: 10,   // K — subject/niche identifier
 };
 
-async function getAllProducts() {
+async function getAllProducts({ subject, waGroupName } = {}) {
   const sheets = await getClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!A2:J`,
+    range: `${SHEET_NAME}!A2:K`,
   });
 
   const rows = res.data.values || [];
-  return rows
+  const products = rows
     .map((row, idx) => ({
       row_number: idx + 2,
       long_url: row[COL.long_url] || '',
@@ -58,12 +59,21 @@ async function getAllProducts() {
       sent: row[COL.sent] || '',
       facebook: row[COL.facebook] || '',
       clicks: row[COL.clicks] !== undefined && row[COL.clicks] !== '' ? parseInt(row[COL.clicks]) : null,
+      subject: row[COL.subject] || '',
     }))
     .filter(p => p.Link && p.Link.startsWith('https://spoo.me/')); // only show products with a spoo.me link
+
+  if (subject !== undefined && subject !== null && subject !== '') {
+    return products.filter(p =>
+      p.subject === subject ||
+      (waGroupName && p.wa_group === waGroupName)
+    );
+  }
+  return products;
 }
 
-async function getNextUnsent() {
-  const products = await getAllProducts();
+async function getNextUnsent({ subject } = {}) {
+  const products = await getAllProducts({ subject });
   return products.find(p => !p.sent) || null;
 }
 
@@ -113,16 +123,16 @@ async function updateProductText(link, text) {
   });
 }
 
-async function addProduct({ Link, image, Text, join_link, wa_group }) {
+async function addProduct({ Link, image, Text, join_link, wa_group, subject = '' }) {
   const shortLink = await shortenUrl(Link);
   const sheets = await getClient();
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!A:I`,
+    range: `${SHEET_NAME}!A:K`,
     valueInputOption: 'RAW',
     requestBody: {
-      // A: long_url, B: Link (spoo.me), C: image, D: '', E: Text, F: join_link, G: wa_group, H: sent, I: facebook
-      values: [[Link, shortLink, image, '', Text, join_link, wa_group, '', '']],
+      // A: long_url, B: Link (spoo.me), C: image, D: '', E: Text, F: join_link, G: wa_group, H: sent, I: facebook, J: clicks, K: subject
+      values: [[Link, shortLink, image, '', Text, join_link, wa_group, '', '', '', subject]],
     },
   });
 }
@@ -225,4 +235,21 @@ async function syncClicks(clicksMap) {
   return data.length;
 }
 
-module.exports = { getAllProducts, getNextUnsent, markSent, addProduct, updateProductText, updateProductLink, getSetting, setSetting, moveRow, syncClicks };
+// ── Subjects ──────────────────────────────────────────────────────────────────
+// Subjects are stored in Settings sheet under key "subjects" as JSON array:
+// [{ id, name, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret }]
+
+async function getSubjects() {
+  try {
+    const raw = await getSetting('subjects');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveSubjects(subjects) {
+  await setSetting('subjects', JSON.stringify(subjects));
+}
+
+module.exports = { getAllProducts, getNextUnsent, markSent, addProduct, updateProductText, updateProductLink, getSetting, setSetting, moveRow, syncClicks, getSubjects, saveSubjects };
