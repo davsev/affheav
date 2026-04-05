@@ -324,10 +324,17 @@ function renderActiveNicheCard() {
                 </div>
               </div>
 
-              <div class="niche-field-label">
-                <span class="material-symbols-outlined">thumb_up</span>
-                הגדרות Facebook
+              <div class="niche-field-label" style="justify-content:space-between;">
+                <span style="display:flex;align-items:center;gap:6px;">
+                  <span class="material-symbols-outlined">thumb_up</span>
+                  הגדרות Facebook
+                </span>
+                <button class="btn btn-ghost btn-sm" onclick="checkNicheToken('${s.id}')" style="font-size:11px;padding:4px 12px;border-radius:20px;">
+                  <span class="material-symbols-outlined" style="font-size:14px;">manage_search</span>
+                  בדוק טוקן
+                </button>
               </div>
+              <div id="niche-token-info-${s.id}" style="margin-bottom:12px;font-size:12px;color:var(--on-surface-var);min-height:0;"></div>
               <div class="form-grid" style="margin-bottom:24px;">
                 <div class="form-group">
                   <label class="form-label">Page ID</label>
@@ -415,6 +422,36 @@ window.selectSettingsSubject = (id) => {
   renderSettingsPage();
   const el = document.getElementById('active-niche-container');
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+window.checkNicheToken = async (id) => {
+  const el = document.getElementById(`niche-token-info-${id}`);
+  if (!el) return;
+  el.textContent = 'בודק טוקן...';
+  el.style.color = 'var(--on-surface-var)';
+  try {
+    const d = await api(`/api/facebook/token-info?subjectId=${encodeURIComponent(id)}`);
+    const daysLeft = d.days_left;
+    const color = daysLeft === null ? '#16a34a' : daysLeft > 14 ? '#16a34a' : daysLeft > 3 ? '#d97706' : '#dc2626';
+    const validIcon = d.valid ? '✓' : '✗';
+    const expiry = daysLeft === null
+      ? '<span style="color:#16a34a">לא פג תוקף (Page Token ✓)</span>'
+      : `<span style="color:${color}">${d.expires_at} · ${daysLeft} ימים נותרו</span>`;
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;line-height:1.9;background:rgba(255,255,255,0.7);border-radius:1rem;padding:12px 14px;border:1px solid rgba(112,42,225,0.08);">
+        <span style="color:var(--on-surface-var);">תקף:</span>
+        <span style="color:${d.valid ? '#16a34a' : '#dc2626'};font-weight:700;">${validIcon} ${d.valid ? 'כן' : 'לא'}</span>
+        <span style="color:var(--on-surface-var);">אפליקציה:</span>
+        <span>${escHtml(d.app || '—')}</span>
+        <span style="color:var(--on-surface-var);">תפוגה:</span>
+        ${expiry}
+        <span style="color:var(--on-surface-var);">הרשאות:</span>
+        <span style="font-size:10px;font-family:var(--font-mono);">${(d.scopes || []).join(', ')}</span>
+      </div>`;
+  } catch (err) {
+    el.style.color = '#dc2626';
+    el.textContent = `✗ שגיאה: ${err.message}`;
+  }
 };
 
 window.saveNiche = async (id) => {

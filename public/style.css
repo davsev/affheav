@@ -761,6 +761,7 @@ tr[draggable].drag-over td { border-top: 2px solid var(--primary); background: r
 .niche-settings-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 40px;
 }
+.niche-settings-grid > * { min-width: 0; overflow: hidden; }
 .niche-field-label {
   display: flex; align-items: center; gap: 6px;
   font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
