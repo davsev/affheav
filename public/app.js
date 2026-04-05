@@ -83,7 +83,7 @@ async function loadSubjects() {
     const { subjects } = await api('/api/subjects');
     _subjects = subjects || [];
     populateSubjectSelects();
-    renderSubjectsList();
+    renderSettingsPage();
   } catch (err) {
     console.error('Failed to load subjects:', err);
   }
@@ -193,104 +193,231 @@ function populateSubjectSelects() {
   if (newSubj) newSubj.innerHTML = '<option value="">ללא נושא</option>' + options;
 }
 
-function renderSubjectsList() {
-  const container = document.getElementById('subjects-list');
+// ── Settings page (Stitch design) ─────────────────────────────────────────────
+let _settingsActiveId = null;
+
+function getSubjectIcon(idx) {
+  const ICONS = ['🐠','🎣','🌿','🐾','🏋️','🍳','📱','🎮','👗','🏕️','🌸','⚽'];
+  return ICONS[idx % ICONS.length];
+}
+
+function hexToRgba(hex, a) {
+  const h = hex.replace('#','');
+  const r = parseInt(h.slice(0,2),16);
+  const g = parseInt(h.slice(2,4),16);
+  const b = parseInt(h.slice(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function renderSettingsPage() {
+  renderActiveNicheCard();
+  renderNicheGrid();
+}
+
+function renderActiveNicheCard() {
+  const container = document.getElementById('active-niche-container');
   if (!container) return;
-  if (!_subjects.length) {
+
+  // Auto-select first subject if none selected
+  if (!_settingsActiveId && _subjects.length > 0) {
+    _settingsActiveId = _subjects[0].id;
+  }
+
+  if (!_settingsActiveId || !_subjects.length) {
     container.innerHTML = `
-      <div style="text-align:center;padding:32px 20px;color:var(--on-surface-var);">
-        <span class="material-symbols-outlined" style="font-size:36px;opacity:0.3;display:block;margin-bottom:8px;">category</span>
-        <div style="font-size:13px;">אין נושאים מוגדרים עדיין.</div>
+      <div class="niche-select-placeholder">
+        <span class="material-symbols-outlined" style="font-size:48px;opacity:0.3;display:block;margin-bottom:12px;">category</span>
+        <div style="font-size:14px;">הוסף נישה חדשה כדי להתחיל</div>
       </div>`;
     return;
   }
-  container.innerHTML = _subjects.map((s, i) => {
-    const color = getSubjectColor(i);
-    return `
-    <div class="subject-settings-item" id="subject-item-${s.id}">
-      <span class="subject-settings-dot" style="background:${color};box-shadow:0 0 0 4px ${color}22;"></span>
-      <div class="subject-settings-info">
-        <div class="subject-settings-name">${escHtml(s.name)}</div>
-        <div class="subject-settings-meta">
-          ${s.waGroupName ? `📋 <strong>${escHtml(s.waGroupName)}</strong>` : '<span style="color:#ea580c;">📋 קבוצת WA לא הוגדרה</span>'}
-          &nbsp;·&nbsp;
-          ${s.whatsappUrl ? '💬 Webhook ✓' : '💬 Webhook —'}
-          &nbsp;·&nbsp;
-          ${s.facebookPageId ? `📘 Page ${escHtml(s.facebookPageId)}` : '📘 Facebook —'}
-        </div>
-        <div id="subject-edit-${s.id}" style="display:none;margin-top:10px;">
-          <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:10px;">
-            <div class="form-group">
-              <label class="form-label">שם קבוצת WA (לסינון)</label>
-              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-wa-group-${s.id}" value="${escHtml(s.waGroupName||'')}" placeholder="שם הקבוצה מדויק" />
+
+  const idx = _subjects.findIndex(s => s.id === _settingsActiveId);
+  if (idx === -1) { container.innerHTML = ''; return; }
+  const s = _subjects[idx];
+  const color = getSubjectColor(idx);
+  const icon = getSubjectIcon(idx);
+  const bg = hexToRgba(color, 0.1);
+  const waEnabled = s.waEnabled !== false;
+  const fbEnabled = s.fbEnabled !== false;
+
+  container.innerHTML = `
+    <section style="margin-bottom:48px;">
+      <div class="niche-config-panel">
+        <div class="niche-config-inner">
+          <div class="niche-config-header">
+            <div class="niche-config-header-left">
+              <div class="niche-icon-box" style="background:${bg};">${icon}</div>
+              <div>
+                <h2 class="niche-name-h2">${escHtml(s.name)}</h2>
+                <div class="niche-status-row">
+                  <span class="niche-pulse"></span>
+                  <span class="niche-status-label">${s.waGroupName ? `מחובר: ${escHtml(s.waGroupName)}` : 'הגדרות נישה פעילה'}</span>
+                </div>
+              </div>
             </div>
-            <div class="form-group">
-              <label class="form-label">Webhook URL</label>
-              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-wa-url-${s.id}" value="${escHtml(s.whatsappUrl||'')}" placeholder="https://trigger.macrodroid.com/..." dir="ltr" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Facebook Page ID</label>
-              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-fb-page-${s.id}" value="${escHtml(s.facebookPageId||'')}" dir="ltr" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Facebook Token</label>
-              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-fb-token-${s.id}" value="${escHtml(s.facebookToken||'')}" dir="ltr" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">App ID</label>
-              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-fb-app-id-${s.id}" value="${escHtml(s.facebookAppId||'')}" dir="ltr" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">App Secret</label>
-              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-fb-app-secret-${s.id}" value="${escHtml(s.facebookAppSecret||'')}" dir="ltr" />
+            <div class="niche-header-actions">
+              <button class="niche-action-btn danger" onclick="deleteSubject('${s.id}')" title="מחק נישה">
+                <span class="material-symbols-outlined">delete</span>
+              </button>
             </div>
           </div>
-          <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
-            <button class="btn btn-primary btn-sm" onclick="saveSubject('${s.id}')">
-              <span class="material-symbols-outlined" style="font-size:13px;">save</span>שמור
+
+          <div class="niche-settings-grid">
+            <!-- Right col: AI Prompt -->
+            <div style="order:2;">
+              <div class="niche-field-label">
+                <span class="material-symbols-outlined">psychology</span>
+                הנחיית (Prompt) AI
+              </div>
+              <textarea class="niche-prompt-textarea" id="niche-prompt-${s.id}" placeholder="הגדר כיצד ה-AI יכתוב את הפוסט..." dir="rtl">${escHtml(s.prompt || '')}</textarea>
+              <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+                <code class="code-tag">{{Text}}</code>
+                <code class="code-tag">{{Link}}</code>
+                <code class="code-tag">{{join_link}}</code>
+              </div>
+            </div>
+
+            <!-- Left col: Channels + Credentials -->
+            <div style="order:1;">
+              <div class="niche-field-label" style="margin-bottom:10px;">
+                <span class="material-symbols-outlined">hub</span>
+                ערוצי יעד
+              </div>
+              <div class="channel-toggles-grid" style="margin-bottom:28px;">
+                <div class="channel-toggle-card">
+                  <div class="channel-toggle-info">
+                    <div class="channel-icon-box" style="background:rgba(37,211,102,0.1);">💬</div>
+                    <span style="font-weight:700;font-size:14px;">WhatsApp</span>
+                  </div>
+                  <div class="ios-toggle ${waEnabled ? 'active' : ''}" id="wa-toggle-${s.id}" onclick="this.classList.toggle('active')"></div>
+                </div>
+                <div class="channel-toggle-card">
+                  <div class="channel-toggle-info">
+                    <div class="channel-icon-box" style="background:rgba(66,103,178,0.1);">📘</div>
+                    <span style="font-weight:700;font-size:14px;">Facebook</span>
+                  </div>
+                  <div class="ios-toggle ${fbEnabled ? 'active' : ''}" id="fb-toggle-${s.id}" onclick="this.classList.toggle('active')"></div>
+                </div>
+              </div>
+
+              <div class="niche-field-label">
+                <span class="material-symbols-outlined">groups</span>
+                הגדרות WhatsApp
+              </div>
+              <div class="form-grid" style="margin-bottom:24px;">
+                <div class="form-group">
+                  <label class="form-label">שם קבוצת WA</label>
+                  <input class="form-input" id="niche-wa-group-${s.id}" value="${escHtml(s.waGroupName||'')}" placeholder="שם הקבוצה המדויק" style="font-size:13px;" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Webhook URL</label>
+                  <input class="form-input" id="niche-wa-url-${s.id}" value="${escHtml(s.whatsappUrl||'')}" placeholder="https://trigger.macrodroid.com/..." dir="ltr" style="font-size:13px;" />
+                </div>
+              </div>
+
+              <div class="niche-field-label">
+                <span class="material-symbols-outlined">thumb_up</span>
+                הגדרות Facebook
+              </div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">Page ID</label>
+                  <input class="form-input" id="niche-fb-page-${s.id}" value="${escHtml(s.facebookPageId||'')}" dir="ltr" style="font-size:13px;" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Access Token</label>
+                  <input class="form-input" id="niche-fb-token-${s.id}" value="${escHtml(s.facebookToken||'')}" dir="ltr" style="font-size:13px;" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">App ID</label>
+                  <input class="form-input" id="niche-fb-app-id-${s.id}" value="${escHtml(s.facebookAppId||'')}" dir="ltr" style="font-size:13px;" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">App Secret</label>
+                  <input class="form-input" id="niche-fb-app-secret-${s.id}" value="${escHtml(s.facebookAppSecret||'')}" dir="ltr" style="font-size:13px;" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="niche-config-footer">
+            <button class="btn btn-primary" style="padding:14px 40px;font-size:15px;" onclick="saveNiche('${s.id}')">
+              שמור הגדרות נישה
             </button>
-            <button class="btn btn-ghost btn-sm" onclick="toggleSubjectEdit('${s.id}')">ביטול</button>
-            <span id="subject-save-result-${s.id}" style="font-size:12px;"></span>
+            <button class="btn btn-ghost" style="padding:14px 28px;font-size:15px;" onclick="renderSettingsPage()">
+              ביטול שינויים
+            </button>
+            <span id="niche-save-result-${s.id}" style="font-size:13px;"></span>
           </div>
         </div>
       </div>
-      <div style="display:flex;gap:6px;flex-shrink:0;">
-        <button class="btn btn-ghost btn-sm" onclick="toggleSubjectEdit('${s.id}')">
-          <span class="material-symbols-outlined" style="font-size:14px;">edit</span>
-        </button>
-        <button class="btn btn-danger btn-sm" onclick="deleteSubject('${s.id}')">
-          <span class="material-symbols-outlined" style="font-size:14px;">delete</span>
-        </button>
-      </div>
-    </div>`;
-  }).join('');
+    </section>`;
 }
 
-window.toggleSubjectEdit = (id) => {
-  const el = document.getElementById(`subject-edit-${id}`);
-  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+function renderNicheGrid() {
+  const section = document.getElementById('niche-grid-section');
+  if (!section) return;
+
+  const others = _subjects.filter(s => s.id !== _settingsActiveId);
+  if (!others.length) { section.innerHTML = ''; return; }
+
+  const cards = others.map(s => {
+    const idx = _subjects.findIndex(x => x.id === s.id);
+    const color = getSubjectColor(idx);
+    const icon = getSubjectIcon(idx);
+    const bg = hexToRgba(color, 0.1);
+    const isActive = !!(s.whatsappUrl || s.facebookPageId);
+    return `
+      <div class="niche-mini-card" onclick="selectSettingsSubject('${s.id}')">
+        <div class="niche-mini-card-header">
+          <div class="niche-mini-icon" style="background:${bg};">${icon}</div>
+          <span class="niche-status-chip ${isActive ? 'active' : 'inactive'}">${isActive ? 'פעיל' : 'טרם הוגדר'}</span>
+        </div>
+        <div class="niche-mini-name">${escHtml(s.name)}</div>
+        <div class="niche-mini-stat">${s.waGroupName ? `📋 ${escHtml(s.waGroupName)}` : 'קבוצת WA לא הוגדרה'}</div>
+        <button class="niche-mini-edit-btn">ערוך הגדרות</button>
+      </div>`;
+  }).join('');
+
+  section.innerHTML = `
+    <section style="margin-bottom:32px;">
+      <div class="niche-section-title">
+        <span class="niche-title-bar"></span>
+        נישות נוספות בניהול
+      </div>
+      <div class="niche-mini-grid">${cards}</div>
+    </section>`;
+}
+
+window.selectSettingsSubject = (id) => {
+  _settingsActiveId = id;
+  renderSettingsPage();
+  const el = document.getElementById('active-niche-container');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
-window.saveSubject = async (id) => {
-  const result = document.getElementById(`subject-save-result-${id}`);
+window.saveNiche = async (id) => {
+  const result = document.getElementById(`niche-save-result-${id}`);
   try {
     await api(`/api/subjects/${id}`, {
       method: 'PUT',
       body: {
-        waGroupName:       document.getElementById(`edit-wa-group-${id}`)?.value.trim() || '',
-        whatsappUrl:       document.getElementById(`edit-wa-url-${id}`)?.value.trim() || '',
-        facebookPageId:    document.getElementById(`edit-fb-page-${id}`)?.value.trim() || '',
-        facebookToken:     document.getElementById(`edit-fb-token-${id}`)?.value.trim() || '',
-        facebookAppId:     document.getElementById(`edit-fb-app-id-${id}`)?.value.trim() || '',
-        facebookAppSecret: document.getElementById(`edit-fb-app-secret-${id}`)?.value.trim() || '',
+        prompt:            document.getElementById(`niche-prompt-${id}`)?.value || '',
+        waEnabled:         document.getElementById(`wa-toggle-${id}`)?.classList.contains('active') ?? true,
+        fbEnabled:         document.getElementById(`fb-toggle-${id}`)?.classList.contains('active') ?? true,
+        waGroupName:       document.getElementById(`niche-wa-group-${id}`)?.value.trim() || '',
+        whatsappUrl:       document.getElementById(`niche-wa-url-${id}`)?.value.trim() || '',
+        facebookPageId:    document.getElementById(`niche-fb-page-${id}`)?.value.trim() || '',
+        facebookToken:     document.getElementById(`niche-fb-token-${id}`)?.value.trim() || '',
+        facebookAppId:     document.getElementById(`niche-fb-app-id-${id}`)?.value.trim() || '',
+        facebookAppSecret: document.getElementById(`niche-fb-app-secret-${id}`)?.value.trim() || '',
       },
     });
-    result.style.color = '#16a34a';
-    result.textContent = '✓ נשמר';
+    if (result) { result.style.color = '#16a34a'; result.textContent = '✓ נשמר'; }
     await loadSubjects();
   } catch (err) {
-    result.style.color = '#dc2626';
-    result.textContent = '✗ שגיאה: ' + err.message;
+    if (result) { result.style.color = '#dc2626'; result.textContent = '✗ שגיאה: ' + err.message; }
   }
   setTimeout(() => { if (result) result.textContent = ''; }, 3000);
 };
@@ -304,12 +431,23 @@ window.deleteSubject = async (id) => {
       const sel = document.getElementById('subject-select');
       if (sel) sel.value = '';
     }
+    if (_settingsActiveId === id) _settingsActiveId = null;
     await loadSubjects();
     await loadProducts();
   } catch (err) {
     alert('שגיאה: ' + err.message);
   }
 };
+
+document.getElementById('btn-new-niche').addEventListener('click', () => {
+  const sec = document.getElementById('new-niche-form-section');
+  if (sec) { sec.style.display = 'block'; document.getElementById('subj-name').focus(); }
+});
+
+document.getElementById('btn-cancel-new-niche').addEventListener('click', () => {
+  const sec = document.getElementById('new-niche-form-section');
+  if (sec) sec.style.display = 'none';
+});
 
 document.getElementById('btn-add-subject').addEventListener('click', async () => {
   const name = document.getElementById('subj-name').value.trim();
@@ -319,17 +457,21 @@ document.getElementById('btn-add-subject').addEventListener('click', async () =>
   const facebookToken = document.getElementById('subj-fb-token').value.trim();
   const facebookAppId = document.getElementById('subj-fb-app-id').value.trim();
   const facebookAppSecret = document.getElementById('subj-fb-app-secret').value.trim();
+  const prompt = document.getElementById('subj-prompt').value.trim();
   const result = document.getElementById('subject-form-result');
 
   if (!name) { result.style.color = '#d97706'; result.textContent = '⚠ שם נושא הוא שדה חובה'; return; }
 
   try {
-    await api('/api/subjects', { method: 'POST', body: { name, waGroupName, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret } });
+    const res = await api('/api/subjects', { method: 'POST', body: { name, waGroupName, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret, prompt } });
     result.style.color = '#16a34a';
     result.textContent = '✓ נושא נוסף בהצלחה';
-    ['subj-name','subj-wa-group-name','subj-wa-url','subj-fb-page-id','subj-fb-token','subj-fb-app-id','subj-fb-app-secret'].forEach(id => {
+    ['subj-name','subj-wa-group-name','subj-wa-url','subj-fb-page-id','subj-fb-token','subj-fb-app-id','subj-fb-app-secret','subj-prompt'].forEach(id => {
       document.getElementById(id).value = '';
     });
+    document.getElementById('new-niche-form-section').style.display = 'none';
+    // Auto-select the new niche
+    if (res.subject) _settingsActiveId = res.subject.id;
     await loadSubjects();
   } catch (err) {
     result.style.color = '#dc2626';
@@ -914,10 +1056,9 @@ async function loadTokenInfo() {
 
 document.getElementById('btn-check-token').addEventListener('click', loadTokenInfo);
 
-// Load prompt + token info + subjects when settings tab is opened
+// Load prompt + subjects when settings tab is opened
 document.querySelector('[data-tab="settings"]').addEventListener('click', () => {
   loadPrompt();
-  loadTokenInfo();
   loadSubjects();
 });
 

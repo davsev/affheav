@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
 
 // POST /api/subjects — create new subject
 router.post('/', async (req, res) => {
-  const { name, waGroupName, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret } = req.body;
+  const { name, waGroupName, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret, prompt, waEnabled, fbEnabled } = req.body;
   if (!name) return res.status(400).json({ success: false, error: 'name is required' });
 
   try {
@@ -29,6 +29,9 @@ router.post('/', async (req, res) => {
       facebookToken: facebookToken || '',
       facebookAppId: facebookAppId || '',
       facebookAppSecret: facebookAppSecret || '',
+      prompt: prompt || '',
+      waEnabled: waEnabled !== false,
+      fbEnabled: fbEnabled !== false,
     };
     subjects.push(entry);
     await saveSubjects(subjects);
@@ -45,7 +48,7 @@ router.put('/:id', async (req, res) => {
     const idx = subjects.findIndex(s => s.id === req.params.id);
     if (idx === -1) return res.status(404).json({ success: false, error: 'Subject not found' });
 
-    const fields = ['name', 'waGroupName', 'whatsappUrl', 'facebookPageId', 'facebookToken', 'facebookAppId', 'facebookAppSecret'];
+    const fields = ['name', 'waGroupName', 'whatsappUrl', 'facebookPageId', 'facebookToken', 'facebookAppId', 'facebookAppSecret', 'prompt', 'waEnabled', 'fbEnabled'];
     fields.forEach(f => { if (req.body[f] !== undefined) subjects[idx][f] = req.body[f]; });
 
     await saveSubjects(subjects);

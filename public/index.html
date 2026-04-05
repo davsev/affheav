@@ -441,108 +441,119 @@
 
     <!-- ── Settings ──────────────────────────────────────────────── -->
     <div class="tab-panel" id="tab-settings">
+
       <!-- Hero header -->
       <section style="margin-bottom:36px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;">
         <div>
           <div class="page-eyebrow">ניהול פרויקטים</div>
           <h1 class="page-title" style="margin-bottom:0;">הגדרות <span class="highlight">נישות ונושאים</span></h1>
         </div>
-        <button class="btn btn-primary" onclick="document.getElementById('subject-form-details').open=true;document.getElementById('subj-name').focus();">
+        <button class="btn btn-primary" id="btn-new-niche">
           <span class="material-symbols-outlined" style="font-size:16px;">add_circle</span>
           צור נישה חדשה
         </button>
       </section>
 
-      <!-- Active subjects -->
-      <div class="card" style="margin-bottom:16px;">
-        <div class="card-title">נושאים פעילים</div>
-        <div class="card-sub">כל נושא מקבל הגדרות WhatsApp ו-Facebook נפרדות, וניתן לסנן מוצרים לפיו.</div>
-        <div id="subjects-list" style="margin-bottom:8px;"></div>
+      <!-- Active niche config card — rendered by JS -->
+      <div id="active-niche-container"></div>
 
-        <!-- Add subject form -->
-        <details id="subject-form-details" style="margin-top:14px;">
-          <summary class="details-summary">
-            <span class="material-symbols-outlined" style="font-size:15px;">add</span>
-            הוסף נושא חדש
-          </summary>
-          <div class="details-body" style="margin-top:4px;padding:20px;background:var(--surface-low);border-radius:1.5rem;">
-            <div class="form-grid">
-              <div class="form-group">
-                <label class="form-label">שם נושא *</label>
-                <input class="form-input" id="subj-name" placeholder="aquarium" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">שם קבוצת WA (לסינון מוצרים)</label>
-                <input class="form-input" id="subj-wa-group-name" placeholder="ציוד דייג ומחנאות" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">WhatsApp Webhook URL</label>
-                <input class="form-input" id="subj-wa-url" placeholder="https://trigger.macrodroid.com/..." dir="ltr" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Facebook Page ID</label>
-                <input class="form-input" id="subj-fb-page-id" placeholder="123456789" dir="ltr" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Facebook Access Token</label>
-                <input class="form-input" id="subj-fb-token" placeholder="EAAVWa..." dir="ltr" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Facebook App ID</label>
-                <input class="form-input" id="subj-fb-app-id" placeholder="150238..." dir="ltr" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Facebook App Secret</label>
-                <input class="form-input" id="subj-fb-app-secret" placeholder="c80fb6..." dir="ltr" />
-              </div>
+      <!-- Other niches grid — rendered by JS -->
+      <div id="niche-grid-section"></div>
+
+      <!-- New niche form (hidden, toggled by button) -->
+      <div id="new-niche-form-section" style="display:none;">
+        <div class="card" style="margin-top:8px;">
+          <div class="card-title">נישה חדשה</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">שם נושא *</label>
+              <input class="form-input" id="subj-name" placeholder="aquarium" />
             </div>
-            <div style="display:flex;gap:12px;margin-top:16px;align-items:center;">
-              <button class="btn btn-primary" id="btn-add-subject">
-                <span class="material-symbols-outlined" style="font-size:15px;">add</span>הוסף נושא
+            <div class="form-group">
+              <label class="form-label">שם קבוצת WA (לסינון מוצרים)</label>
+              <input class="form-input" id="subj-wa-group-name" placeholder="ציוד דייג ומחנאות" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">WhatsApp Webhook URL</label>
+              <input class="form-input" id="subj-wa-url" placeholder="https://trigger.macrodroid.com/..." dir="ltr" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Facebook Page ID</label>
+              <input class="form-input" id="subj-fb-page-id" placeholder="123456789" dir="ltr" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Facebook Access Token</label>
+              <input class="form-input" id="subj-fb-token" placeholder="EAAVWa..." dir="ltr" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Facebook App ID</label>
+              <input class="form-input" id="subj-fb-app-id" placeholder="150238..." dir="ltr" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Facebook App Secret</label>
+              <input class="form-input" id="subj-fb-app-secret" placeholder="c80fb6..." dir="ltr" />
+            </div>
+            <div class="form-group form-full">
+              <label class="form-label">פרומפט AI</label>
+              <textarea class="form-input" id="subj-prompt" style="min-height:120px;" placeholder="תתנהג כמו מומחה..." dir="rtl"></textarea>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;margin-top:16px;align-items:center;">
+            <button class="btn btn-primary" id="btn-add-subject">
+              <span class="material-symbols-outlined" style="font-size:15px;">add</span>הוסף נושא
+            </button>
+            <button class="btn btn-ghost" id="btn-cancel-new-niche">ביטול</button>
+            <div id="subject-form-result" style="font-size:13px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Global settings (collapsed) -->
+      <details style="margin-top:28px;">
+        <summary class="details-summary">
+          <span class="material-symbols-outlined" style="font-size:15px;">tune</span>
+          הגדרות גלובליות
+        </summary>
+        <div class="details-body" style="margin-top:4px;">
+          <!-- Facebook Token -->
+          <div class="card" style="margin-bottom:16px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+              <div class="card-title" style="display:flex;align-items:center;gap:8px;margin-bottom:0;">
+                <span class="material-symbols-outlined" style="color:var(--primary);font-size:22px;">thumb_up</span>
+                סטטוס טוקן Facebook
+              </div>
+              <button class="icon-btn" id="btn-check-token" title="בדוק טוקן">
+                <span class="material-symbols-outlined">manage_search</span>
               </button>
-              <div id="subject-form-result" style="font-size:13px;"></div>
+            </div>
+            <div id="fb-token-info" style="font-size:13px;color:var(--on-surface-var);">לחץ על הכפתור לבדיקת הטוקן</div>
+          </div>
+
+          <!-- OpenAI Default Prompt -->
+          <div class="card">
+            <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+              <span class="material-symbols-outlined" style="color:var(--primary);font-size:22px;">psychology</span>
+              פרומפט OpenAI (ברירת מחדל גלובלית)
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+              <code class="code-tag">{{Text}}</code>
+              <code class="code-tag">{{Link}}</code>
+              <code class="code-tag">{{join_link}}</code>
+              <code class="code-tag">{{dayInstruction}}</code>
+            </div>
+            <textarea class="form-input" id="prompt-editor" style="height:280px;" dir="rtl"></textarea>
+            <div style="display:flex;gap:10px;margin-top:16px;align-items:center;">
+              <button class="btn btn-primary" id="btn-save-prompt">
+                <span class="material-symbols-outlined" style="font-size:15px;">save</span>שמור
+              </button>
+              <button class="btn btn-ghost" id="btn-reset-prompt">
+                <span class="material-symbols-outlined" style="font-size:15px;">restart_alt</span>אפס
+              </button>
+              <div id="prompt-save-result" style="font-size:13px;align-self:center;"></div>
             </div>
           </div>
-        </details>
-      </div>
-
-      <!-- Facebook Token -->
-      <div class="card" style="margin-bottom:16px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-          <div class="card-title" style="display:flex;align-items:center;gap:8px;margin-bottom:0;">
-            <span class="material-symbols-outlined" style="color:var(--primary);font-size:22px;">thumb_up</span>
-            פייסבוק
-          </div>
-          <button class="icon-btn" id="btn-check-token" title="בדוק טוקן">
-            <span class="material-symbols-outlined">manage_search</span>
-          </button>
         </div>
-        <div id="fb-token-info" style="font-size:13px;color:var(--on-surface-var);">טוען...</div>
-      </div>
-
-      <!-- OpenAI Prompt -->
-      <div class="card">
-        <div class="card-title" style="display:flex;align-items:center;gap:8px;">
-          <span class="material-symbols-outlined" style="color:var(--primary);font-size:22px;">psychology</span>
-          פרומפט OpenAI
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-          <code class="code-tag">{{Text}}</code>
-          <code class="code-tag">{{Link}}</code>
-          <code class="code-tag">{{join_link}}</code>
-          <code class="code-tag">{{dayInstruction}}</code>
-        </div>
-        <textarea class="form-input" id="prompt-editor" style="height:340px;" dir="rtl"></textarea>
-        <div style="display:flex;gap:10px;margin-top:16px;align-items:center;">
-          <button class="btn btn-primary" id="btn-save-prompt">
-            <span class="material-symbols-outlined" style="font-size:15px;">save</span>שמור
-          </button>
-          <button class="btn btn-ghost" id="btn-reset-prompt">
-            <span class="material-symbols-outlined" style="font-size:15px;">restart_alt</span>אפס
-          </button>
-          <div id="prompt-save-result" style="font-size:13px;align-self:center;"></div>
-        </div>
-      </div>
+      </details>
 
     </div><!-- /tab-settings -->
 
