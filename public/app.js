@@ -1,3 +1,33 @@
+// ── Login ─────────────────────────────────────────────────────────────────────
+(function initLogin() {
+  const loginPage = document.getElementById('login-page');
+  if (!loginPage) return;
+
+  // Skip login if already authenticated in this session
+  if (sessionStorage.getItem('ah_auth') === '1') {
+    loginPage.style.display = 'none';
+    return;
+  }
+
+  const btnLogin = document.getElementById('btn-login');
+  const passInput = document.getElementById('login-pass');
+
+  function doLogin() {
+    sessionStorage.setItem('ah_auth', '1');
+    loginPage.style.animation = 'fadeOut 0.4s ease forwards';
+    setTimeout(() => { loginPage.style.display = 'none'; }, 400);
+  }
+
+  btnLogin.addEventListener('click', doLogin);
+  passInput.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  document.getElementById('login-user').addEventListener('keydown', e => { if (e.key === 'Enter') passInput.focus(); });
+
+  // Add fadeOut animation
+  const style = document.createElement('style');
+  style.textContent = '@keyframes fadeOut { to { opacity:0; transform:scale(1.02); } }';
+  document.head.appendChild(style);
+})();
+
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -8,6 +38,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     // Update topbar section name
     const el = document.getElementById('topbar-section');
     if (el && typeof tabNames !== 'undefined') el.textContent = tabNames[btn.dataset.tab] || '';
+    // Load dashboard when switching to it
+    if (btn.dataset.tab === 'dashboard') renderDashboard();
   });
 });
 
@@ -89,51 +121,60 @@ function setAccentColor(hexColor) {
 }
 
 function renderSubjectBar() {
-  const bar = document.getElementById('subject-bar');
-  if (!bar) return;
+  const container = document.getElementById('sidebar-subjects');
+  if (!container) return;
 
-  const pills = [
-    `<button class="subject-pill ${_currentSubject === '' ? 'active' : ''}" data-subject="" data-color="#007AFF" style="--pill-color:#007AFF">
-      <span class="subject-pill-name">הכל</span>
+  const items = [
+    `<button class="subject-item ${_currentSubject === '' ? 'active' : ''}" data-subject="" data-color="#007AFF" style="--item-color:#007AFF">
+      <span class="subject-dot" style="background:#007AFF;"></span>
+      <span class="subject-item-name">הכל</span>
     </button>`
   ];
 
   _subjects.forEach((s, i) => {
     const color = getSubjectColor(i);
     const isActive = _currentSubject === s.id;
-    pills.push(`
-      <button class="subject-pill ${isActive ? 'active' : ''}"
+    items.push(`
+      <button class="subject-item ${isActive ? 'active' : ''}"
               data-subject="${escHtml(s.id)}"
               data-color="${color}"
-              style="--pill-color:${color}">
-        <span class="subject-pill-name">${escHtml(s.name)}</span>
+              style="--item-color:${color}">
+        <span class="subject-dot" style="background:${color};"></span>
+        <span class="subject-item-name">${escHtml(s.name)}</span>
       </button>
     `);
   });
 
-  bar.innerHTML = pills.join('');
+  container.innerHTML = items.join('');
 
-  bar.querySelectorAll('.subject-pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      const id    = pill.dataset.subject;
-      const color = pill.dataset.color;
+  container.querySelectorAll('.subject-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const id    = item.dataset.subject;
+      const color = item.dataset.color;
       _currentSubject = id;
 
-      bar.querySelectorAll('.subject-pill').forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
+      container.querySelectorAll('.subject-item').forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
 
       setAccentColor(id === '' ? null : color);
 
-      // Sync hidden select
       const sel = document.getElementById('subject-select');
       if (sel) sel.value = id;
+
+      // Navigate to products tab when a subject is selected
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelector('[data-tab="products"]').classList.add('active');
+      document.getElementById('tab-products').classList.add('active');
+      const topbarEl = document.getElementById('topbar-section');
+      if (topbarEl) topbarEl.textContent = tabNames['products'] || 'מוצרים';
 
       loadProducts();
     });
   });
 
   // Apply current accent
-  const active = bar.querySelector('.subject-pill.active');
+  const active = container.querySelector('.subject-item.active');
   if (active) setAccentColor(_currentSubject === '' ? null : active.dataset.color);
 }
 
@@ -156,24 +197,103 @@ function renderSubjectsList() {
   const container = document.getElementById('subjects-list');
   if (!container) return;
   if (!_subjects.length) {
-    container.innerHTML = '<div style="font-size:13px;color:var(--label-3);">אין נושאים מוגדרים עדיין.</div>';
+    container.innerHTML = `
+      <div style="text-align:center;padding:32px 20px;color:var(--on-surface-var);">
+        <span class="material-symbols-outlined" style="font-size:36px;opacity:0.3;display:block;margin-bottom:8px;">category</span>
+        <div style="font-size:13px;">אין נושאים מוגדרים עדיין.</div>
+      </div>`;
     return;
   }
-  container.innerHTML = _subjects.map(s => `
-    <div class="schedule-item" id="subject-item-${s.id}" style="align-items:flex-start;gap:12px;">
-      <div style="flex:1;min-width:0;">
-        <div class="schedule-label">${escHtml(s.name)}</div>
-        <div style="font-size:11.5px;color:var(--label-3);margin-top:3px;font-family:monospace;word-break:break-all;">
-          ${s.whatsappUrl ? `WA: ${escHtml(s.whatsappUrl.slice(0, 60))}…` : '<span style="opacity:.5;">WA: לא הוגדר</span>'}
+  container.innerHTML = _subjects.map((s, i) => {
+    const color = getSubjectColor(i);
+    return `
+    <div class="subject-settings-item" id="subject-item-${s.id}">
+      <span class="subject-settings-dot" style="background:${color};box-shadow:0 0 0 4px ${color}22;"></span>
+      <div class="subject-settings-info">
+        <div class="subject-settings-name">${escHtml(s.name)}</div>
+        <div class="subject-settings-meta">
+          ${s.waGroupName ? `📋 <strong>${escHtml(s.waGroupName)}</strong>` : '<span style="color:#ea580c;">📋 קבוצת WA לא הוגדרה</span>'}
+          &nbsp;·&nbsp;
+          ${s.whatsappUrl ? '💬 Webhook ✓' : '💬 Webhook —'}
+          &nbsp;·&nbsp;
+          ${s.facebookPageId ? `📘 Page ${escHtml(s.facebookPageId)}` : '📘 Facebook —'}
         </div>
-        <div style="font-size:11.5px;color:var(--label-3);margin-top:1px;font-family:monospace;">
-          ${s.facebookPageId ? `FB Page: ${escHtml(s.facebookPageId)}` : '<span style="opacity:.5;">FB: לא הוגדר</span>'}
+        <div id="subject-edit-${s.id}" style="display:none;margin-top:10px;">
+          <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="form-group">
+              <label class="form-label">שם קבוצת WA (לסינון)</label>
+              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-wa-group-${s.id}" value="${escHtml(s.waGroupName||'')}" placeholder="שם הקבוצה מדויק" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Webhook URL</label>
+              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-wa-url-${s.id}" value="${escHtml(s.whatsappUrl||'')}" placeholder="https://trigger.macrodroid.com/..." dir="ltr" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Facebook Page ID</label>
+              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-fb-page-${s.id}" value="${escHtml(s.facebookPageId||'')}" dir="ltr" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Facebook Token</label>
+              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-fb-token-${s.id}" value="${escHtml(s.facebookToken||'')}" dir="ltr" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">App ID</label>
+              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-fb-app-id-${s.id}" value="${escHtml(s.facebookAppId||'')}" dir="ltr" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">App Secret</label>
+              <input class="form-input" style="font-size:13px;padding:7px 11px;" id="edit-fb-app-secret-${s.id}" value="${escHtml(s.facebookAppSecret||'')}" dir="ltr" />
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+            <button class="btn btn-primary btn-sm" onclick="saveSubject('${s.id}')">
+              <span class="material-symbols-outlined" style="font-size:13px;">save</span>שמור
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="toggleSubjectEdit('${s.id}')">ביטול</button>
+            <span id="subject-save-result-${s.id}" style="font-size:12px;"></span>
+          </div>
         </div>
       </div>
-      <button class="btn btn-danger btn-sm" onclick="deleteSubject('${s.id}')">🗑</button>
-    </div>
-  `).join('');
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <button class="btn btn-ghost btn-sm" onclick="toggleSubjectEdit('${s.id}')">
+          <span class="material-symbols-outlined" style="font-size:14px;">edit</span>
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="deleteSubject('${s.id}')">
+          <span class="material-symbols-outlined" style="font-size:14px;">delete</span>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
 }
+
+window.toggleSubjectEdit = (id) => {
+  const el = document.getElementById(`subject-edit-${id}`);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+
+window.saveSubject = async (id) => {
+  const result = document.getElementById(`subject-save-result-${id}`);
+  try {
+    await api(`/api/subjects/${id}`, {
+      method: 'PUT',
+      body: {
+        waGroupName:       document.getElementById(`edit-wa-group-${id}`)?.value.trim() || '',
+        whatsappUrl:       document.getElementById(`edit-wa-url-${id}`)?.value.trim() || '',
+        facebookPageId:    document.getElementById(`edit-fb-page-${id}`)?.value.trim() || '',
+        facebookToken:     document.getElementById(`edit-fb-token-${id}`)?.value.trim() || '',
+        facebookAppId:     document.getElementById(`edit-fb-app-id-${id}`)?.value.trim() || '',
+        facebookAppSecret: document.getElementById(`edit-fb-app-secret-${id}`)?.value.trim() || '',
+      },
+    });
+    result.style.color = '#16a34a';
+    result.textContent = '✓ נשמר';
+    await loadSubjects();
+  } catch (err) {
+    result.style.color = '#dc2626';
+    result.textContent = '✗ שגיאה: ' + err.message;
+  }
+  setTimeout(() => { if (result) result.textContent = ''; }, 3000);
+};
 
 window.deleteSubject = async (id) => {
   if (!confirm('למחוק נושא זה?')) return;
@@ -193,6 +313,7 @@ window.deleteSubject = async (id) => {
 
 document.getElementById('btn-add-subject').addEventListener('click', async () => {
   const name = document.getElementById('subj-name').value.trim();
+  const waGroupName = document.getElementById('subj-wa-group-name').value.trim();
   const whatsappUrl = document.getElementById('subj-wa-url').value.trim();
   const facebookPageId = document.getElementById('subj-fb-page-id').value.trim();
   const facebookToken = document.getElementById('subj-fb-token').value.trim();
@@ -200,18 +321,18 @@ document.getElementById('btn-add-subject').addEventListener('click', async () =>
   const facebookAppSecret = document.getElementById('subj-fb-app-secret').value.trim();
   const result = document.getElementById('subject-form-result');
 
-  if (!name) { result.style.color = '#fbbf24'; result.textContent = '⚠ שם נושא הוא שדה חובה'; return; }
+  if (!name) { result.style.color = '#d97706'; result.textContent = '⚠ שם נושא הוא שדה חובה'; return; }
 
   try {
-    await api('/api/subjects', { method: 'POST', body: { name, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret } });
-    result.style.color = '#4ade80';
+    await api('/api/subjects', { method: 'POST', body: { name, waGroupName, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret } });
+    result.style.color = '#16a34a';
     result.textContent = '✓ נושא נוסף בהצלחה';
-    ['subj-name','subj-wa-url','subj-fb-page-id','subj-fb-token','subj-fb-app-id','subj-fb-app-secret'].forEach(id => {
+    ['subj-name','subj-wa-group-name','subj-wa-url','subj-fb-page-id','subj-fb-token','subj-fb-app-id','subj-fb-app-secret'].forEach(id => {
       document.getElementById(id).value = '';
     });
     await loadSubjects();
   } catch (err) {
-    result.style.color = '#f87171';
+    result.style.color = '#dc2626';
     result.textContent = '✗ שגיאה: ' + err.message;
   }
   setTimeout(() => { result.textContent = ''; }, 4000);
@@ -220,6 +341,33 @@ document.getElementById('btn-add-subject').addEventListener('click', async () =>
 // ── Products ──────────────────────────────────────────────────────────────────
 let _currentFilter = 'unsent';
 let _currentSort = 'none';
+let _currentView = 'table';
+
+window.setView = (v) => {
+  _currentView = v;
+  ['table','cards'].forEach(id => {
+    const btn = document.getElementById('view-' + id);
+    if (btn) btn.className = 'view-btn' + (id === v ? ' active' : '');
+  });
+  document.getElementById('products-table-view').style.display = v === 'table' ? '' : 'none';
+  document.getElementById('products-card-view').style.display  = v === 'cards' ? '' : 'none';
+  renderProducts(_lastProducts);
+};
+
+function updateKPIs(products) {
+  const total   = products.length;
+  const sent    = products.filter(p => p.sent).length;
+  const unsent  = total - sent;
+  const clicks  = products.reduce((sum, p) => sum + (p.clicks || 0), 0);
+  const kpiTotal  = document.getElementById('kpi-total');
+  const kpiUnsent = document.getElementById('kpi-unsent');
+  const kpiSent   = document.getElementById('kpi-sent');
+  const kpiClicks = document.getElementById('kpi-clicks');
+  if (kpiTotal)  kpiTotal.textContent  = total;
+  if (kpiUnsent) kpiUnsent.textContent = unsent;
+  if (kpiSent)   kpiSent.textContent   = sent;
+  if (kpiClicks) kpiClicks.textContent = clicks;
+}
 
 window.setSort = (s) => {
   _currentSort = s;
@@ -245,6 +393,7 @@ window.setFilter = (f) => {
 
 function renderProducts(products) {
   _lastProducts = products;
+  updateKPIs(products);
   const tbody = document.getElementById('products-body');
   const sentCount = products.filter(p => p.sent).length;
   document.getElementById('products-summary').textContent = `${sentCount} נשלחו מתוך ${products.length} סה"כ`;
@@ -290,6 +439,40 @@ function renderProducts(products) {
   }).join('');
 
   initDragAndDrop(tbody);
+
+  // Render card view
+  const grid = document.getElementById('products-grid');
+  if (grid) {
+    if (!filtered.length) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">${_currentFilter === 'unsent' ? 'כל המוצרים נשלחו ✓' : 'אין מוצרים'}</div>`;
+    } else {
+      grid.innerHTML = filtered.map(p => {
+        const clicksHtml = p.clicks != null
+          ? `<span class="product-card-clicks">👁 ${p.clicks} קליקים</span>`
+          : '';
+        const sentBadge = p.sent
+          ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>`
+          : `<span class="badge badge-unsent">ממתין</span>`;
+        return `
+        <div class="product-card">
+          ${p.image
+            ? `<img class="product-card-img" src="${escHtml(p.image)}" onerror="this.style.display='none'" loading="lazy" />`
+            : `<div class="product-card-img-placeholder">📦</div>`}
+          <div class="product-card-body">
+            <div class="product-card-title">${escHtml(p.Text)}</div>
+            <div class="product-card-meta">
+              ${sentBadge}
+              ${clicksHtml}
+            </div>
+          </div>
+          <div class="product-card-footer">
+            <a href="${escHtml(p.Link)}" target="_blank" style="color:var(--accent);font-size:12px;" dir="ltr">🔗 קישור</a>
+            <button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct(${p.row_number}, this)">▶ שלח</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
 }
 
 function initDragAndDrop(tbody) {
@@ -399,38 +582,38 @@ document.getElementById('btn-refresh-products').addEventListener('click', loadPr
 document.getElementById('btn-sync-clicks').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   btn.disabled = true;
-  btn.textContent = '⏳ מסנכרן...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="animation:spin 1s linear infinite;font-size:17px;">sync</span>';
   try {
     const res = await api('/api/products/sync-clicks', { method: 'POST' });
     if (res.success) {
-      btn.textContent = `✅ סונכרנו ${res.synced}`;
+      btn.innerHTML = `<span style="font-size:12px;font-weight:700;">✓ ${res.synced}</span>`;
       renderProducts(res.products);
     } else {
-      btn.textContent = '❌ שגיאה';
+      btn.innerHTML = '<span style="font-size:12px;">✗</span>';
     }
   } catch {
-    btn.textContent = '❌ שגיאה';
+    btn.innerHTML = '<span style="font-size:12px;">✗</span>';
   }
-  setTimeout(() => { btn.disabled = false; btn.textContent = '📊 סנכרן קליקים'; }, 3000);
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">sync</span>'; }, 3000);
 });
 
 document.getElementById('btn-shorten-all').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   btn.disabled = true;
-  btn.textContent = '⏳ ממיר...';
+  btn.innerHTML = '<span class="material-symbols-outlined" style="animation:spin 1s linear infinite;font-size:17px;">sync</span>';
   try {
     const res = await api('/api/products/shorten-all', { method: 'POST' });
     if (res.success) {
-      btn.textContent = `✅ הומרו ${res.converted}`;
+      btn.innerHTML = `<span style="font-size:12px;font-weight:700;">✓ ${res.converted}</span>`;
       await loadProducts();
     } else {
-      btn.textContent = '❌ שגיאה';
+      btn.innerHTML = '<span style="font-size:12px;">✗</span>';
       alert(res.error);
     }
   } catch (err) {
-    btn.textContent = '❌ שגיאה';
+    btn.innerHTML = '<span style="font-size:12px;">✗</span>';
   }
-  setTimeout(() => { btn.disabled = false; btn.textContent = '🔗 המר לspoo.me'; }, 3000);
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">link</span>'; }, 3000);
 });
 
 document.getElementById('btn-execute').addEventListener('click', async (e) => {
@@ -578,16 +761,16 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
   const subject  = document.getElementById('new-subject').value;
   const result   = document.getElementById('add-product-result');
 
-  if (!Text || !Link) { result.textContent = '⚠ שם מוצר וקישור הם שדות חובה'; result.style.color='#fbbf24'; return; }
+  if (!Text || !Link) { result.textContent = '⚠ שם מוצר וקישור הם שדות חובה'; result.style.color='#d97706'; return; }
 
   try {
     await api('/api/products', { method: 'POST', body: { Link, image, Text, join_link, wa_group, subject } });
     result.textContent = '✓ מוצר נוסף בהצלחה';
-    result.style.color = '#4ade80';
+    result.style.color = '#16a34a';
     ['new-text','new-link','new-image','new-join','new-wa-group'].forEach(id => document.getElementById(id).value = '');
   } catch (err) {
     result.textContent = '✗ שגיאה: ' + err.message;
-    result.style.color = '#f87171';
+    result.style.color = '#dc2626';
   }
 });
 
@@ -684,10 +867,10 @@ document.getElementById('btn-save-prompt').addEventListener('click', async () =>
   if (!prompt) return;
   try {
     await api('/api/prompt', { method: 'POST', body: { prompt } });
-    res.style.color = '#4ade80';
+    res.style.color = '#16a34a';
     res.textContent = '✓ הפרומפט נשמר בהצלחה';
   } catch (e) {
-    res.style.color = '#f87171';
+    res.style.color = '#dc2626';
     res.textContent = '✗ שגיאה בשמירה';
   }
   setTimeout(() => { res.textContent = ''; }, 3000);
@@ -698,10 +881,10 @@ document.getElementById('btn-reset-prompt').addEventListener('click', async () =
   try {
     const data = await api('/api/prompt/reset', { method: 'POST' });
     document.getElementById('prompt-editor').value = data.prompt;
-    res.style.color = '#4ade80';
+    res.style.color = '#16a34a';
     res.textContent = '✓ הפרומפט אופס לברירת המחדל';
   } catch (e) {
-    res.style.color = '#f87171';
+    res.style.color = '#dc2626';
     res.textContent = '✗ שגיאה באיפוס';
   }
   setTimeout(() => { res.textContent = ''; }, 3000);
@@ -738,7 +921,135 @@ document.querySelector('[data-tab="settings"]').addEventListener('click', () => 
   loadSubjects();
 });
 
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+async function renderDashboard() {
+  const grid = document.getElementById('dashboard-subjects-grid');
+  if (!grid) return;
+
+  // Fetch products for all subjects
+  let allProducts = [];
+  try {
+    const { products } = await api('/api/products');
+    allProducts = products || [];
+  } catch (e) { /* ignore */ }
+
+  const SUBJECT_ICONS = ['🐠','🎣','🌿','🐾','🏋️','🍳','📱','🎮','👗','🏕️','🌸','⚽'];
+  const SUBJECT_BG    = [
+    'rgba(112,42,225,0.08)','rgba(0,122,255,0.08)','rgba(22,163,74,0.08)',
+    'rgba(234,88,12,0.08)', 'rgba(160,45,112,0.08)','rgba(14,165,233,0.08)',
+  ];
+
+  const cards = [];
+
+  // "All" summary card
+  const totalSent   = allProducts.filter(p => p.sent).length;
+  const totalUnsent = allProducts.length - totalSent;
+  const totalClicks = allProducts.reduce((s,p) => s + (p.clicks||0), 0);
+  cards.push(`
+    <div class="dashboard-subject-card" onclick="navigateTo('products','')">
+      <div class="dashboard-subject-icon" style="background:rgba(112,42,225,0.1);">🌐</div>
+      <div class="dashboard-subject-name">כלל הנושאים</div>
+      <div class="dashboard-subject-stat">${allProducts.length} מוצרים</div>
+      <div class="dashboard-subject-kpi">
+        <div class="dashboard-kpi-item">
+          <div class="dashboard-kpi-label">ממתינים</div>
+          <div class="dashboard-kpi-val" style="color:#ea580c;">${totalUnsent}</div>
+        </div>
+        <div class="dashboard-kpi-item">
+          <div class="dashboard-kpi-label">נשלחו</div>
+          <div class="dashboard-kpi-val" style="color:#16a34a;">${totalSent}</div>
+        </div>
+        <div class="dashboard-kpi-item">
+          <div class="dashboard-kpi-label">קליקים</div>
+          <div class="dashboard-kpi-val" style="color:#702ae1;">${totalClicks}</div>
+        </div>
+      </div>
+    </div>
+  `);
+
+  if (_subjects.length === 0) {
+    cards.push(`
+      <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--on-surface-var);">
+        <span class="material-symbols-outlined" style="font-size:48px;opacity:0.3;display:block;margin-bottom:12px;">category</span>
+        <div style="font-size:14px;">אין נושאים מוגדרים — הוסף נושאים בהגדרות</div>
+      </div>
+    `);
+  } else {
+    _subjects.forEach((s, i) => {
+      const color   = getSubjectColor(i);
+      const subProds= allProducts.filter(p => p.subject === s.id);
+      const sent    = subProds.filter(p => p.sent).length;
+      const unsent  = subProds.length - sent;
+      const clicks  = subProds.reduce((sum,p) => sum + (p.clicks||0), 0);
+      const icon    = SUBJECT_ICONS[i % SUBJECT_ICONS.length];
+      const bg      = SUBJECT_BG[i % SUBJECT_BG.length];
+      cards.push(`
+        <div class="dashboard-subject-card" onclick="navigateTo('products','${escHtml(s.id)}')">
+          <div class="dashboard-subject-icon" style="background:${bg};">${icon}</div>
+          <div class="dashboard-subject-name">${escHtml(s.name)}</div>
+          <div class="dashboard-subject-stat">${subProds.length} מוצרים</div>
+          <div class="dashboard-subject-kpi">
+            <div class="dashboard-kpi-item">
+              <div class="dashboard-kpi-label">ממתינים</div>
+              <div class="dashboard-kpi-val" style="color:#ea580c;">${unsent}</div>
+            </div>
+            <div class="dashboard-kpi-item">
+              <div class="dashboard-kpi-label">נשלחו</div>
+              <div class="dashboard-kpi-val" style="color:#16a34a;">${sent}</div>
+            </div>
+            <div class="dashboard-kpi-item">
+              <div class="dashboard-kpi-label">קליקים</div>
+              <div class="dashboard-kpi-val" style="color:${color};">${clicks}</div>
+            </div>
+          </div>
+        </div>
+      `);
+    });
+  }
+
+  grid.innerHTML = cards.join('');
+  // Re-apply grid columns
+  grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(280px, 1fr))';
+}
+
+// Navigate to products page filtered by subject
+window.navigateTo = (tab, subjectId) => {
+  // Switch to products tab
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  const tabBtn = document.querySelector(`[data-tab="${tab}"]`);
+  if (tabBtn) tabBtn.classList.add('active');
+  const panel = document.getElementById('tab-' + tab);
+  if (panel) panel.classList.add('active');
+  const el = document.getElementById('topbar-section');
+  if (el && typeof tabNames !== 'undefined') el.textContent = tabNames[tab] || '';
+
+  // Set subject filter
+  if (tab === 'products') {
+    _currentSubject = subjectId;
+    // Update sidebar subject items
+    document.querySelectorAll('.subject-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.subject === subjectId);
+    });
+    // Update accent color
+    if (subjectId === '') {
+      setAccentColor(null);
+    } else {
+      const idx = _subjects.findIndex(s => s.id === subjectId);
+      if (idx >= 0) setAccentColor(getSubjectColor(idx));
+    }
+    loadProducts();
+  }
+};
+
 // ── Init ──────────────────────────────────────────────────────────────────────
+// Add spin keyframe for icon buttons
+(function() {
+  const s = document.createElement('style');
+  s.textContent = '@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }';
+  document.head.appendChild(s);
+})();
+
 // Load subjects first so selects are populated before products/schedules render
 loadSubjects().then(() => {
   loadProducts();
