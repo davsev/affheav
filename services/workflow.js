@@ -3,6 +3,13 @@ const openai = require('./openai');
 const whatsapp = require('./whatsapp');
 const facebook = require('./facebook');
 
+// Resolve subject config (credentials) by subject id
+async function resolveSubjectConfig(subjectId) {
+  if (!subjectId) return null;
+  const subjects = await googleSheets.getSubjects();
+  return subjects.find(s => s.id === subjectId) || null;
+}
+
 // Global log emitter — set by server.js so routes/scheduler can share it
 let _emit = null;
 function setEmitter(fn) { _emit = fn; }
@@ -15,18 +22,27 @@ function log(msg, level = 'info') {
 
 /**
  * Run one full product send cycle:
- * 1. Get next unsent product from Google Sheets
+ * 1. Get next unsent product from Google Sheets (filtered by subject if provided)
  * 2. Generate Hebrew message via OpenAI
- * 3. Send to WhatsApp via MacroDroid
- * 4. Post to Facebook page
+ * 3. Send to WhatsApp via MacroDroid (using subject-specific webhook if configured)
+ * 4. Post to Facebook page (using subject-specific credentials if configured)
  * 5. Mark row as sent in Google Sheets
  *
  * @param {object} [overrideProduct] - If provided, use this product instead of fetching next unsent
+ * @param {object} [opts]
+ * @param {string[]} [opts.platforms]  - Which platforms to send to
+ * @param {string}   [opts.subject]    - Subject/niche id to filter products and use credentials for
  */
-async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'] } = {}) {
+async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'], subject } = {}) {
   const sendWA = platforms.includes('whatsapp');
   const sendFB = platforms.includes('facebook');
   log('▶ Workflow started');
+
+  // Resolve subject credentials (if subject is specified)
+  const subjectConfig = subject ? await resolveSubjectConfig(subject) : null;
+  if (subject) {
+    log(`Subject: ${subjectConfig ? subjectConfig.name : subject}`);
+  }
 
   // Step 1: Get product
   let product;
@@ -35,7 +51,7 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
     log(`Using provided product: ${product.Text}`);
   } else {
     log('Fetching next unsent product from Google Sheets...');
-    product = await googleSheets.getNextUnsent();
+    product = await googleSheets.getNextUnsent(subject !== undefined ? { subject } : {});
     if (!product) {
       log('No unsent products found. Workflow complete.', 'warn');
       return { success: false, reason: 'no_unsent_products' };
@@ -77,6 +93,7 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
         text: message,
         image: product.image,
         wa_group: product.wa_group,
+        webhookUrl: subjectConfig?.whatsappUrl || null,
       });
       results.whatsapp = waResult;
       if (waResult.success) {
@@ -99,6 +116,8 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
       const fbResult = await facebook.postPhoto({
         message,
         imageUrl: product.image,
+        facebookPageId: subjectConfig?.facebookPageId || null,
+        facebookToken: subjectConfig?.facebookToken || null,
       });
       results.facebook = fbResult;
       log(`✓ Facebook post published (id: ${fbResult.data?.post_id || fbResult.data?.id})`);

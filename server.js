@@ -55,6 +55,7 @@ workflow.setEmitter(emitLog);
 app.use('/api/products', require('./routes/products'));
 app.use('/api/send', require('./routes/send'));
 app.use('/api/schedules', require('./routes/schedules'));
+app.use('/api/subjects', require('./routes/subjects'));
 app.use('/api/scrape', require('./routes/scrape'));
 app.use('/api/facebook', require('./routes/facebook'));
 app.use('/api/prompt', require('./routes/prompt'));
@@ -70,8 +71,8 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`\n🎯 Affiliate Heaven running at http://localhost:${PORT}\n`);
 
-  // Wire the workflow runner into the scheduler
-  scheduler.setWorkflowRunner(() => workflow.run());
+  // Wire the workflow runner into the scheduler (passes subject from schedule entry)
+  scheduler.setWorkflowRunner((opts) => workflow.run(null, opts || {}));
 
   // Start all cron jobs (loads from Google Sheets)
   const count = await scheduler.startAll();

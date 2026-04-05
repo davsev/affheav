@@ -1,8 +1,8 @@
 const axios = require('axios');
 require('dotenv').config();
 
-async function send({ text, image, wa_group }) {
-  const url = process.env.MACRODROID_WEBHOOK_URL;
+async function send({ text, image, wa_group, webhookUrl }) {
+  const url = webhookUrl || process.env.MACRODROID_WEBHOOK_URL;
   if (!url) throw new Error('MACRODROID_WEBHOOK_URL not set in .env');
 
   const params = { text, image, wa_group };
