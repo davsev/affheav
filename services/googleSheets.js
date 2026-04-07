@@ -40,7 +40,7 @@ const COL = {
   instagram: 11,  // L — instagram post timestamp
 };
 
-async function getAllProducts({ subject, waGroupName } = {}) {
+async function getAllProducts({ subject, waGroupName, includeAll } = {}) {
   const sheets = await getClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
@@ -48,7 +48,7 @@ async function getAllProducts({ subject, waGroupName } = {}) {
   });
 
   const rows = res.data.values || [];
-  const products = rows
+  const mapped = rows
     .map((row, idx) => ({
       row_number: idx + 2,
       long_url: row[COL.long_url] || '',
@@ -62,8 +62,13 @@ async function getAllProducts({ subject, waGroupName } = {}) {
       clicks: row[COL.clicks] !== undefined && row[COL.clicks] !== '' ? parseInt(row[COL.clicks]) : null,
       subject: row[COL.subject] || '',
       instagram: row[COL.instagram] || '',
-    }))
-    .filter(p => p.Link && p.Link.startsWith('https://spoo.me/')); // only show products with a spoo.me link
+    }));
+
+  // When includeAll=true (e.g. shorten-all) we keep every row that has at least a long_url or Link.
+  // Otherwise only show products that already have a spoo.me short link.
+  const products = includeAll
+    ? mapped.filter(p => p.long_url || p.Link)
+    : mapped.filter(p => p.Link && p.Link.startsWith('https://spoo.me/')); // only show products with a spoo.me link
 
   if (subject !== undefined && subject !== null && subject !== '') {
     return products.filter(p =>

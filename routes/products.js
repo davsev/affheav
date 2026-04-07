@@ -57,7 +57,7 @@ router.post('/sync-clicks', async (req, res) => {
 router.post('/shorten-all', async (req, res) => {
   try {
     const [products, accountClicks] = await Promise.all([
-      googleSheets.getAllProducts(),
+      googleSheets.getAllProducts({ includeAll: true }),
       getAllClickStats(),
     ]);
 
