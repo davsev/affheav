@@ -3,11 +3,20 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getSubjects, saveSubjects } = require('../services/googleSheets');
 
+// Fields that are never sent to the client — only a boolean presence indicator is sent
+const SENSITIVE = ['whatsappUrl', 'facebookToken', 'facebookAppId', 'facebookAppSecret', 'instagramAccountId'];
+
+function stripSensitive(subject) {
+  const out = { ...subject };
+  SENSITIVE.forEach(f => { out[f] = !!subject[f]; }); // true = has value, false = empty
+  return out;
+}
+
 // GET /api/subjects
 router.get('/', async (req, res) => {
   try {
     const subjects = await getSubjects();
-    res.json({ success: true, subjects });
+    res.json({ success: true, subjects: subjects.map(stripSensitive) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -37,7 +46,7 @@ router.post('/', async (req, res) => {
     };
     subjects.push(entry);
     await saveSubjects(subjects);
-    res.json({ success: true, subject: entry });
+    res.json({ success: true, subject: stripSensitive(entry) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -50,11 +59,19 @@ router.put('/:id', async (req, res) => {
     const idx = subjects.findIndex(s => s.id === req.params.id);
     if (idx === -1) return res.status(404).json({ success: false, error: 'Subject not found' });
 
-    const fields = ['name', 'waGroupName', 'whatsappUrl', 'facebookPageId', 'facebookToken', 'facebookAppId', 'facebookAppSecret', 'prompt', 'waEnabled', 'fbEnabled', 'instagramAccountId', 'instagramEnabled'];
-    fields.forEach(f => { if (req.body[f] !== undefined) subjects[idx][f] = req.body[f]; });
+    // Non-sensitive fields: update normally
+    const plain = ['name', 'waGroupName', 'facebookPageId', 'prompt', 'waEnabled', 'fbEnabled', 'instagramEnabled'];
+    plain.forEach(f => { if (req.body[f] !== undefined) subjects[idx][f] = req.body[f]; });
+
+    // Sensitive fields: only update if a new non-empty value is explicitly provided
+    SENSITIVE.forEach(f => {
+      if (req.body[f] && typeof req.body[f] === 'string' && req.body[f].trim() !== '') {
+        subjects[idx][f] = req.body[f].trim();
+      }
+    });
 
     await saveSubjects(subjects);
-    res.json({ success: true, subject: subjects[idx] });
+    res.json({ success: true, subject: stripSensitive(subjects[idx]) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

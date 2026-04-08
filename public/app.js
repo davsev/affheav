@@ -319,8 +319,8 @@ function renderActiveNicheCard() {
                   <input class="form-input" id="niche-wa-group-${s.id}" value="${escHtml(s.waGroupName||'')}" placeholder="שם הקבוצה המדויק" style="font-size:13px;" />
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Webhook URL</label>
-                  <input class="form-input" type="password" id="niche-wa-url-${s.id}" value="${escHtml(s.whatsappUrl||'')}" placeholder="https://trigger.macrodroid.com/..." dir="ltr" style="font-size:13px;" />
+                  <label class="form-label">Webhook URL ${s.whatsappUrl ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#dc2626;font-size:10px;">לא מוגדר</span>'}</label>
+                  <input class="form-input" type="password" id="niche-wa-url-${s.id}" value="" placeholder="${s.whatsappUrl ? 'השאר ריק לשמור ערך קיים' : 'הזן Webhook URL'}" dir="ltr" style="font-size:13px;" />
                 </div>
               </div>
 
@@ -347,16 +347,16 @@ function renderActiveNicheCard() {
                   <input class="form-input" id="niche-fb-page-${s.id}" value="${escHtml(s.facebookPageId||'')}" dir="ltr" style="font-size:13px;" />
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Access Token</label>
-                  <input class="form-input" type="password" id="niche-fb-token-${s.id}" value="${escHtml(s.facebookToken||'')}" dir="ltr" style="font-size:13px;" />
+                  <label class="form-label">Access Token ${s.facebookToken ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#dc2626;font-size:10px;">לא מוגדר</span>'}</label>
+                  <input class="form-input" type="password" id="niche-fb-token-${s.id}" value="" placeholder="${s.facebookToken ? 'השאר ריק לשמור ערך קיים' : 'הזן Access Token'}" dir="ltr" style="font-size:13px;" />
                 </div>
                 <div class="form-group">
-                  <label class="form-label">App ID</label>
-                  <input class="form-input" type="password" id="niche-fb-app-id-${s.id}" value="${escHtml(s.facebookAppId||'')}" dir="ltr" style="font-size:13px;" />
+                  <label class="form-label">App ID ${s.facebookAppId ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#dc2626;font-size:10px;">לא מוגדר</span>'}</label>
+                  <input class="form-input" type="password" id="niche-fb-app-id-${s.id}" value="" placeholder="${s.facebookAppId ? 'השאר ריק לשמור ערך קיים' : 'הזן App ID'}" dir="ltr" style="font-size:13px;" />
                 </div>
                 <div class="form-group">
-                  <label class="form-label">App Secret</label>
-                  <input class="form-input" type="password" id="niche-fb-app-secret-${s.id}" value="${escHtml(s.facebookAppSecret||'')}" dir="ltr" style="font-size:13px;" />
+                  <label class="form-label">App Secret ${s.facebookAppSecret ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#dc2626;font-size:10px;">לא מוגדר</span>'}</label>
+                  <input class="form-input" type="password" id="niche-fb-app-secret-${s.id}" value="" placeholder="${s.facebookAppSecret ? 'השאר ריק לשמור ערך קיים' : 'הזן App Secret'}" dir="ltr" style="font-size:13px;" />
                 </div>
               </div>
 
@@ -366,8 +366,8 @@ function renderActiveNicheCard() {
               </div>
               <div class="form-grid">
                 <div class="form-group form-full" style="grid-column:1/-1;">
-                  <label class="form-label">Instagram Business Account ID</label>
-                  <input class="form-input" type="password" id="niche-ig-account-${s.id}" value="${escHtml(s.instagramAccountId||'')}" placeholder="17841400000000000" dir="ltr" style="font-size:13px;" />
+                  <label class="form-label">Instagram Business Account ID ${s.instagramAccountId ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#dc2626;font-size:10px;">לא מוגדר</span>'}</label>
+                  <input class="form-input" type="password" id="niche-ig-account-${s.id}" value="" placeholder="${s.instagramAccountId ? 'השאר ריק לשמור ערך קיים' : '17841400000000000'}" dir="ltr" style="font-size:13px;" />
                   <div style="font-size:10px;color:var(--on-surface-var);margin-top:4px;">נמצא ב-Meta Graph API Explorer: GET /me/accounts → Instagram Business Account ID. משתמש באותו Access Token של Facebook.</div>
                 </div>
               </div>
