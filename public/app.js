@@ -320,7 +320,7 @@ function renderActiveNicheCard() {
                 </div>
                 <div class="form-group">
                   <label class="form-label">Webhook URL</label>
-                  <input class="form-input" id="niche-wa-url-${s.id}" value="${escHtml(s.whatsappUrl||'')}" placeholder="https://trigger.macrodroid.com/..." dir="ltr" style="font-size:13px;" />
+                  <input class="form-input" type="password" id="niche-wa-url-${s.id}" value="${escHtml(s.whatsappUrl||'')}" placeholder="https://trigger.macrodroid.com/..." dir="ltr" style="font-size:13px;" />
                 </div>
               </div>
 
@@ -348,15 +348,15 @@ function renderActiveNicheCard() {
                 </div>
                 <div class="form-group">
                   <label class="form-label">Access Token</label>
-                  <input class="form-input" id="niche-fb-token-${s.id}" value="${escHtml(s.facebookToken||'')}" dir="ltr" style="font-size:13px;" />
+                  <input class="form-input" type="password" id="niche-fb-token-${s.id}" value="${escHtml(s.facebookToken||'')}" dir="ltr" style="font-size:13px;" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">App ID</label>
-                  <input class="form-input" id="niche-fb-app-id-${s.id}" value="${escHtml(s.facebookAppId||'')}" dir="ltr" style="font-size:13px;" />
+                  <input class="form-input" type="password" id="niche-fb-app-id-${s.id}" value="${escHtml(s.facebookAppId||'')}" dir="ltr" style="font-size:13px;" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">App Secret</label>
-                  <input class="form-input" id="niche-fb-app-secret-${s.id}" value="${escHtml(s.facebookAppSecret||'')}" dir="ltr" style="font-size:13px;" />
+                  <input class="form-input" type="password" id="niche-fb-app-secret-${s.id}" value="${escHtml(s.facebookAppSecret||'')}" dir="ltr" style="font-size:13px;" />
                 </div>
               </div>
 
@@ -367,7 +367,7 @@ function renderActiveNicheCard() {
               <div class="form-grid">
                 <div class="form-group form-full" style="grid-column:1/-1;">
                   <label class="form-label">Instagram Business Account ID</label>
-                  <input class="form-input" id="niche-ig-account-${s.id}" value="${escHtml(s.instagramAccountId||'')}" placeholder="17841400000000000" dir="ltr" style="font-size:13px;" />
+                  <input class="form-input" type="password" id="niche-ig-account-${s.id}" value="${escHtml(s.instagramAccountId||'')}" placeholder="17841400000000000" dir="ltr" style="font-size:13px;" />
                   <div style="font-size:10px;color:var(--on-surface-var);margin-top:4px;">נמצא ב-Meta Graph API Explorer: GET /me/accounts → Instagram Business Account ID. משתמש באותו Access Token של Facebook.</div>
                 </div>
               </div>
