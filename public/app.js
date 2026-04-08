@@ -1,31 +1,62 @@
-// ── Login ─────────────────────────────────────────────────────────────────────
-(function initLogin() {
+// ── Auth ──────────────────────────────────────────────────────────────────────
+const style = document.createElement('style');
+style.textContent = '@keyframes fadeOut { to { opacity:0; transform:scale(1.02); } }';
+document.head.appendChild(style);
+
+function showLoginPage(errorMsg) {
+  const loginPage = document.getElementById('login-page');
+  if (loginPage) loginPage.style.display = 'flex';
+  if (errorMsg) {
+    const el = document.getElementById('login-error');
+    if (el) el.textContent = errorMsg;
+  }
+}
+
+function hideLoginPage() {
   const loginPage = document.getElementById('login-page');
   if (!loginPage) return;
+  loginPage.style.animation = 'fadeOut 0.4s ease forwards';
+  setTimeout(() => { loginPage.style.display = 'none'; }, 400);
+}
 
-  // Skip login if already authenticated in this session
-  if (sessionStorage.getItem('ah_auth') === '1') {
-    loginPage.style.display = 'none';
+function updateSidebarUser(user) {
+  const el = document.getElementById('sidebar-user');
+  if (!el) return;
+  el.style.display = 'flex';
+  const photo = document.getElementById('sidebar-user-photo');
+  if (photo && user.photo) { photo.src = user.photo; photo.style.display = ''; }
+  else if (photo) photo.style.display = 'none';
+  const name = document.getElementById('sidebar-user-name');
+  if (name) name.textContent = user.name || '';
+  const email = document.getElementById('sidebar-user-email');
+  if (email) email.textContent = user.email || '';
+}
+
+window.doLogout = async () => {
+  await fetch('/auth/logout', { method: 'POST' });
+  window.location.reload();
+};
+
+(async function initAuth() {
+  // Show error from OAuth callback if present
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('error') === 'unauthorized') {
+    showLoginPage('החשבון לא מורשה לגשת למערכת');
     return;
   }
 
-  const btnLogin = document.getElementById('btn-login');
-  const passInput = document.getElementById('login-pass');
-
-  function doLogin() {
-    sessionStorage.setItem('ah_auth', '1');
-    loginPage.style.animation = 'fadeOut 0.4s ease forwards';
-    setTimeout(() => { loginPage.style.display = 'none'; }, 400);
+  try {
+    const res = await fetch('/api/me');
+    if (res.ok) {
+      const data = await res.json();
+      updateSidebarUser(data.user);
+      hideLoginPage();
+    } else {
+      showLoginPage();
+    }
+  } catch {
+    showLoginPage();
   }
-
-  btnLogin.addEventListener('click', doLogin);
-  passInput.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
-  document.getElementById('login-user').addEventListener('keydown', e => { if (e.key === 'Enter') passInput.focus(); });
-
-  // Add fadeOut animation
-  const style = document.createElement('style');
-  style.textContent = '@keyframes fadeOut { to { opacity:0; transform:scale(1.02); } }';
-  document.head.appendChild(style);
 })();
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────

@@ -711,6 +711,16 @@ tr[draggable].drag-over td { border-top: 2px solid var(--primary); background: r
 .login-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(112,42,225,0.45); }
 .login-btn:active { transform: scale(0.97); }
 .login-footer { margin-top: 20px; font-size: 11px; color: var(--on-surface-var); opacity: 0.55; }
+.google-signin-btn {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  width: 100%; padding: 13px 20px;
+  background: #fff; border: 1.5px solid #dadce0; border-radius: 12px;
+  font-size: 15px; font-weight: 600; color: #3c4043;
+  text-decoration: none; cursor: pointer;
+  transition: box-shadow 0.2s, background 0.2s;
+}
+.google-signin-btn:hover { background: #f8f9fa; box-shadow: 0 2px 12px rgba(0,0,0,0.12); }
+.google-signin-btn:active { background: #f1f3f4; }
 
 /* ── Niche Configuration Card ───────────────────────────────────────────── */
 .niche-config-panel {
