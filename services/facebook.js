@@ -104,4 +104,35 @@ async function refreshToken({ facebookAppId, facebookAppSecret, facebookToken } 
   return response.data; // { access_token, token_type, expires_in }
 }
 
-module.exports = { postPhoto, refreshToken, getTokenInfo };
+// Exchange a short-lived user token → long-lived user token → page access token (never expires)
+async function generatePermanentPageToken({ shortUserToken, pageId, facebookAppId, facebookAppSecret }) {
+  const appId = facebookAppId || process.env.FACEBOOK_APP_ID;
+  const appSecret = facebookAppSecret || process.env.FACEBOOK_APP_SECRET;
+  const pid = pageId || process.env.FACEBOOK_PAGE_ID;
+
+  // Step 1: exchange to long-lived user token (~60 days)
+  const exchangeRes = await axios.get(`${BASE}/oauth/access_token`, {
+    params: {
+      grant_type: 'fb_exchange_token',
+      client_id: appId,
+      client_secret: appSecret,
+      fb_exchange_token: shortUserToken,
+    },
+  });
+  const longLivedUserToken = exchangeRes.data.access_token;
+
+  // Step 2: get Page Access Token via /me/accounts (never expires)
+  const accountsRes = await axios.get(`${BASE}/me/accounts`, {
+    params: { access_token: longLivedUserToken },
+  });
+  const pages = accountsRes.data?.data || [];
+  const page = pages.find(p => p.id === pid);
+  if (!page) {
+    const available = pages.map(p => `${p.name} (${p.id})`).join(', ');
+    throw new Error(`Page ${pid} not found. Available: ${available || 'none'}`);
+  }
+
+  return { pageToken: page.access_token, pageName: page.name };
+}
+
+module.exports = { postPhoto, refreshToken, getTokenInfo, generatePermanentPageToken };

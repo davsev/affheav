@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { refreshToken, getTokenInfo } = require('../services/facebook');
+const { refreshToken, getTokenInfo, generatePermanentPageToken } = require('../services/facebook');
 const { getSubjects } = require('../services/googleSheets');
 
 // POST /api/facebook/refresh-token
@@ -39,6 +39,30 @@ router.get('/token-info', async (req, res) => {
     }
     const info = await getTokenInfo(credentials);
     res.json({ success: true, ...info });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/facebook/generate-page-token
+// Body: { shortUserToken, subjectId? } — subjectId uses niche's pageId/appId/appSecret
+router.post('/generate-page-token', async (req, res) => {
+  try {
+    const { shortUserToken, subjectId } = req.body;
+    if (!shortUserToken) return res.status(400).json({ success: false, error: 'shortUserToken required' });
+
+    let opts = { shortUserToken };
+    if (subjectId) {
+      const subjects = await getSubjects();
+      const subject = subjects.find(s => s.id === subjectId);
+      if (!subject) return res.status(404).json({ success: false, error: 'Subject not found' });
+      opts.pageId         = subject.facebookPageId;
+      opts.facebookAppId  = subject.facebookAppId;
+      opts.facebookAppSecret = subject.facebookAppSecret;
+    }
+
+    const { pageToken, pageName } = await generatePermanentPageToken(opts);
+    res.json({ success: true, pageToken, pageName });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

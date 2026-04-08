@@ -329,10 +329,16 @@ function renderActiveNicheCard() {
                   <span class="material-symbols-outlined">thumb_up</span>
                   הגדרות Facebook
                 </span>
-                <button class="btn btn-ghost btn-sm" onclick="checkNicheToken('${s.id}')" style="font-size:11px;padding:4px 12px;border-radius:20px;">
-                  <span class="material-symbols-outlined" style="font-size:14px;">manage_search</span>
-                  בדוק טוקן
-                </button>
+                <div style="display:flex;gap:6px;">
+                  <button class="btn btn-ghost btn-sm" onclick="checkNicheToken('${s.id}')" style="font-size:11px;padding:4px 12px;border-radius:20px;">
+                    <span class="material-symbols-outlined" style="font-size:14px;">manage_search</span>
+                    בדוק טוקן
+                  </button>
+                  <button class="btn btn-ghost btn-sm" onclick="openGenerateTokenModal('${s.id}')" style="font-size:11px;padding:4px 12px;border-radius:20px;background:rgba(112,42,225,0.08);color:#702ae1;">
+                    <span class="material-symbols-outlined" style="font-size:14px;">key</span>
+                    צור טוקן קבוע
+                  </button>
+                </div>
               </div>
               <div id="niche-token-info-${s.id}" style="margin-bottom:12px;font-size:12px;color:var(--on-surface-var);min-height:0;"></div>
               <div class="form-grid" style="margin-bottom:24px;">
@@ -453,6 +459,55 @@ window.checkNicheToken = async (id) => {
     el.textContent = `✗ שגיאה: ${err.message}`;
   }
 };
+
+let _genTokenSubjectId = null;
+
+window.openGenerateTokenModal = (id) => {
+  _genTokenSubjectId = id;
+  document.getElementById('gen-token-input').value = '';
+  document.getElementById('gen-token-status').textContent = '';
+  document.getElementById('gen-token-confirm').disabled = false;
+  const modal = document.getElementById('gen-token-modal');
+  modal.style.display = 'flex';
+};
+
+window.closeGenerateTokenModal = () => {
+  document.getElementById('gen-token-modal').style.display = 'none';
+  _genTokenSubjectId = null;
+};
+
+window.doGeneratePageToken = async () => {
+  const shortToken = document.getElementById('gen-token-input').value.trim();
+  const status = document.getElementById('gen-token-status');
+  if (!shortToken) { status.style.color = '#dc2626'; status.textContent = 'נא להזין טוקן'; return; }
+
+  const btn = document.getElementById('gen-token-confirm');
+  btn.disabled = true;
+  status.style.color = 'var(--on-surface-var)';
+  status.textContent = 'ממיר טוקן...';
+
+  try {
+    const d = await api('/api/facebook/generate-page-token', {
+      method: 'POST',
+      body: { shortUserToken: shortToken, subjectId: _genTokenSubjectId },
+    });
+    // Auto-fill the token field in the niche settings card
+    const tokenInput = document.getElementById(`niche-fb-token-${_genTokenSubjectId}`);
+    if (tokenInput) tokenInput.value = d.pageToken;
+    status.style.color = '#16a34a';
+    status.innerHTML = `✓ טוקן קבוע נוצר לדף: <strong>${escHtml(d.pageName)}</strong><br><span style="font-size:10px;color:var(--on-surface-var);">הטוקן מולא אוטומטית — לחץ "שמור הגדרות" כדי לשמור</span>`;
+    btn.disabled = false;
+  } catch (err) {
+    status.style.color = '#dc2626';
+    status.textContent = `✗ ${err.message}`;
+    btn.disabled = false;
+  }
+};
+
+// Close modal on backdrop click
+document.getElementById('gen-token-modal')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeGenerateTokenModal();
+});
 
 window.saveNiche = async (id) => {
   const result = document.getElementById(`niche-save-result-${id}`);
