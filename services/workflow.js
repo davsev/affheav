@@ -63,12 +63,17 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
 
   // Step 2: Generate message (or reuse saved Hebrew message)
   // Only reuse if the saved text is a fully generated message (contains the product link)
-  const isSavedMessage = /[\u05D0-\u05EA]/.test(product.Text) && product.Link && product.Text.includes(product.Link);
+  // BUT: if the niche has a custom prompt, always regenerate to ensure correct niche tone
+  const hasNichePrompt = !!(subjectConfig?.prompt && subjectConfig.prompt.trim());
+  const isSavedMessage = !hasNichePrompt && /[\u05D0-\u05EA]/.test(product.Text) && product.Link && product.Text.includes(product.Link);
   let message;
   if (isSavedMessage) {
     message = product.Text;
     log(`Using saved Hebrew message (${message.length} chars)`);
   } else {
+    if (hasNichePrompt && /[\u05D0-\u05EA]/.test(product.Text) && product.Link && product.Text.includes(product.Link)) {
+      log('Niche has custom prompt — regenerating message instead of using cached version');
+    }
     log('Generating Hebrew marketing message via OpenAI...');
     message = await openai.generateMessage({
       Text: product.Text,
