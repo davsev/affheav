@@ -24,7 +24,7 @@ router.get('/', async (req, res) => {
 
 // POST /api/subjects — create new subject
 router.post('/', async (req, res) => {
-  const { name, waGroupName, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret, prompt, waEnabled, fbEnabled, instagramAccountId, instagramEnabled } = req.body;
+  const { name, waGroupName, joinLink, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret, prompt, waEnabled, fbEnabled, instagramAccountId, instagramEnabled } = req.body;
   if (!name) return res.status(400).json({ success: false, error: 'name is required' });
 
   try {
@@ -33,6 +33,7 @@ router.post('/', async (req, res) => {
       id: uuidv4(),
       name,
       waGroupName: waGroupName || '',
+      joinLink: joinLink || '',
       whatsappUrl: whatsappUrl || '',
       facebookPageId: facebookPageId || '',
       facebookToken: facebookToken || '',
@@ -60,7 +61,7 @@ router.put('/:id', async (req, res) => {
     if (idx === -1) return res.status(404).json({ success: false, error: 'Subject not found' });
 
     // Non-sensitive fields: update normally
-    const plain = ['name', 'waGroupName', 'facebookPageId', 'prompt', 'waEnabled', 'fbEnabled', 'instagramEnabled'];
+    const plain = ['name', 'waGroupName', 'joinLink', 'facebookPageId', 'prompt', 'waEnabled', 'fbEnabled', 'instagramEnabled'];
     plain.forEach(f => { if (req.body[f] !== undefined) subjects[idx][f] = req.body[f]; });
 
     // Sensitive fields: only update if a new non-empty value is explicitly provided

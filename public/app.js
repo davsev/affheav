@@ -350,6 +350,10 @@ function renderActiveNicheCard() {
                   <label class="form-label">שם קבוצת WA</label>
                   <input class="form-input" id="niche-wa-group-${s.id}" value="${escHtml(s.waGroupName||'')}" placeholder="שם הקבוצה המדויק" style="font-size:13px;" />
                 </div>
+                <div class="form-group form-full">
+                  <label class="form-label">קישור הצטרפות לקבוצת WA</label>
+                  <input class="form-input" id="niche-join-link-${s.id}" value="${escHtml(s.joinLink||'')}" placeholder="https://chat.whatsapp.com/..." dir="ltr" style="font-size:13px;" />
+                </div>
                 <div class="form-group">
                   <label class="form-label">Webhook URL ${s.whatsappUrl ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#dc2626;font-size:10px;">לא מוגדר</span>'}</label>
                   <input class="form-input" type="password" id="niche-wa-url-${s.id}" value="" placeholder="${s.whatsappUrl ? 'השאר ריק לשמור ערך קיים' : 'הזן Webhook URL'}" dir="ltr" style="font-size:13px;" />
@@ -552,6 +556,7 @@ window.saveNiche = async (id) => {
         fbEnabled:           document.getElementById(`fb-toggle-${id}`)?.classList.contains('active') ?? true,
         instagramEnabled:    document.getElementById(`ig-toggle-${id}`)?.classList.contains('active') ?? true,
         waGroupName:         document.getElementById(`niche-wa-group-${id}`)?.value.trim() || '',
+        joinLink:            document.getElementById(`niche-join-link-${id}`)?.value.trim() || '',
         whatsappUrl:         document.getElementById(`niche-wa-url-${id}`)?.value.trim() || '',
         facebookPageId:      document.getElementById(`niche-fb-page-${id}`)?.value.trim() || '',
         facebookToken:       document.getElementById(`niche-fb-token-${id}`)?.value.trim() || '',
@@ -598,6 +603,7 @@ document.getElementById('btn-cancel-new-niche').addEventListener('click', () => 
 document.getElementById('btn-add-subject').addEventListener('click', async () => {
   const name = document.getElementById('subj-name').value.trim();
   const waGroupName = document.getElementById('subj-wa-group-name').value.trim();
+  const joinLink = document.getElementById('subj-join-link').value.trim();
   const whatsappUrl = document.getElementById('subj-wa-url').value.trim();
   const facebookPageId = document.getElementById('subj-fb-page-id').value.trim();
   const facebookToken = document.getElementById('subj-fb-token').value.trim();
@@ -610,10 +616,10 @@ document.getElementById('btn-add-subject').addEventListener('click', async () =>
   if (!name) { result.style.color = '#d97706'; result.textContent = '⚠ שם נושא הוא שדה חובה'; return; }
 
   try {
-    const res = await api('/api/subjects', { method: 'POST', body: { name, waGroupName, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret, prompt, instagramAccountId } });
+    const res = await api('/api/subjects', { method: 'POST', body: { name, waGroupName, joinLink, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret, prompt, instagramAccountId } });
     result.style.color = '#16a34a';
     result.textContent = '✓ נושא נוסף בהצלחה';
-    ['subj-name','subj-wa-group-name','subj-wa-url','subj-fb-page-id','subj-fb-token','subj-fb-app-id','subj-fb-app-secret','subj-prompt','subj-ig-account'].forEach(id => {
+    ['subj-name','subj-wa-group-name','subj-join-link','subj-wa-url','subj-fb-page-id','subj-fb-token','subj-fb-app-id','subj-fb-app-secret','subj-prompt','subj-ig-account'].forEach(id => {
       document.getElementById(id).value = '';
     });
     document.getElementById('new-niche-form-section').style.display = 'none';
@@ -1351,15 +1357,14 @@ function refreshAliSubjectSelect() {
   if (current) sel.value = current;
 }
 
-// Auto-fill wa_group when niche is selected
+// Auto-fill wa_group and join_link when niche is selected
 document.getElementById('ali-subject-select').addEventListener('change', function() {
   const subjectId = this.value;
-  if (!subjectId) return;
-  const subj = (_subjects || []).find(s => s.id === subjectId);
-  if (subj && subj.waGroupName) {
-    const waInput = document.getElementById('ali-wa-group');
-    if (waInput && !waInput.value) waInput.value = subj.waGroupName;
-  }
+  const subj = subjectId ? (_subjects || []).find(s => s.id === subjectId) : null;
+  const waInput   = document.getElementById('ali-wa-group');
+  const joinInput = document.getElementById('ali-join-link');
+  if (waInput)   waInput.value   = subj?.waGroupName || '';
+  if (joinInput) joinInput.value = subj?.joinLink    || '';
 });
 
 // Weighted score: rate 40%, volume 40%, price 20% (lower = better), stock bonus
@@ -1471,9 +1476,10 @@ function renderAliGrid() {
       const card     = addBtn.closest('[data-product-idx]');
       const idx      = parseInt(card.dataset.productIdx, 10);
       const product  = _aliLastProducts[idx];
-      const subject  = document.getElementById('ali-subject-select').value;
-      const waGroup  = document.getElementById('ali-wa-group').value.trim();
-      const feedback = card.querySelector('.ali-add-feedback');
+      const subject   = document.getElementById('ali-subject-select').value;
+      const waGroup   = document.getElementById('ali-wa-group').value.trim();
+      const joinLink  = document.getElementById('ali-join-link').value.trim();
+      const feedback  = card.querySelector('.ali-add-feedback');
 
       addBtn.disabled = true;
       feedback.textContent = 'שומר...';
@@ -1482,7 +1488,7 @@ function renderAliGrid() {
       try {
         await api('/api/aliexpress/add', {
           method: 'POST',
-          body: { product, subject, wa_group: waGroup },
+          body: { product, subject, wa_group: waGroup, join_link: joinLink },
         });
         feedback.textContent = '✓ נוסף לנישה';
         feedback.style.color = '#16a34a';
