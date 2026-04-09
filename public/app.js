@@ -944,11 +944,13 @@ async function loadSchedules() {
     }
     container.innerHTML = schedules.map(s => {
       const subj = s.subject ? _subjects.find(x => x.id === s.subject) : null;
-      const subjChip = subj ? `<span style="font-size:10.5px;background:var(--blue-light);color:var(--blue);padding:1px 7px;border-radius:20px;margin-right:6px;">${escHtml(subj.name)}</span>` : '';
+      const subjChip = subj
+        ? `<span style="font-size:10.5px;background:rgba(2,132,199,0.12);color:#0284c7;padding:2px 8px;border-radius:20px;margin-left:6px;font-weight:600;">${escHtml(subj.name)}</span>`
+        : `<span style="font-size:10.5px;background:rgba(100,116,139,0.1);color:#64748b;padding:2px 8px;border-radius:20px;margin-left:6px;">כל הנישות</span>`;
       return `
       <div class="schedule-item" id="sched-${s.id}">
         <div>
-          <div class="schedule-label">${subjChip}${escHtml(s.label)}</div>
+          <div class="schedule-label" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${escHtml(s.label)}${subjChip}</div>
           <div class="schedule-cron" dir="ltr">${escHtml(s.cron)}</div>
         </div>
         <div class="schedule-actions">
