@@ -1332,8 +1332,10 @@ window.navigateTo = (tab, subjectId) => {
 };
 
 // ── AliExpress API Search ─────────────────────────────────────────────────────
-let _aliPage = 1;
+let _aliPage         = 1;
 let _aliLastProducts = [];
+let _aliSort         = 'score';
+let _aliExistingUrls = new Set(); // long_urls already in the sheet
 
 function refreshAliSubjectSelect() {
   const sel = document.getElementById('ali-subject-select');
@@ -1349,21 +1351,86 @@ function refreshAliSubjectSelect() {
   if (current) sel.value = current;
 }
 
-function renderAliCard(p, idx) {
-  const title = escHtml((p.product_title || '').slice(0, 80));
-  const price = p.app_sale_price ? `₪${escHtml(String(p.app_sale_price))}` : '—';
-  const rate  = p.evaluate_rate  ? escHtml(String(p.evaluate_rate))        : '—';
-  const vol   = p.lastest_volume  != null ? Number(p.lastest_volume).toLocaleString('he-IL') : '—';
-  const stock = (p.available_stock != null && p.available_stock !== '')
+// Auto-fill wa_group when niche is selected
+document.getElementById('ali-subject-select').addEventListener('change', function() {
+  const subjectId = this.value;
+  if (!subjectId) return;
+  const subj = (_subjects || []).find(s => s.id === subjectId);
+  if (subj && subj.waGroupName) {
+    const waInput = document.getElementById('ali-wa-group');
+    if (waInput && !waInput.value) waInput.value = subj.waGroupName;
+  }
+});
+
+// Weighted score: rate 40%, volume 40%, price 20% (lower = better), stock bonus
+function computeAliScore(p) {
+  const rate   = parseFloat((p.evaluate_rate || '0').replace('%', '')) || 0;
+  const vol    = Number(p.lastest_volume || 0);
+  const price  = parseFloat(p.app_sale_price || '999') || 999;
+  const stock  = Number(p.available_stock || 0);
+
+  const rateScore   = (rate / 100) * 40;
+  const volScore    = (Math.min(Math.log10(Math.max(vol, 1)) / Math.log10(5000), 1)) * 40;
+  const priceScore  = Math.max(0, 1 - price / 500) * 20;
+  const stockBonus  = Math.min(stock / 2000, 1) * 5;
+
+  return Math.round((rateScore + volScore + priceScore + stockBonus) * 10) / 10;
+}
+
+function sortAliProducts(products, sortBy) {
+  const arr = [...products];
+  switch (sortBy) {
+    case 'rate':
+      return arr.sort((a, b) => (parseFloat(b.evaluate_rate) || 0) - (parseFloat(a.evaluate_rate) || 0));
+    case 'volume':
+      return arr.sort((a, b) => (Number(b.lastest_volume) || 0) - (Number(a.lastest_volume) || 0));
+    case 'price_asc':
+      return arr.sort((a, b) => (parseFloat(a.app_sale_price) || 9999) - (parseFloat(b.app_sale_price) || 9999));
+    case 'price_desc':
+      return arr.sort((a, b) => (parseFloat(b.app_sale_price) || 0) - (parseFloat(a.app_sale_price) || 0));
+    case 'stock':
+      return arr.sort((a, b) => (Number(b.available_stock) || 0) - (Number(a.available_stock) || 0));
+    case 'score':
+    default:
+      return arr.sort((a, b) => computeAliScore(b) - computeAliScore(a));
+  }
+}
+
+function renderAliCard(p, originalIdx) {
+  const score    = computeAliScore(p);
+  const isOwned  = _aliExistingUrls.has(p.promotion_link);
+  const title    = escHtml((p.product_title || '').slice(0, 80));
+  const price    = p.app_sale_price ? `₪${escHtml(String(p.app_sale_price))}` : '—';
+  const rate     = p.evaluate_rate  ? escHtml(String(p.evaluate_rate))        : '—';
+  const vol      = p.lastest_volume  != null ? Number(p.lastest_volume).toLocaleString('he-IL') : '—';
+  const stock    = (p.available_stock != null && p.available_stock !== '')
     ? Number(p.available_stock).toLocaleString('he-IL')
     : '<span style="color:var(--on-surface-var)">אין כמות</span>';
-  const imgHtml = p.product_main_image_url
+  const imgHtml  = p.product_main_image_url
     ? `<img src="${escHtml(p.product_main_image_url)}" alt="" style="width:100%;height:180px;object-fit:cover;border-radius:10px 10px 0 0;display:block;" loading="lazy" />`
     : `<div style="width:100%;height:180px;background:rgba(112,42,225,0.07);border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:center;"><span class="material-symbols-outlined" style="font-size:48px;color:var(--primary);opacity:0.3;">image</span></div>`;
 
+  const scoreColor = score >= 70 ? '#16a34a' : score >= 45 ? '#d97706' : '#dc2626';
+  const ownedBadge = isOwned
+    ? `<div style="position:absolute;top:8px;right:8px;background:#16a34a;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:0.3px;">✓ ברשימה</div>`
+    : '';
+  const scoreBadge = `<div style="position:absolute;top:8px;left:8px;background:${scoreColor};color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;">${score}</div>`;
+
+  const addBtn = isOwned
+    ? `<button class="btn btn-ghost btn-sm btn-ali-add" style="justify-content:center;font-size:12px;opacity:0.6;" title="כבר ברשימה">
+         <span class="material-symbols-outlined" style="font-size:13px;">check_circle</span>כבר ברשימה
+       </button>`
+    : `<button class="btn btn-primary btn-sm btn-ali-add" style="justify-content:center;font-size:12px;">
+         <span class="material-symbols-outlined" style="font-size:13px;">add_circle</span>הוסף לנישה
+       </button>`;
+
   return `
-    <div class="card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;" data-product-idx="${idx}">
-      ${imgHtml}
+    <div class="card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;${isOwned ? 'opacity:0.75;' : ''}" data-product-idx="${originalIdx}">
+      <div style="position:relative;">
+        ${imgHtml}
+        ${scoreBadge}
+        ${ownedBadge}
+      </div>
       <div style="padding:14px;flex:1;display:flex;flex-direction:column;gap:8px;">
         <div style="font-size:13px;font-weight:600;color:var(--on-surface);line-height:1.4;">${title}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px;color:var(--on-surface-var);margin-top:2px;">
@@ -1376,13 +1443,59 @@ function renderAliCard(p, idx) {
           <a href="${escHtml(p.promotion_link || '#')}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="justify-content:center;font-size:12px;">
             <span class="material-symbols-outlined" style="font-size:13px;">open_in_new</span>קישור אפיליאציה
           </a>
-          <button class="btn btn-primary btn-sm btn-ali-add" style="justify-content:center;font-size:12px;">
-            <span class="material-symbols-outlined" style="font-size:13px;">add_circle</span>הוסף לנישה
-          </button>
+          ${addBtn}
           <div class="ali-add-feedback" style="font-size:11px;min-height:14px;text-align:center;"></div>
         </div>
       </div>
     </div>`;
+}
+
+function renderAliGrid() {
+  const grid    = document.getElementById('ali-products-grid');
+  const sorted  = sortAliProducts(_aliLastProducts, _aliSort);
+
+  if (sorted.length === 0) {
+    grid.innerHTML = '<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--on-surface-var);">לא נמצאו מוצרים העומדים בקריטריונים</div>';
+    return;
+  }
+
+  // Map sorted products back to original indices for the add handler
+  grid.innerHTML = sorted.map(p => {
+    const originalIdx = _aliLastProducts.indexOf(p);
+    return renderAliCard(p, originalIdx);
+  }).join('');
+
+  grid.querySelectorAll('.btn-ali-add').forEach(addBtn => {
+    if (addBtn.title === 'כבר ברשימה') return; // skip owned
+    addBtn.addEventListener('click', async () => {
+      const card     = addBtn.closest('[data-product-idx]');
+      const idx      = parseInt(card.dataset.productIdx, 10);
+      const product  = _aliLastProducts[idx];
+      const subject  = document.getElementById('ali-subject-select').value;
+      const waGroup  = document.getElementById('ali-wa-group').value.trim();
+      const feedback = card.querySelector('.ali-add-feedback');
+
+      addBtn.disabled = true;
+      feedback.textContent = 'שומר...';
+      feedback.style.color = 'var(--on-surface-var)';
+
+      try {
+        await api('/api/aliexpress/add', {
+          method: 'POST',
+          body: { product, subject, wa_group: waGroup },
+        });
+        feedback.textContent = '✓ נוסף לנישה';
+        feedback.style.color = '#16a34a';
+        addBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:13px;">check_circle</span>נוסף';
+        addBtn.style.opacity = '0.5';
+        _aliExistingUrls.add(product.promotion_link); // mark as owned locally
+      } catch (err) {
+        feedback.textContent = `✗ שגיאה: ${err.message}`;
+        feedback.style.color = '#dc2626';
+        addBtn.disabled = false;
+      }
+    });
+  });
 }
 
 async function doAliSearch(page) {
@@ -1396,73 +1509,52 @@ async function doAliSearch(page) {
   const searchBtn = document.getElementById('btn-ali-search');
   const status    = document.getElementById('ali-search-status');
   const section   = document.getElementById('ali-results-section');
-  const grid      = document.getElementById('ali-products-grid');
 
   searchBtn.disabled = true;
   status.textContent = `מחפש "${keywords}"...`;
   section.style.display = 'none';
 
   try {
-    const data = await api('/api/aliexpress/search', {
-      method: 'POST',
-      body: { keywords, page_no: page },
-    });
+    // Fetch search results and existing products in parallel
+    const [data, existingData] = await Promise.all([
+      api('/api/aliexpress/search', { method: 'POST', body: { keywords, page_no: page } }),
+      api('/api/aliexpress/existing').catch(() => ({ urls: [] })),
+    ]);
 
+    _aliExistingUrls = new Set(existingData.urls || []);
     _aliLastProducts = data.products;
     status.textContent = '';
     section.style.display = 'block';
 
+    const ownedCount = data.products.filter(p => _aliExistingUrls.has(p.promotion_link)).length;
+    const ownedNote  = ownedCount > 0 ? ` · ${ownedCount} כבר ברשימה` : '';
     document.getElementById('ali-results-summary').textContent =
-      `נמצאו ${data.filtered} מוצרים (מתוך ${data.total} תוצאות) — עמוד ${page}`;
+      `נמצאו ${data.filtered} מוצרים (מתוך ${data.total} תוצאות) — עמוד ${page}${ownedNote}`;
 
-    const nextBtn = document.getElementById('btn-ali-next-page');
-    nextBtn.style.display = data.total >= 50 ? '' : 'none';
+    document.getElementById('btn-ali-next-page').style.display = data.total >= 50 ? '' : 'none';
 
-    if (data.products.length === 0) {
-      grid.innerHTML = '<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--on-surface-var);">לא נמצאו מוצרים העומדים בקריטריונים</div>';
-      return;
-    }
-
-    grid.innerHTML = data.products.map((p, i) => renderAliCard(p, i)).join('');
-
-    grid.querySelectorAll('.btn-ali-add').forEach(addBtn => {
-      addBtn.addEventListener('click', async () => {
-        const card     = addBtn.closest('[data-product-idx]');
-        const idx      = parseInt(card.dataset.productIdx, 10);
-        const product  = _aliLastProducts[idx];
-        const subject  = document.getElementById('ali-subject-select').value;
-        const feedback = card.querySelector('.ali-add-feedback');
-
-        addBtn.disabled = true;
-        feedback.textContent = 'שומר...';
-        feedback.style.color = 'var(--on-surface-var)';
-
-        try {
-          await api('/api/aliexpress/add', {
-            method: 'POST',
-            body: { product, subject },
-          });
-          feedback.textContent = '✓ נוסף לנישה';
-          feedback.style.color = '#16a34a';
-          addBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:13px;">check_circle</span>נוסף';
-          addBtn.style.opacity = '0.5';
-        } catch (err) {
-          feedback.textContent = `✗ שגיאה: ${err.message}`;
-          feedback.style.color = '#dc2626';
-          addBtn.disabled = false;
-        }
-      });
-    });
+    renderAliGrid();
 
   } catch (err) {
     status.textContent = '';
     section.style.display = 'block';
     document.getElementById('ali-results-summary').textContent = '';
-    grid.innerHTML = `<div style="grid-column:1/-1;padding:20px;color:#f87171;">✗ שגיאה: ${escHtml(err.message)}</div>`;
+    document.getElementById('ali-products-grid').innerHTML =
+      `<div style="grid-column:1/-1;padding:20px;color:#f87171;">✗ שגיאה: ${escHtml(err.message)}</div>`;
   } finally {
     searchBtn.disabled = false;
   }
 }
+
+// Sort button handlers
+document.querySelectorAll('[data-ali-sort]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    _aliSort = btn.dataset.aliSort;
+    document.querySelectorAll('[data-ali-sort]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (_aliLastProducts.length > 0) renderAliGrid();
+  });
+});
 
 document.getElementById('btn-ali-search').addEventListener('click', () => doAliSearch(1));
 document.getElementById('ali-keywords').addEventListener('keydown', e => { if (e.key === 'Enter') doAliSearch(1); });

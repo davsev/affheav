@@ -473,6 +473,10 @@
               <option value="">ללא נישה</option>
             </select>
           </div>
+          <div class="form-group">
+            <label class="form-label">קבוצת WA (לשמירה)</label>
+            <input class="form-input" id="ali-wa-group" placeholder="fishing" />
+          </div>
         </div>
         <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <button class="btn btn-primary" id="btn-ali-search">
@@ -484,11 +488,23 @@
 
       <!-- Results -->
       <div id="ali-results-section" style="display:none;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
           <div style="font-size:13px;color:var(--on-surface-var);" id="ali-results-summary"></div>
           <button class="btn btn-ghost btn-sm" id="btn-ali-next-page" style="display:none;">
             <span class="material-symbols-outlined" style="font-size:15px;">arrow_back</span>עמוד הבא
           </button>
+        </div>
+        <!-- Sort controls -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+          <span style="font-size:12px;color:var(--on-surface-var);margin-left:4px;">מיון:</span>
+          <div class="filter-group">
+            <button class="filter-btn active" data-ali-sort="score">ציון משוקלל</button>
+            <button class="filter-btn" data-ali-sort="rate">דירוג</button>
+            <button class="filter-btn" data-ali-sort="volume">רכישות</button>
+            <button class="filter-btn" data-ali-sort="price_asc">מחיר ↑</button>
+            <button class="filter-btn" data-ali-sort="price_desc">מחיר ↓</button>
+            <button class="filter-btn" data-ali-sort="stock">מלאי</button>
+          </div>
         </div>
         <div id="ali-products-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;"></div>
       </div>

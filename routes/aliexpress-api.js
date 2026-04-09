@@ -85,10 +85,23 @@ router.post('/search', async (req, res) => {
   }
 });
 
+// GET /api/aliexpress/existing — returns Set of long_urls already in the sheet
+router.get('/existing', async (req, res) => {
+  try {
+    const products = await googleSheets.getAllProducts({ includeAll: true });
+    const urls = products
+      .map(p => p.long_url)
+      .filter(Boolean);
+    res.json({ success: true, urls });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message, urls: [] });
+  }
+});
+
 // POST /api/aliexpress/add
-// Body: { product: { promotion_link, product_main_image_url, product_title }, subject }
+// Body: { product: { promotion_link, product_main_image_url, product_title }, subject, wa_group }
 router.post('/add', async (req, res) => {
-  const { product, subject = '' } = req.body;
+  const { product, subject = '', wa_group = '' } = req.body;
   if (!product || !product.promotion_link || !product.product_title) {
     return res.status(400).json({ success: false, error: 'product with promotion_link and product_title required' });
   }
@@ -100,7 +113,7 @@ router.post('/add', async (req, res) => {
       image: product.product_main_image_url || '',
       Text: product.product_title,
       join_link: '',
-      wa_group: '',
+      wa_group,
       subject,
     });
     workflow.log(`✓ Product added to Google Sheet`);
