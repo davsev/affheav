@@ -942,16 +942,28 @@ async function loadSchedules() {
       container.innerHTML = '<div class="empty-state">אין לוחות זמנים</div>';
       return;
     }
+    const subjectOptions = _subjects.map(s =>
+      `<option value="${escHtml(s.id)}">${escHtml(s.name)}</option>`
+    ).join('');
+
     container.innerHTML = schedules.map(s => {
       const subj = s.subject ? _subjects.find(x => x.id === s.subject) : null;
       const subjChip = subj
-        ? `<span style="font-size:10.5px;background:rgba(2,132,199,0.12);color:#0284c7;padding:2px 8px;border-radius:20px;margin-left:6px;font-weight:600;">${escHtml(subj.name)}</span>`
-        : `<span style="font-size:10.5px;background:rgba(100,116,139,0.1);color:#64748b;padding:2px 8px;border-radius:20px;margin-left:6px;">כל הנישות</span>`;
+        ? `<span style="font-size:10.5px;background:rgba(2,132,199,0.12);color:#0284c7;padding:2px 8px;border-radius:20px;font-weight:600;">${escHtml(subj.name)}</span>`
+        : `<span style="font-size:10.5px;background:rgba(100,116,139,0.1);color:#64748b;padding:2px 8px;border-radius:20px;">כל הנישות</span>`;
       return `
       <div class="schedule-item" id="sched-${s.id}">
-        <div>
-          <div class="schedule-label" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${escHtml(s.label)}${subjChip}</div>
-          <div class="schedule-cron" dir="ltr">${escHtml(s.cron)}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="schedule-label" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">${escHtml(s.label)}${subjChip}</div>
+          <div class="schedule-cron" dir="ltr" style="margin-bottom:6px;">${escHtml(s.cron)}</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <select class="form-input" style="font-size:11px;padding:3px 6px;height:28px;width:auto;max-width:160px;"
+              onchange="assignScheduleSubject('${s.id}', this.value)">
+              <option value="">כל הנישות</option>
+              ${subjectOptions}
+            </select>
+            <span id="sched-assign-ok-${s.id}" style="font-size:11px;color:#16a34a;min-width:40px;"></span>
+          </div>
         </div>
         <div class="schedule-actions">
           <label class="toggle" title="${s.enabled ? 'פעיל' : 'לא פעיל'}">
@@ -962,10 +974,27 @@ async function loadSchedules() {
         </div>
       </div>
     `;}).join('');
+
+    // Set current subject value on each select
+    schedules.forEach(s => {
+      const sel = document.querySelector(`#sched-${s.id} select`);
+      if (sel && s.subject) sel.value = s.subject;
+    });
   } catch (err) {
     container.innerHTML = `<div class="empty-state" style="color:#f87171;">${escHtml(err.message)}</div>`;
   }
 }
+
+window.assignScheduleSubject = async (id, subject) => {
+  try {
+    await api(`/api/schedules/${id}`, { method: 'PUT', body: { subject } });
+    const ok = document.getElementById(`sched-assign-ok-${id}`);
+    if (ok) { ok.textContent = '✓ נשמר'; setTimeout(() => { ok.textContent = ''; }, 2000); }
+    await loadSchedules();
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
 
 window.toggleSchedule = async (id, enabled) => {
   try {
