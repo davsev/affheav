@@ -116,6 +116,9 @@
     <button class="tab-btn" data-tab="add-product">
       <span class="material-symbols-outlined nav-icon">add_circle</span>הוסף מוצר
     </button>
+    <button class="tab-btn" data-tab="aliexpress-search">
+      <span class="material-symbols-outlined nav-icon">manage_search</span>חיפוש API
+    </button>
 
     <div class="nav-section-label" style="margin-top:8px;">נושאים</div>
     <div class="sidebar-subjects" id="sidebar-subjects">
@@ -443,6 +446,51 @@
           <span class="material-symbols-outlined" style="font-size:15px;">add_circle</span>הוסף לגיליון
         </button>
         <div id="add-product-result" style="margin-top:12px;font-size:13px;"></div>
+      </div>
+    </div>
+
+    <!-- ── AliExpress API Search ─────────────────────────────────── -->
+    <div class="tab-panel" id="tab-aliexpress-search">
+      <div style="margin-bottom:28px;">
+        <div class="page-eyebrow">גילוי מוצרים</div>
+        <h1 class="page-title">חיפוש <span class="highlight">AliExpress API</span></h1>
+      </div>
+
+      <!-- Search form -->
+      <div class="card" style="margin-bottom:14px;">
+        <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+          <span class="material-symbols-outlined" style="color:var(--primary);font-size:20px;">manage_search</span>
+          חיפוש מוצרים
+        </div>
+        <div class="form-grid" style="max-width:640px;">
+          <div class="form-group form-full">
+            <label class="form-label">מילת מפתח</label>
+            <input class="form-input" id="ali-keywords" placeholder="fishing rod, aquarium pump..." dir="ltr" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">הוסף לנישה</label>
+            <select class="form-input" id="ali-subject-select">
+              <option value="">ללא נישה</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button class="btn btn-primary" id="btn-ali-search">
+            <span class="material-symbols-outlined" style="font-size:15px;">search</span>חפש
+          </button>
+          <span id="ali-search-status" style="font-size:12px;color:var(--on-surface-var);"></span>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div id="ali-results-section" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:13px;color:var(--on-surface-var);" id="ali-results-summary"></div>
+          <button class="btn btn-ghost btn-sm" id="btn-ali-next-page" style="display:none;">
+            <span class="material-symbols-outlined" style="font-size:15px;">arrow_back</span>עמוד הבא
+          </button>
+        </div>
+        <div id="ali-products-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;"></div>
       </div>
     </div>
 

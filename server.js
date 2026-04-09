@@ -109,8 +109,9 @@ app.use('/api/send',      isAuthenticated, require('./routes/send'));
 app.use('/api/schedules', isAuthenticated, require('./routes/schedules'));
 app.use('/api/subjects',  isAuthenticated, require('./routes/subjects'));
 app.use('/api/scrape',    isAuthenticated, require('./routes/scrape'));
-app.use('/api/facebook',  isAuthenticated, require('./routes/facebook'));
-app.use('/api/prompt',    isAuthenticated, require('./routes/prompt'));
+app.use('/api/facebook',      isAuthenticated, require('./routes/facebook'));
+app.use('/api/prompt',        isAuthenticated, require('./routes/prompt'));
+app.use('/api/aliexpress',    isAuthenticated, require('./routes/aliexpress-api'));
 
 // ── Static + SPA Fallback ─────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));

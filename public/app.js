@@ -210,6 +210,7 @@ function renderSubjectBar() {
 }
 
 function populateSubjectSelects() {
+  refreshAliSubjectSelect();
   const options = _subjects.map(s => `<option value="${escHtml(s.id)}">${escHtml(s.name)}</option>`).join('');
 
   // Render the visual pill bar
@@ -1329,6 +1330,143 @@ window.navigateTo = (tab, subjectId) => {
     loadProducts();
   }
 };
+
+// ── AliExpress API Search ─────────────────────────────────────────────────────
+let _aliPage = 1;
+let _aliLastProducts = [];
+
+function refreshAliSubjectSelect() {
+  const sel = document.getElementById('ali-subject-select');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">ללא נישה</option>';
+  (_subjects || []).forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.name;
+    sel.appendChild(opt);
+  });
+  if (current) sel.value = current;
+}
+
+function renderAliCard(p, idx) {
+  const title = escHtml((p.product_title || '').slice(0, 80));
+  const price = p.app_sale_price ? `₪${escHtml(String(p.app_sale_price))}` : '—';
+  const rate  = p.evaluate_rate  ? escHtml(String(p.evaluate_rate))        : '—';
+  const vol   = p.lastest_volume  != null ? Number(p.lastest_volume).toLocaleString('he-IL') : '—';
+  const stock = (p.available_stock != null && p.available_stock !== '')
+    ? Number(p.available_stock).toLocaleString('he-IL')
+    : '<span style="color:var(--on-surface-var)">אין כמות</span>';
+  const imgHtml = p.product_main_image_url
+    ? `<img src="${escHtml(p.product_main_image_url)}" alt="" style="width:100%;height:180px;object-fit:cover;border-radius:10px 10px 0 0;display:block;" loading="lazy" />`
+    : `<div style="width:100%;height:180px;background:rgba(112,42,225,0.07);border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:center;"><span class="material-symbols-outlined" style="font-size:48px;color:var(--primary);opacity:0.3;">image</span></div>`;
+
+  return `
+    <div class="card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;" data-product-idx="${idx}">
+      ${imgHtml}
+      <div style="padding:14px;flex:1;display:flex;flex-direction:column;gap:8px;">
+        <div style="font-size:13px;font-weight:600;color:var(--on-surface);line-height:1.4;">${title}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px;color:var(--on-surface-var);margin-top:2px;">
+          <span>💰 ${price}</span>
+          <span>⭐ ${rate}</span>
+          <span>🛒 ${vol} רכישות</span>
+          <span>📦 ${stock}</span>
+        </div>
+        <div style="margin-top:auto;padding-top:10px;display:flex;flex-direction:column;gap:6px;">
+          <a href="${escHtml(p.promotion_link || '#')}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="justify-content:center;font-size:12px;">
+            <span class="material-symbols-outlined" style="font-size:13px;">open_in_new</span>קישור אפיליאציה
+          </a>
+          <button class="btn btn-primary btn-sm btn-ali-add" style="justify-content:center;font-size:12px;">
+            <span class="material-symbols-outlined" style="font-size:13px;">add_circle</span>הוסף לנישה
+          </button>
+          <div class="ali-add-feedback" style="font-size:11px;min-height:14px;text-align:center;"></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function doAliSearch(page) {
+  const keywords = document.getElementById('ali-keywords').value.trim();
+  if (!keywords) {
+    document.getElementById('ali-search-status').textContent = 'יש להזין מילת מפתח';
+    return;
+  }
+  _aliPage = page;
+
+  const searchBtn = document.getElementById('btn-ali-search');
+  const status    = document.getElementById('ali-search-status');
+  const section   = document.getElementById('ali-results-section');
+  const grid      = document.getElementById('ali-products-grid');
+
+  searchBtn.disabled = true;
+  status.textContent = `מחפש "${keywords}"...`;
+  section.style.display = 'none';
+
+  try {
+    const data = await api('/api/aliexpress/search', {
+      method: 'POST',
+      body: { keywords, page_no: page },
+    });
+
+    _aliLastProducts = data.products;
+    status.textContent = '';
+    section.style.display = 'block';
+
+    document.getElementById('ali-results-summary').textContent =
+      `נמצאו ${data.filtered} מוצרים (מתוך ${data.total} תוצאות) — עמוד ${page}`;
+
+    const nextBtn = document.getElementById('btn-ali-next-page');
+    nextBtn.style.display = data.total >= 50 ? '' : 'none';
+
+    if (data.products.length === 0) {
+      grid.innerHTML = '<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--on-surface-var);">לא נמצאו מוצרים העומדים בקריטריונים</div>';
+      return;
+    }
+
+    grid.innerHTML = data.products.map((p, i) => renderAliCard(p, i)).join('');
+
+    grid.querySelectorAll('.btn-ali-add').forEach(addBtn => {
+      addBtn.addEventListener('click', async () => {
+        const card     = addBtn.closest('[data-product-idx]');
+        const idx      = parseInt(card.dataset.productIdx, 10);
+        const product  = _aliLastProducts[idx];
+        const subject  = document.getElementById('ali-subject-select').value;
+        const feedback = card.querySelector('.ali-add-feedback');
+
+        addBtn.disabled = true;
+        feedback.textContent = 'שומר...';
+        feedback.style.color = 'var(--on-surface-var)';
+
+        try {
+          await api('/api/aliexpress/add', {
+            method: 'POST',
+            body: { product, subject },
+          });
+          feedback.textContent = '✓ נוסף לנישה';
+          feedback.style.color = '#16a34a';
+          addBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:13px;">check_circle</span>נוסף';
+          addBtn.style.opacity = '0.5';
+        } catch (err) {
+          feedback.textContent = `✗ שגיאה: ${err.message}`;
+          feedback.style.color = '#dc2626';
+          addBtn.disabled = false;
+        }
+      });
+    });
+
+  } catch (err) {
+    status.textContent = '';
+    section.style.display = 'block';
+    document.getElementById('ali-results-summary').textContent = '';
+    grid.innerHTML = `<div style="grid-column:1/-1;padding:20px;color:#f87171;">✗ שגיאה: ${escHtml(err.message)}</div>`;
+  } finally {
+    searchBtn.disabled = false;
+  }
+}
+
+document.getElementById('btn-ali-search').addEventListener('click', () => doAliSearch(1));
+document.getElementById('ali-keywords').addEventListener('keydown', e => { if (e.key === 'Enter') doAliSearch(1); });
+document.getElementById('btn-ali-next-page').addEventListener('click', () => doAliSearch(_aliPage + 1));
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 // Add spin keyframe for icon buttons
