@@ -53,7 +53,7 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
     log(`Using provided product: ${product.Text}`);
   } else {
     log('Fetching next unsent product from Google Sheets...');
-    product = await googleSheets.getNextUnsent(subject !== undefined ? { subject } : {});
+    product = await googleSheets.getNextUnsent(subject !== undefined ? { subject, waGroupName: subjectConfig?.waGroupName } : {});
     if (!product) {
       log('No unsent products found. Workflow complete.', 'warn');
       return { success: false, reason: 'no_unsent_products' };
