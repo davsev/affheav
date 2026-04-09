@@ -6,6 +6,7 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const workflow = require('./services/workflow');
 const scheduler = require('./scheduler');
+const { appendLogs, getRecentLogs } = require('./services/googleSheets');
 
 const app = express();
 app.set('trust proxy', 1); // Trust Railway/proxy HTTPS headers
@@ -84,6 +85,9 @@ const sseClients = new Set();
 const logHistory = [];
 const LOG_HISTORY_MAX = 500;
 
+// Buffer for pending log entries not yet flushed to Google Sheets
+let _pendingLogs = [];
+
 app.get('/api/logs', isAuthenticated, (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -94,12 +98,39 @@ app.get('/api/logs', isAuthenticated, (req, res) => {
   req.on('close', () => sseClients.delete(res));
 });
 
+// Persistent log history from Google Sheets (authenticated)
+app.get('/api/logs/history', isAuthenticated, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 500, 2000);
+    const logs = await getRecentLogs(limit);
+    res.json({ success: true, logs });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 function emitLog(entry) {
   logHistory.push(entry);
   if (logHistory.length > LOG_HISTORY_MAX) logHistory.shift();
+  _pendingLogs.push(entry);
   const data = `data: ${JSON.stringify(entry)}\n\n`;
   for (const client of sseClients) client.write(data);
 }
+
+// Flush pending logs to Google Sheets every 60 seconds
+setInterval(async () => {
+  if (_pendingLogs.length === 0) return;
+  const batch = _pendingLogs.splice(0);
+  await appendLogs(batch);
+}, 60 * 1000);
+
+// Flush on graceful shutdown
+process.on('SIGTERM', async () => {
+  if (_pendingLogs.length > 0) {
+    await appendLogs(_pendingLogs.splice(0));
+  }
+  process.exit(0);
+});
 
 workflow.setEmitter(emitLog);
 

@@ -265,4 +265,41 @@ async function saveSubjects(subjects) {
   await setSetting('subjects', JSON.stringify(subjects));
 }
 
-module.exports = { getAllProducts, getNextUnsent, markSent, addProduct, updateProductText, updateProductLink, getSetting, setSetting, moveRow, syncClicks, getSubjects, saveSubjects };
+// ── Logs ──────────────────────────────────────────────────────────────────────
+// Logs are stored in a "Logs" sheet: A=timestamp, B=level, C=message
+const LOGS_SHEET = 'Logs';
+
+async function appendLogs(entries) {
+  if (!entries || entries.length === 0) return;
+  try {
+    const sheets = await getClient();
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: `${LOGS_SHEET}!A:C`,
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: entries.map(e => [e.ts, e.level, e.msg]),
+      },
+    });
+  } catch (err) {
+    console.error('[logs] Failed to flush logs to Sheets:', err.message);
+  }
+}
+
+async function getRecentLogs(limit = 500) {
+  try {
+    const sheets = await getClient();
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: `${LOGS_SHEET}!A:C`,
+    });
+    const rows = (res.data.values || []).slice(1); // skip header row if any
+    const tail = rows.slice(-limit);
+    return tail.map(r => ({ ts: r[0] || '', level: r[1] || 'info', msg: r[2] || '' }));
+  } catch (err) {
+    console.error('[logs] Failed to read logs from Sheets:', err.message);
+    return [];
+  }
+}
+
+module.exports = { getAllProducts, getNextUnsent, markSent, addProduct, updateProductText, updateProductLink, getSetting, setSetting, moveRow, syncClicks, getSubjects, saveSubjects, appendLogs, getRecentLogs };

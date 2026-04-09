@@ -105,6 +105,25 @@ document.getElementById('btn-clear-log').addEventListener('click', () => {
   logPanel.innerHTML = '';
 });
 
+document.getElementById('btn-log-history').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-log-history');
+  btn.disabled = true;
+  try {
+    const data = await api('/api/logs/history?limit=500');
+    logPanel.innerHTML = '';
+    if (!data.logs || data.logs.length === 0) {
+      logPanel.innerHTML = '<div style="color:var(--on-surface-var);font-size:13px;padding:8px;">אין לוגים שמורים עדיין</div>';
+      return;
+    }
+    data.logs.forEach(entry => appendLog(entry));
+    logPanel.scrollTop = logPanel.scrollHeight;
+  } catch (err) {
+    alert('שגיאה בטעינת ההיסטוריה: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ── Subjects ──────────────────────────────────────────────────────────────────
 let _subjects = [];
 let _currentSubject = ''; // empty = all subjects
