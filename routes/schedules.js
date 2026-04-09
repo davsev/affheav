@@ -11,10 +11,10 @@ router.get('/', (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { label, cron, enabled } = req.body;
+  const { label, cron, enabled, subject } = req.body;
   if (!label || !cron) return res.status(400).json({ success: false, error: 'label and cron are required' });
   try {
-    const entry = await scheduler.add({ label, cron, enabled });
+    const entry = await scheduler.add({ label, cron, enabled, subject });
     res.json({ success: true, schedule: entry });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
