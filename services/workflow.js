@@ -74,6 +74,7 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
       Text: product.Text,
       Link: product.Link,
       join_link: product.join_link,
+      promptOverride: subjectConfig?.prompt || null,
     });
     log(`Message generated (${message.length} chars)`);
     // Save generated message back to sheet so resends don't regenerate

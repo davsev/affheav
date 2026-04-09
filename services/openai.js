@@ -16,7 +16,7 @@ function getDayContext() {
   return 'regular';
 }
 
-async function generateMessage({ Text, Link, join_link }) {
+async function generateMessage({ Text, Link, join_link, promptOverride } = {}) {
   const dayContext = getDayContext();
 
   let dayInstruction = '';
@@ -27,7 +27,9 @@ async function generateMessage({ Text, Link, join_link }) {
   }
 
   const promptStore = require('./promptStore');
-  const prompt = promptStore.get()
+  // Use niche-specific prompt if provided and non-empty, otherwise fall back to global prompt
+  const basePrompt = (promptOverride && promptOverride.trim()) ? promptOverride : promptStore.get();
+  const prompt = basePrompt
     .replace('{{Text}}', Text)
     .replace('{{Link}}', Link)
     .replace('{{join_link}}', join_link)
