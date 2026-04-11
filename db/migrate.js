@@ -60,6 +60,21 @@ async function migrate() {
     )
   `);
 
+  // ── WhatsApp Groups (per niche) ───────────────────────────────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS whatsapp_groups (
+      id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      subject_id UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+      name       VARCHAR(255) NOT NULL,
+      wa_group   VARCHAR(255) NOT NULL,
+      join_link  TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS wa_groups_subject_id ON whatsapp_groups(subject_id)`);
+
   // ── Products ──────────────────────────────────────────────────────────────
   await query(`
     CREATE TABLE IF NOT EXISTS products (
