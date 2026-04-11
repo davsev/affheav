@@ -253,7 +253,7 @@ router.post('/migrate-products', isAdmin, async (req, res) => {
           p.sent      ? new Date(p.sent)     : null,
           p.facebook  ? new Date(p.facebook) : null,
           p.instagram ? new Date(p.instagram): null,
-          p.clicks    ?? 0,
+          Number.isFinite(p.clicks) ? p.clicks : 0,
           sortOrder++,
         ]
       );
