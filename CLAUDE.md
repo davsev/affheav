@@ -40,9 +40,23 @@ User/Cron → POST /api/send → workflow.js → googleSheets.js (fetch unsent p
 
 Each "subject" (niche) has its own WhatsApp group, Facebook page, Instagram account, MacroDroid webhook, and optional OpenAI prompt override. Products are tagged with `subject=id` in Google Sheets column K. Schedules can be scoped to a specific subject.
 
-### Authentication
+### Authentication & User Management
 
-Google OAuth 2.0 via Passport.js. Optional email whitelist via `ALLOWED_GOOGLE_EMAIL` env var. Session-based (30-day cookie). All `/api/*` routes require authentication.
+Google OAuth 2.0 via Passport.js. Invite-only registration: admin sends email invite → user gets a link → registers via Google OAuth. Session-based (30-day cookie). All `/api/*` routes require authentication.
+
+- **Roles:** `admin` (full access + user management) and `user` (own data only)
+- **Bootstrap:** First login with `ADMIN_GOOGLE_EMAIL` creates the admin account automatically
+- **Invite flow:** `POST /api/users/invites` → generates token → `/auth/invite/:token` → Google OAuth → account created
+- `passport.deserializeUser` re-fetches user from DB on every request (60s in-memory cache via `services/userService.js`)
+
+### Database (PostgreSQL)
+
+All data is stored in PostgreSQL (replaces Google Sheets as primary store — Sheets still used for legacy product sync). Tables: `users`, `invitations`, `subjects`, `products`, `schedules`, `settings`, `logs`. Schema is auto-migrated on startup via `db/migrate.js` (idempotent `CREATE TABLE IF NOT EXISTS`).
+
+- **`db/index.js`** — `pg` Pool, exports `query(sql, params)`
+- **`db/migrate.js`** — idempotent schema creation, called on startup if `DATABASE_URL` is set
+- **`services/userService.js`** — user CRUD with 60s TTL cache
+- **`services/inviteService.js`** — invite token lifecycle
 
 ### Sensitive Fields
 
@@ -67,4 +81,7 @@ MACRODROID_WEBHOOK_URL=...
 FACEBOOK_PAGE_ID=... / FACEBOOK_ACCESS_TOKEN=...
 GOOGLE_CLIENT_ID=... / GOOGLE_CLIENT_SECRET=...
 SESSION_SECRET=...
+DATABASE_URL=postgresql://...         # Railway PostgreSQL plugin sets this automatically
+ADMIN_GOOGLE_EMAIL=your@gmail.com     # Bootstrap super-admin on first login
+APP_BASE_URL=https://...              # Used for generating invite links
 ```

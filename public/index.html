@@ -135,6 +135,9 @@
     <button class="tab-btn" data-tab="settings">
       <span class="material-symbols-outlined nav-icon">settings</span>הגדרות
     </button>
+    <button class="tab-btn" data-tab="users" id="nav-users" style="display:none;">
+      <span class="material-symbols-outlined nav-icon">manage_accounts</span>משתמשים
+    </button>
   </nav>
 
   <div class="sidebar-footer">
@@ -669,6 +672,62 @@
 
     </div><!-- /tab-settings -->
 
+    <!-- ── Users (admin only) ───────────────────────────────────────── -->
+    <div class="tab-panel" id="tab-users">
+      <section style="margin-bottom:28px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;">
+        <div>
+          <div class="page-eyebrow">מערכת</div>
+          <h1 class="page-title">ניהול <span class="highlight">משתמשים</span></h1>
+        </div>
+        <button class="btn btn-primary" id="btn-invite-user">
+          <span class="material-symbols-outlined" style="font-size:16px;">person_add</span>
+          הזמן משתמש
+        </button>
+      </section>
+
+      <!-- Invite form (hidden by default) -->
+      <div id="invite-form-section" style="display:none;margin-bottom:24px;">
+        <div class="card" style="max-width:480px;">
+          <div class="card-title">הזמנת משתמש חדש</div>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label class="form-label">כתובת מייל</label>
+            <input class="form-input" id="invite-email-input" type="email" placeholder="user@example.com" dir="ltr" />
+          </div>
+          <div id="invite-result" style="font-size:13px;margin-bottom:12px;min-height:18px;"></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" id="btn-invite-cancel">ביטול</button>
+            <button class="btn btn-primary btn-sm" id="btn-invite-submit">
+              <span class="material-symbols-outlined" style="font-size:14px;">send</span>
+              צור קישור הזמנה
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Users table -->
+      <div class="card">
+        <div class="toolbar" style="margin-bottom:16px;">
+          <h2 style="font-size:16px;font-weight:700;margin:0;">משתמשים רשומים</h2>
+          <button class="icon-btn" id="btn-refresh-users" title="רענן">
+            <span class="material-symbols-outlined">refresh</span>
+          </button>
+        </div>
+        <div id="users-table-wrap">
+          <div style="padding:40px;text-align:center;color:var(--on-surface-var);">טוען...</div>
+        </div>
+      </div>
+
+      <!-- Invitations table -->
+      <div class="card" style="margin-top:24px;">
+        <div class="toolbar" style="margin-bottom:16px;">
+          <h2 style="font-size:16px;font-weight:700;margin:0;">הזמנות פעילות</h2>
+        </div>
+        <div id="invites-table-wrap">
+          <div style="padding:40px;text-align:center;color:var(--on-surface-var);">טוען...</div>
+        </div>
+      </div>
+    </div><!-- /tab-users -->
+
   </div><!-- /content -->
 </div><!-- /main-content -->
 
@@ -680,7 +739,8 @@
     scraper: 'סריקת AliExpress',
     'add-product': 'הוסף מוצר',
     logs: 'לוג פעילות',
-    settings: 'הגדרות'
+    settings: 'הגדרות',
+    users: 'ניהול משתמשים'
   };
 </script>
 <script src="app.js"></script>

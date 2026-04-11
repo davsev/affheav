@@ -17,6 +17,7 @@
     "openai": "^4.52.0",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
+    "pg": "^8.20.0",
     "playwright": "^1.44.0",
     "uuid": "^10.0.0"
   }

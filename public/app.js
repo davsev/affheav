@@ -38,18 +38,25 @@ window.doLogout = async () => {
 };
 
 (async function initAuth() {
-  // Show error from OAuth callback if present
   const params = new URLSearchParams(window.location.search);
-  if (params.get('error') === 'unauthorized') {
-    showLoginPage('החשבון לא מורשה לגשת למערכת');
-    return;
-  }
+  const errorMap = {
+    unauthorized:   'החשבון לא מורשה לגשת למערכת',
+    suspended:      'החשבון הושעה. פנה למנהל המערכת.',
+    no_invite:      'נדרשת הזמנה כדי להירשם למערכת.',
+    invalid_invite: 'קישור ההזמנה אינו תקין או שפג תוקפו.',
+  };
+  const errMsg = errorMap[params.get('error')];
+  if (errMsg) { showLoginPage(errMsg); return; }
 
   try {
     const res = await fetch('/api/me');
     if (res.ok) {
       const data = await res.json();
       updateSidebarUser(data.user);
+      if (data.user.role === 'admin') {
+        const navUsers = document.getElementById('nav-users');
+        if (navUsers) navUsers.style.display = '';
+      }
       hideLoginPage();
     } else {
       showLoginPage();
@@ -1628,4 +1635,197 @@ document.getElementById('btn-ali-next-page').addEventListener('click', () => doA
 loadSubjects().then(() => {
   loadProducts();
   loadSchedules();
+});
+
+// ── Users Admin ───────────────────────────────────────────────────────────────
+// Load users when the tab is opened
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  if (btn.dataset.tab === 'users') {
+    btn.addEventListener('click', () => {
+      loadUsers();
+      loadInvites();
+    });
+  }
+});
+
+async function loadUsers() {
+  const wrap = document.getElementById('users-table-wrap');
+  if (!wrap) return;
+  try {
+    const res  = await fetch('/api/users');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    renderUsersTable(data.users);
+  } catch (err) {
+    wrap.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+function renderUsersTable(users) {
+  const wrap = document.getElementById('users-table-wrap');
+  if (!wrap) return;
+  if (!users.length) {
+    wrap.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);">אין משתמשים רשומים</div>';
+    return;
+  }
+  const rows = users.map(u => `
+    <tr>
+      <td>
+        ${u.photo
+          ? `<img src="${escHtml(u.photo)}" width="32" height="32" style="border-radius:50%;object-fit:cover;vertical-align:middle;" />`
+          : `<span class="material-symbols-outlined" style="font-size:32px;vertical-align:middle;color:var(--on-surface-var);">account_circle</span>`}
+      </td>
+      <td style="font-weight:600;">${escHtml(u.name || '')}</td>
+      <td style="direction:ltr;text-align:right;">${escHtml(u.email)}</td>
+      <td>
+        <span style="padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${u.role === 'admin' ? 'rgba(112,42,225,0.12)' : 'rgba(30,150,90,0.10)'};color:${u.role === 'admin' ? '#702ae1' : '#16a34a'};">
+          ${u.role === 'admin' ? 'אדמין' : 'משתמש'}
+        </span>
+      </td>
+      <td>
+        <span style="padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${u.status === 'active' ? 'rgba(22,163,74,0.10)' : 'rgba(220,38,38,0.10)'};color:${u.status === 'active' ? '#16a34a' : '#dc2626'};">
+          ${u.status === 'active' ? 'פעיל' : 'מושעה'}
+        </span>
+      </td>
+      <td style="white-space:nowrap;">
+        ${u.status === 'active'
+          ? `<button class="btn btn-ghost btn-sm" onclick="setUserStatus('${u.id}','suspended')" style="color:#dc2626;">השעה</button>`
+          : `<button class="btn btn-ghost btn-sm" onclick="setUserStatus('${u.id}','active')" style="color:#16a34a;">הפעל</button>`}
+        ${u.role !== 'admin'
+          ? `<button class="btn btn-ghost btn-sm" onclick="deleteUserConfirm('${u.id}','${escHtml(u.name || u.email)}')" style="color:#dc2626;margin-right:4px;">מחק</button>`
+          : ''}
+      </td>
+    </tr>`).join('');
+
+  wrap.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th style="width:40px;"></th>
+          <th>שם</th><th>מייל</th><th>תפקיד</th><th>סטטוס</th><th>פעולות</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+window.setUserStatus = async (id, status) => {
+  try {
+    const res  = await fetch(`/api/users/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    loadUsers();
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
+
+window.deleteUserConfirm = async (id, name) => {
+  if (!confirm(`למחוק את המשתמש "${name}"? פעולה זו תמחק את כל הנתונים שלו.`)) return;
+  try {
+    const res  = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    loadUsers();
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
+
+// ── Invitations ───────────────────────────────────────────────────────────────
+async function loadInvites() {
+  const wrap = document.getElementById('invites-table-wrap');
+  if (!wrap) return;
+  try {
+    const res  = await fetch('/api/users/invites');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    renderInvitesTable(data.invitations);
+  } catch (err) {
+    wrap.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+function renderInvitesTable(invites) {
+  const wrap = document.getElementById('invites-table-wrap');
+  if (!wrap) return;
+  const pending = invites.filter(i => !i.used_at && new Date(i.expires_at) > new Date());
+  if (!pending.length) {
+    wrap.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);">אין הזמנות פעילות</div>';
+    return;
+  }
+  const baseUrl = window.location.origin;
+  const rows = pending.map(i => `
+    <tr>
+      <td style="direction:ltr;text-align:right;">${escHtml(i.email)}</td>
+      <td style="direction:ltr;font-size:11px;word-break:break-all;">
+        <a href="${baseUrl}/auth/invite/${escHtml(i.token)}" target="_blank" style="color:var(--primary);">${baseUrl}/auth/invite/${escHtml(i.token)}</a>
+      </td>
+      <td style="font-size:12px;">${new Date(i.expires_at).toLocaleDateString('he-IL')}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="deleteInvite('${i.id}')" style="color:#dc2626;">בטל</button>
+      </td>
+    </tr>`).join('');
+
+  wrap.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>מייל</th><th>קישור הזמנה</th><th>תפוגה</th><th>פעולות</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+window.deleteInvite = async (id) => {
+  try {
+    const res  = await fetch(`/api/users/invites/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    loadInvites();
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
+
+// Invite form toggle
+document.getElementById('btn-invite-user')?.addEventListener('click', () => {
+  document.getElementById('invite-form-section').style.display = '';
+  document.getElementById('invite-email-input').focus();
+});
+document.getElementById('btn-invite-cancel')?.addEventListener('click', () => {
+  document.getElementById('invite-form-section').style.display = 'none';
+  document.getElementById('invite-result').textContent = '';
+  document.getElementById('invite-email-input').value = '';
+});
+document.getElementById('btn-invite-submit')?.addEventListener('click', async () => {
+  const email  = document.getElementById('invite-email-input').value.trim();
+  const result = document.getElementById('invite-result');
+  if (!email) { result.style.color = '#dc2626'; result.textContent = 'נדרשת כתובת מייל'; return; }
+
+  try {
+    const res  = await fetch('/api/users/invites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    result.style.color = '#16a34a';
+    result.innerHTML = `קישור נוצר: <a href="${escHtml(data.invitation.inviteUrl)}" target="_blank" style="direction:ltr;word-break:break-all;">${escHtml(data.invitation.inviteUrl)}</a>`;
+    document.getElementById('invite-email-input').value = '';
+    loadInvites();
+  } catch (err) {
+    result.style.color = '#dc2626';
+    result.textContent = 'שגיאה: ' + err.message;
+  }
+});
+
+document.getElementById('btn-refresh-users')?.addEventListener('click', () => {
+  loadUsers();
+  loadInvites();
 });
