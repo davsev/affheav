@@ -2031,6 +2031,29 @@ document.getElementById('btn-refresh-users')?.addEventListener('click', () => {
   loadInvites();
 });
 
+// ── Migrate products from Google Sheets ──────────────────────────────────────
+document.getElementById('btn-migrate-products')?.addEventListener('click', async () => {
+  const btn    = document.getElementById('btn-migrate-products');
+  const result = document.getElementById('migrate-products-result');
+  btn.disabled = true;
+  btn.textContent = 'מייבא...';
+  result.textContent = '';
+  result.style.color = 'var(--on-surface-var)';
+  try {
+    const data = await fetch('/api/users/migrate-products', { method: 'POST' }).then(r => r.json());
+    if (!data.success) throw new Error(data.error);
+    result.style.color = 'var(--success, #4caf50)';
+    result.textContent = `✓ יובאו ${data.inserted} מוצרים, דולגו ${data.skipped} קיימים.`;
+    if (data.inserted > 0) loadProducts();
+  } catch (err) {
+    result.style.color = 'var(--error, #f44336)';
+    result.textContent = `✗ שגיאה: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">table_rows</span> ייבא מוצרים';
+  }
+});
+
 // ── Migrate subjects from Google Sheets ───────────────────────────────────────
 document.getElementById('btn-migrate-subjects')?.addEventListener('click', async () => {
   const btn = document.getElementById('btn-migrate-subjects');

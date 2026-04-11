@@ -3,7 +3,7 @@ const router  = express.Router();
 const { listUsers, findUserById, updateUserById, deleteUser } = require('../services/userService');
 const { createInvitation, listInvitations, deleteInvitation, validateToken } = require('../services/inviteService');
 const { query } = require('../db');
-const { getSubjects } = require('../services/googleSheets');
+const { getSubjects, getAllProducts, markMigratedToDb } = require('../services/googleSheets');
 
 const isAdmin = (req, res, next) => {
   if (req.user?.role === 'admin') return next();
@@ -172,6 +172,96 @@ router.post('/migrate-subjects', isAdmin, async (req, res) => {
       } else {
         details.push(`migrated: ${s.name}`);
       }
+      inserted++;
+    }
+
+    res.json({ success: true, inserted, skipped, details });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── Admin: one-time migrate products from Google Sheets → PostgreSQL ──────────
+router.post('/migrate-products', isAdmin, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Load subjects from Postgres to map subject-id strings → UUIDs
+    const { rows: dbSubjects } = await query(
+      'SELECT id, name FROM subjects WHERE user_id = $1',
+      [userId]
+    );
+
+    // Also load Google Sheets subjects to map old subject id → subject name → Postgres UUID
+    const sheetsSubjects = await getSubjects();
+    const subjectIdMap = {}; // sheets-subject-id → postgres-uuid
+    for (const s of sheetsSubjects) {
+      const match = dbSubjects.find(d => d.name === s.name);
+      if (match) subjectIdMap[s.id] = match.id;
+    }
+
+    // Load all products from Google Sheets (including those without spoo.me link)
+    const sheetsProducts = await getAllProducts({ includeAll: true });
+
+    // Load existing short_links from Postgres to skip duplicates
+    const { rows: existingRows } = await query(
+      'SELECT short_link FROM products WHERE user_id = $1',
+      [userId]
+    );
+    const existingLinks = new Set(existingRows.map(r => r.short_link).filter(Boolean));
+
+    let inserted = 0;
+    let skipped  = 0;
+    const details = [];
+
+    // Determine max sort_order
+    const { rows: maxRow } = await query(
+      'SELECT COALESCE(MAX(sort_order), 0) AS max FROM products WHERE user_id = $1',
+      [userId]
+    );
+    let sortOrder = parseInt(maxRow[0].max) + 1;
+
+    for (const p of sheetsProducts) {
+      const key = p.Link || p.long_url;
+      if (!key) { skipped++; continue; }
+
+      // Skip if already in DB (by short_link)
+      if (p.Link && existingLinks.has(p.Link)) {
+        details.push(`skipped (exists): ${p.Text?.slice(0, 40) || p.Link}`);
+        skipped++;
+        continue;
+      }
+
+      // Resolve subject UUID
+      const subjectPgId = p.subject ? (subjectIdMap[p.subject] || null) : null;
+
+      await query(
+        `INSERT INTO products
+           (user_id, subject_id, long_url, short_link, image, text,
+            join_link, wa_group, sent_at, facebook_at, instagram_at,
+            clicks, sort_order)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [
+          userId,
+          subjectPgId,
+          p.long_url  || null,
+          p.Link      || null,
+          p.image     || null,
+          p.Text      || null,
+          p.join_link || null,
+          p.wa_group  || null,
+          p.sent      ? new Date(p.sent)     : null,
+          p.facebook  ? new Date(p.facebook) : null,
+          p.instagram ? new Date(p.instagram): null,
+          p.clicks    ?? 0,
+          sortOrder++,
+        ]
+      );
+
+      // Mark row in Google Sheets (column D = "✓ DB")
+      try { await markMigratedToDb(p.row_number); } catch { /* non-fatal */ }
+
+      details.push(`imported: ${p.Text?.slice(0, 40) || p.Link}`);
       inserted++;
     }
 
