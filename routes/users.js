@@ -250,9 +250,9 @@ router.post('/migrate-products', isAdmin, async (req, res) => {
           p.Text      || null,
           p.join_link || null,
           p.wa_group  || null,
-          p.sent      ? new Date(p.sent)     : null,
-          p.facebook  ? new Date(p.facebook) : null,
-          p.instagram ? new Date(p.instagram): null,
+          p.sent      ? (d => isNaN(d) ? null : d)(new Date(p.sent))      : null,
+          p.facebook  ? (d => isNaN(d) ? null : d)(new Date(p.facebook))  : null,
+          p.instagram ? (d => isNaN(d) ? null : d)(new Date(p.instagram)) : null,
           Number.isFinite(p.clicks) ? p.clicks : 0,
           sortOrder++,
         ]
