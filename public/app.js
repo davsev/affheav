@@ -1,3 +1,23 @@
+// ── Sidebar mobile toggle ─────────────────────────────────────────────────────
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  const isOpen = sidebar.classList.toggle('open');
+  overlay.classList.toggle('active', isOpen);
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('active');
+}
+// Close sidebar when a nav item is tapped on mobile
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.tab-btn, .subject-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (window.innerWidth <= 768) closeSidebar();
+    });
+  });
+});
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const style = document.createElement('style');
 style.textContent = '@keyframes fadeOut { to { opacity:0; transform:scale(1.02); } }';

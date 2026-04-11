@@ -874,9 +874,42 @@ tr[draggable].drag-over td { border-top: 2px solid var(--primary); background: r
 @media (max-width: 1024px) {
   .kpi-strip { grid-template-columns: repeat(2,1fr); }
 }
+/* ── Sidebar overlay (mobile) ───────────────────────────────────────────── */
+.sidebar-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 39;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.sidebar-overlay.active { display: block; }
+
+/* ── Sidebar toggle button (mobile only) ─────────────────────────────────── */
+.sidebar-toggle {
+  display: none;
+  align-items: center; justify-content: center;
+  width: 40px; height: 40px;
+  border: none; border-radius: 10px;
+  background: rgba(112,42,225,0.08);
+  color: var(--primary);
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.sidebar-toggle:hover { background: rgba(112,42,225,0.15); }
+.sidebar-toggle .material-symbols-outlined { font-size: 22px; }
+
+/* ── Sidebar transition ───────────────────────────────────────────────────── */
+.sidebar {
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 @media (max-width: 768px) {
   .main-content { padding-right: 0; }
   .sidebar { transform: translateX(100%); }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-toggle { display: flex; }
   .form-grid { grid-template-columns: 1fr; }
   .page-title { font-size: 26px; }
 }

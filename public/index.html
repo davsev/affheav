@@ -89,8 +89,11 @@
   </div>
 </div>
 
+<!-- ── Sidebar overlay (mobile) ───────────────────────────────────────── -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
 <!-- ── Sidebar ────────────────────────────────────────────────────────── -->
-<aside class="sidebar">
+<aside class="sidebar" id="sidebar">
   <div class="brand-area">
     <div class="brand-icon">🎣</div>
     <div>
@@ -158,6 +161,9 @@
 
   <!-- Topbar -->
   <div class="topbar">
+    <button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebar()" aria-label="פתח תפריט">
+      <span class="material-symbols-outlined">menu</span>
+    </button>
     <div class="topbar-breadcrumb">
       Affiliate Heaven / <span id="topbar-section">מוצרים</span>
     </div>
