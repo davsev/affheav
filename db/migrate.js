@@ -98,6 +98,12 @@ async function migrate() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS products_user_id ON products(user_id)`);
   await query(`CREATE INDEX IF NOT EXISTS products_subject_id ON products(subject_id)`);
+  // Add whatsapp_group_id FK if not already present (idempotent)
+  await query(`
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS whatsapp_group_id UUID REFERENCES whatsapp_groups(id) ON DELETE SET NULL
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS products_wa_group_id ON products(whatsapp_group_id)`);
 
   // ── Schedules ─────────────────────────────────────────────────────────────
   await query(`

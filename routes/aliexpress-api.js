@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 const googleSheets = require('../services/googleSheets');
 const workflow = require('../services/workflow');
+const { query } = require('../db');
 
 const ALIEXPRESS_ENDPOINT = 'https://api-sg.aliexpress.com/sync';
 const TRACKING_ID = 'TechSalebuy';
@@ -99,24 +100,40 @@ router.get('/existing', async (req, res) => {
 });
 
 // POST /api/aliexpress/add
-// Body: { product: { promotion_link, product_main_image_url, product_title }, subject, wa_group }
+// Body: { product: { promotion_link, product_main_image_url, product_title }, subject, whatsappGroupId }
 router.post('/add', async (req, res) => {
-  const { product, subject = '', wa_group = '' } = req.body;
+  const { product, subject = '', whatsappGroupId } = req.body;
   if (!product || !product.promotion_link || !product.product_title) {
     return res.status(400).json({ success: false, error: 'product with promotion_link and product_title required' });
   }
 
   try {
+    // Resolve wa_group and join_link from whatsapp_group FK if provided
+    let wa_group = '', join_link = '', resolvedGroupId = whatsappGroupId || null;
+    if (whatsappGroupId) {
+      const { rows: grp } = await query(
+        'SELECT wa_group, join_link FROM whatsapp_groups WHERE id = $1 AND user_id = $2',
+        [whatsappGroupId, req.user.id]
+      );
+      if (grp[0]) { wa_group = grp[0].wa_group; join_link = grp[0].join_link || ''; }
+    }
+
     workflow.log(`Adding AliExpress product: "${product.product_title.slice(0, 60)}"`);
-    await googleSheets.addProduct({
-      Link: product.promotion_link,
-      image: product.product_main_image_url || '',
-      Text: product.product_title,
-      join_link: '',
-      wa_group,
-      subject,
-    });
-    workflow.log(`✓ Product added to Google Sheet`);
+    const { shortenUrl } = require('../services/spooMe');
+    const { rows: maxRow } = await query(
+      'SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM products WHERE user_id = $1',
+      [req.user.id]
+    );
+    const shortLink = await shortenUrl(product.promotion_link);
+    await query(
+      `INSERT INTO products
+         (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, whatsapp_group_id, sort_order)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [req.user.id, subject || null, product.promotion_link, shortLink,
+       product.product_main_image_url || '', product.product_title,
+       join_link, wa_group, resolvedGroupId, maxRow[0].next_order]
+    );
+    workflow.log(`✓ Product added to DB`);
     res.json({ success: true });
   } catch (err) {
     workflow.log(`✗ Failed to add product: ${err.message}`, 'error');

@@ -54,9 +54,19 @@ router.get('/', async (req, res) => {
 
 // POST /api/products — add new product
 router.post('/', async (req, res) => {
-  const { Link, image, Text, join_link, wa_group, subject } = req.body;
+  const { Link, image, Text, subject, whatsappGroupId } = req.body;
   if (!Link || !Text) return res.status(400).json({ success: false, error: 'Link and Text are required' });
   try {
+    // Resolve wa_group and join_link from whatsapp_group FK if provided
+    let wa_group = '', join_link = '', resolvedGroupId = whatsappGroupId || null;
+    if (whatsappGroupId) {
+      const { rows: grp } = await query(
+        'SELECT wa_group, join_link FROM whatsapp_groups WHERE id = $1 AND user_id = $2',
+        [whatsappGroupId, req.user.id]
+      );
+      if (grp[0]) { wa_group = grp[0].wa_group; join_link = grp[0].join_link || ''; }
+    }
+
     const shortLink = await shortenUrl(Link);
     const { rows: maxRow } = await query(
       'SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM products WHERE user_id = $1',
@@ -64,10 +74,10 @@ router.post('/', async (req, res) => {
     );
     const { rows } = await query(
       `INSERT INTO products
-         (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, sort_order)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, whatsapp_group_id, sort_order)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING *`,
-      [req.user.id, subject || null, Link, shortLink, image || '', Text, join_link || '', wa_group || '', maxRow[0].next_order]
+      [req.user.id, subject || null, Link, shortLink, image || '', Text, join_link, wa_group, resolvedGroupId, maxRow[0].next_order]
     );
     res.json({ success: true, product: rowToProduct(rows[0], 0) });
   } catch (err) {

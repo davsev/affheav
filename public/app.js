@@ -272,6 +272,20 @@ function populateSubjectSelects() {
     newSubj.innerHTML = '<option value="">ללא נישה</option>' + options;
     newSubj.addEventListener('change', () => loadWaGroupsForSelect('new-wa-group-select', newSubj.value));
   }
+
+  // Fishing auto-search form
+  const fishingSubj = document.getElementById('fishing-subject-select');
+  if (fishingSubj) {
+    fishingSubj.innerHTML = '<option value="">ללא נישה</option>' + options;
+    fishingSubj.addEventListener('change', () => loadWaGroupsForSelect('fishing-wa-group-select', fishingSubj.value));
+  }
+
+  // URL scraper form
+  const scrapeSubj = document.getElementById('scrape-subject-select');
+  if (scrapeSubj) {
+    scrapeSubj.innerHTML = '<option value="">ללא נישה</option>' + options;
+    scrapeSubj.addEventListener('change', () => loadWaGroupsForSelect('scrape-wa-group-select', scrapeSubj.value));
+  }
 }
 
 // ── WhatsApp Groups helpers ───────────────────────────────────────────────────
@@ -401,7 +415,7 @@ function renderActiveNicheCard() {
                 <h2 class="niche-name-h2">${escHtml(s.name)}</h2>
                 <div class="niche-status-row">
                   <span class="niche-pulse"></span>
-                  <span class="niche-status-label">${s.waGroupName ? `מחובר: ${escHtml(s.waGroupName)}` : 'הגדרות נישה פעילה'}</span>
+                  <span class="niche-status-label" id="niche-status-label-${s.id}">הגדרות נישה פעילה</span>
                 </div>
               </div>
             </div>
@@ -1196,13 +1210,21 @@ document.getElementById('btn-scrape').addEventListener('click', async (btn) => {
   const resultDiv = document.getElementById('scrape-result');
   resultDiv.style.display = 'none';
 
+  const scrapeSubject  = document.getElementById('scrape-subject-select').value;
+  const scrapeGroupSel = document.getElementById('scrape-wa-group-select');
+  const scrapeGroupId  = scrapeGroupSel ? scrapeGroupSel.value : '';
+  const scrapeGroup    = scrapeGroupId && _waGroupsCache[scrapeSubject]
+    ? (_waGroupsCache[scrapeSubject].find(g => g.id === scrapeGroupId) || null)
+    : null;
+
   try {
     const result = await api('/api/scrape/aliexpress', {
       method: 'POST',
       body: {
         url,
-        join_link: document.getElementById('scrape-join').value.trim(),
-        wa_group:  document.getElementById('scrape-wa-group').value.trim(),
+        join_link: scrapeGroup?.joinLink || '',
+        wa_group:  scrapeGroup?.waGroup  || '',
+        subject:   scrapeSubject,
         autoSend:  document.getElementById('scrape-auto-send').checked,
       },
     });
@@ -1239,19 +1261,13 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
   const subject  = document.getElementById('new-subject').value;
   const result   = document.getElementById('add-product-result');
 
-  // Resolve wa_group and join_link from selected WA group
-  const waGroupSel    = document.getElementById('new-wa-group-select');
-  const waGroupId     = waGroupSel ? waGroupSel.value : '';
-  const selectedGroup = waGroupId && _waGroupsCache[subject]
-    ? (_waGroupsCache[subject].find(g => g.id === waGroupId) || null)
-    : null;
-  const wa_group  = selectedGroup?.waGroup  || '';
-  const join_link = selectedGroup?.joinLink || '';
+  const waGroupSel      = document.getElementById('new-wa-group-select');
+  const whatsappGroupId = waGroupSel ? waGroupSel.value : '';
 
   if (!Text || !Link) { result.textContent = '⚠ שם מוצר וקישור הם שדות חובה'; result.style.color='#d97706'; return; }
 
   try {
-    await api('/api/products', { method: 'POST', body: { Link, image, Text, join_link, wa_group, subject } });
+    await api('/api/products', { method: 'POST', body: { Link, image, Text, subject, whatsappGroupId } });
     result.textContent = '✓ מוצר נוסף בהצלחה';
     result.style.color = '#16a34a';
     ['new-text','new-link','new-image'].forEach(id => document.getElementById(id).value = '');
@@ -1310,9 +1326,15 @@ function showLogTab() {
 
 // ── Fishing Product Search ────────────────────────────────────────────────────
 document.getElementById('btn-fishing-search').addEventListener('click', async () => {
-  const limit     = parseInt(document.getElementById('fishing-limit').value) || 10;
-  const wa_group  = document.getElementById('fishing-wa-group').value.trim();
-  const join_link = document.getElementById('fishing-join-link').value.trim();
+  const limit       = parseInt(document.getElementById('fishing-limit').value) || 10;
+  const subject     = document.getElementById('fishing-subject-select').value;
+  const waGroupSel  = document.getElementById('fishing-wa-group-select');
+  const waGroupId   = waGroupSel ? waGroupSel.value : '';
+  const selectedGroup = waGroupId && _waGroupsCache[subject]
+    ? (_waGroupsCache[subject].find(g => g.id === waGroupId) || null)
+    : null;
+  const wa_group  = selectedGroup?.waGroup  || '';
+  const join_link = selectedGroup?.joinLink || '';
   const status    = document.getElementById('fishing-search-status');
   const result    = document.getElementById('fishing-search-result');
   const btn       = document.getElementById('btn-fishing-search');
@@ -1324,7 +1346,7 @@ document.getElementById('btn-fishing-search').addEventListener('click', async ()
   try {
     const data = await api('/api/scrape/fishing-search', {
       method: 'POST',
-      body: { limit, wa_group, join_link },
+      body: { limit, wa_group, join_link, subject },
     });
 
     status.textContent = '';
@@ -1662,16 +1684,10 @@ function renderAliGrid() {
       const card     = addBtn.closest('[data-product-idx]');
       const idx      = parseInt(card.dataset.productIdx, 10);
       const product  = _aliLastProducts[idx];
-      const subject  = document.getElementById('ali-subject-select').value;
-      const waGroupSel = document.getElementById('ali-wa-group-select');
-      const waGroupId  = waGroupSel ? waGroupSel.value : '';
-      // Resolve wa_group string and join_link from selected group
-      const selectedWaGroup = waGroupId && _waGroupsCache[subject]
-        ? (_waGroupsCache[subject].find(g => g.id === waGroupId) || null)
-        : null;
-      const waGroup  = selectedWaGroup?.waGroup || '';
-      const joinLink = selectedWaGroup?.joinLink || '';
-      const feedback  = card.querySelector('.ali-add-feedback');
+      const subject        = document.getElementById('ali-subject-select').value;
+      const waGroupSel     = document.getElementById('ali-wa-group-select');
+      const whatsappGroupId = waGroupSel ? waGroupSel.value : '';
+      const feedback       = card.querySelector('.ali-add-feedback');
 
       addBtn.disabled = true;
       feedback.textContent = 'שומר...';
@@ -1680,7 +1696,7 @@ function renderAliGrid() {
       try {
         await api('/api/aliexpress/add', {
           method: 'POST',
-          body: { product, subject, wa_group: waGroup, join_link: joinLink },
+          body: { product, subject, whatsappGroupId },
         });
         feedback.textContent = '✓ נוסף לנישה';
         feedback.style.color = '#16a34a';
@@ -1774,6 +1790,13 @@ async function loadAndRenderWaGroups(subjectId) {
   invalidateWaCache(subjectId);
   const groups = await loadWaGroupsForSubject(subjectId);
   renderWaGroupsList(subjectId, groups);
+  // Update status label to reflect current group count
+  const statusLabel = document.getElementById(`niche-status-label-${subjectId}`);
+  if (statusLabel) {
+    statusLabel.textContent = groups.length
+      ? `${groups.length} קבוצת WA מחוברת`
+      : 'הגדרות נישה פעילה';
+  }
 }
 
 function renderWaGroupsList(subjectId, groups) {
