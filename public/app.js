@@ -264,12 +264,82 @@ function populateSubjectSelects() {
 
   // Schedules form
   const schedSel = document.getElementById('sched-subject');
-  if (schedSel) schedSel.innerHTML = '<option value="">כל הנושאים</option>' + options;
+  if (schedSel) schedSel.innerHTML = '<option value="">כל הנישות</option>' + options;
 
   // Add-product form
   const newSubj = document.getElementById('new-subject');
-  if (newSubj) newSubj.innerHTML = '<option value="">ללא נושא</option>' + options;
+  if (newSubj) {
+    newSubj.innerHTML = '<option value="">ללא נישה</option>' + options;
+    newSubj.addEventListener('change', () => loadWaGroupsForSelect('new-wa-group-select', newSubj.value));
+  }
 }
+
+// ── WhatsApp Groups helpers ───────────────────────────────────────────────────
+let _waGroupsCache = {}; // subjectId → groups[]
+
+async function loadWaGroupsForSubject(subjectId) {
+  if (!subjectId) return [];
+  if (_waGroupsCache[subjectId]) return _waGroupsCache[subjectId];
+  try {
+    const data = await api(`/api/subjects/${subjectId}/whatsapp-groups`);
+    _waGroupsCache[subjectId] = data.groups || [];
+  } catch {
+    _waGroupsCache[subjectId] = [];
+  }
+  return _waGroupsCache[subjectId];
+}
+
+function invalidateWaCache(subjectId) {
+  delete _waGroupsCache[subjectId];
+}
+
+async function loadWaGroupsForSelect(selectId, subjectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  if (!subjectId) {
+    sel.innerHTML = '<option value="">בחר נישה קודם...</option>';
+    return;
+  }
+  const groups = await loadWaGroupsForSubject(subjectId);
+  if (!groups.length) {
+    sel.innerHTML = '<option value="">אין קבוצות לנישה זו</option>';
+  } else {
+    sel.innerHTML = '<option value="">בחר קבוצה...</option>' +
+      groups.map(g => `<option value="${escHtml(g.id)}">${escHtml(g.name)}</option>`).join('');
+  }
+}
+
+async function populateSendModalWaGroups(subjectId) {
+  const section  = document.getElementById('modal-wa-groups-section');
+  const list     = document.getElementById('modal-wa-groups-list');
+  const empty    = document.getElementById('modal-wa-groups-empty');
+  const waChk    = document.getElementById('modal-chk-wa');
+  if (!section || !list || !empty) return;
+
+  if (!waChk.checked || !subjectId) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = '';
+  const groups = await loadWaGroupsForSubject(subjectId);
+  if (!groups.length) {
+    list.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = groups.map(g => `
+    <label class="modal-option" style="padding:6px 8px;">
+      <input type="checkbox" class="modal-wa-group-chk" data-id="${escHtml(g.id)}" checked />
+      <span style="font-size:13px;">${escHtml(g.name)}</span>
+    </label>`).join('');
+}
+
+document.getElementById('modal-chk-wa')?.addEventListener('change', () => {
+  const subjectId = _currentSubject;
+  populateSendModalWaGroups(subjectId);
+});
 
 // ── Settings page (Stitch design) ─────────────────────────────────────────────
 let _settingsActiveId = null;
@@ -391,18 +461,46 @@ function renderActiveNicheCard() {
                 <span class="material-symbols-outlined">groups</span>
                 הגדרות WhatsApp
               </div>
-              <div class="form-grid" style="margin-bottom:24px;">
-                <div class="form-group">
-                  <label class="form-label">שם קבוצת WA</label>
-                  <input class="form-input" id="niche-wa-group-${s.id}" value="${escHtml(s.waGroupName||'')}" placeholder="שם הקבוצה המדויק" style="font-size:13px;" />
-                </div>
+              <div class="form-grid" style="margin-bottom:16px;">
                 <div class="form-group form-full">
-                  <label class="form-label">קישור הצטרפות לקבוצת WA</label>
-                  <input class="form-input" id="niche-join-link-${s.id}" value="${escHtml(s.joinLink||'')}" placeholder="https://chat.whatsapp.com/..." dir="ltr" style="font-size:13px;" />
+                  <label class="form-label">Webhook URL ${s.macrodroidUrl ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#dc2626;font-size:10px;">לא מוגדר</span>'}</label>
+                  <input class="form-input" type="password" id="niche-wa-url-${s.id}" value="" placeholder="${s.macrodroidUrl ? 'השאר ריק לשמור ערך קיים' : 'הזן Webhook URL'}" dir="ltr" style="font-size:13px;" />
                 </div>
-                <div class="form-group">
-                  <label class="form-label">Webhook URL ${s.whatsappUrl ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#dc2626;font-size:10px;">לא מוגדר</span>'}</label>
-                  <input class="form-input" type="password" id="niche-wa-url-${s.id}" value="" placeholder="${s.whatsappUrl ? 'השאר ריק לשמור ערך קיים' : 'הזן Webhook URL'}" dir="ltr" style="font-size:13px;" />
+              </div>
+
+              <!-- WA Groups management -->
+              <div style="margin-bottom:24px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                  <div style="font-size:12px;font-weight:600;color:var(--on-surface-var);">קבוצות WhatsApp</div>
+                  <button class="btn btn-ghost btn-sm" onclick="showAddWaGroup('${s.id}')" style="font-size:11px;padding:4px 10px;">
+                    <span class="material-symbols-outlined" style="font-size:13px;">add</span>הוסף קבוצה
+                  </button>
+                </div>
+                <div id="wa-groups-list-${s.id}" style="display:flex;flex-direction:column;gap:6px;">
+                  <div style="font-size:12px;color:var(--on-surface-var);">טוען קבוצות...</div>
+                </div>
+                <!-- Add group inline form -->
+                <div id="add-wa-group-form-${s.id}" style="display:none;margin-top:12px;padding:12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08);">
+                  <div class="form-grid">
+                    <div class="form-group">
+                      <label class="form-label">שם לתצוגה</label>
+                      <input class="form-input" id="new-wa-name-${s.id}" placeholder="קבוצת דיג צפון" style="font-size:13px;" />
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">מזהה קבוצה (MacroDroid)</label>
+                      <input class="form-input" id="new-wa-group-id-${s.id}" placeholder="fishing_north" dir="ltr" style="font-size:13px;" />
+                    </div>
+                    <div class="form-group form-full">
+                      <label class="form-label">קישור הצטרפות</label>
+                      <input class="form-input" id="new-wa-join-${s.id}" placeholder="https://chat.whatsapp.com/..." dir="ltr" style="font-size:13px;" />
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:8px;margin-top:8px;">
+                    <button class="btn btn-ghost btn-sm" onclick="hideAddWaGroup('${s.id}')">ביטול</button>
+                    <button class="btn btn-primary btn-sm" onclick="saveNewWaGroup('${s.id}')">
+                      <span class="material-symbols-outlined" style="font-size:13px;">save</span>שמור קבוצה
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -468,6 +566,9 @@ function renderActiveNicheCard() {
         </div>
       </div>
     </section>`;
+
+  // Load WA groups for this niche after rendering
+  loadAndRenderWaGroups(s.id);
 }
 
 function renderNicheGrid() {
@@ -601,9 +702,7 @@ window.saveNiche = async (id) => {
         waEnabled:           document.getElementById(`wa-toggle-${id}`)?.classList.contains('active') ?? true,
         fbEnabled:           document.getElementById(`fb-toggle-${id}`)?.classList.contains('active') ?? true,
         instagramEnabled:    document.getElementById(`ig-toggle-${id}`)?.classList.contains('active') ?? true,
-        waGroupName:         document.getElementById(`niche-wa-group-${id}`)?.value.trim() || '',
-        joinLink:            document.getElementById(`niche-join-link-${id}`)?.value.trim() || '',
-        whatsappUrl:         document.getElementById(`niche-wa-url-${id}`)?.value.trim() || '',
+        macrodroidUrl:       document.getElementById(`niche-wa-url-${id}`)?.value.trim() || '',
         facebookPageId:      document.getElementById(`niche-fb-page-${id}`)?.value.trim() || '',
         facebookToken:       document.getElementById(`niche-fb-token-${id}`)?.value.trim() || '',
         facebookAppId:       document.getElementById(`niche-fb-app-id-${id}`)?.value.trim() || '',
@@ -620,7 +719,7 @@ window.saveNiche = async (id) => {
 };
 
 window.deleteSubject = async (id) => {
-  if (!confirm('למחוק נושא זה?')) return;
+  if (!confirm('למחוק נישה זו? כל הקבוצות והמוצרים המשויכים יינותקו.')) return;
   try {
     await api(`/api/subjects/${id}`, { method: 'DELETE' });
     if (_currentSubject === id) {
@@ -879,9 +978,12 @@ async function loadProducts() {
   }
 }
 
-window.sendProduct = (rowNumber, btn) => {
+window.sendProduct = async (rowNumber, btn) => {
   const modal = document.getElementById('send-modal');
   modal.style.display = 'flex';
+
+  // Pre-populate WA groups for current niche
+  await populateSendModalWaGroups(_currentSubject);
 
   const onConfirm = async () => {
     cleanup();
@@ -891,12 +993,17 @@ window.sendProduct = (rowNumber, btn) => {
     if (document.getElementById('modal-chk-ig').checked) platforms.push('instagram');
     if (!platforms.length) { alert('יש לבחור לפחות פלטפורמה אחת'); return; }
 
+    // Collect selected WA group ids
+    const waGroupIds = [...document.querySelectorAll('.modal-wa-group-chk:checked')]
+      .map(el => el.dataset.id);
+
     btn.disabled = true;
     btn.textContent = '...';
     showLogTab();
     try {
       const sendBody = { platforms };
       if (_currentSubject) sendBody.subject = _currentSubject;
+      if (waGroupIds.length) sendBody.waGroupIds = waGroupIds;
       await api(`/api/send/${rowNumber}`, { method: 'POST', body: sendBody });
       await loadProducts();
     } catch (err) {
@@ -1129,10 +1236,17 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
   const Text     = document.getElementById('new-text').value.trim();
   const Link     = document.getElementById('new-link').value.trim();
   const image    = document.getElementById('new-image').value.trim();
-  const join_link= document.getElementById('new-join').value.trim();
-  const wa_group = document.getElementById('new-wa-group').value.trim();
   const subject  = document.getElementById('new-subject').value;
   const result   = document.getElementById('add-product-result');
+
+  // Resolve wa_group and join_link from selected WA group
+  const waGroupSel    = document.getElementById('new-wa-group-select');
+  const waGroupId     = waGroupSel ? waGroupSel.value : '';
+  const selectedGroup = waGroupId && _waGroupsCache[subject]
+    ? (_waGroupsCache[subject].find(g => g.id === waGroupId) || null)
+    : null;
+  const wa_group  = selectedGroup?.waGroup  || '';
+  const join_link = selectedGroup?.joinLink || '';
 
   if (!Text || !Link) { result.textContent = '⚠ שם מוצר וקישור הם שדות חובה'; result.style.color='#d97706'; return; }
 
@@ -1140,7 +1254,7 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
     await api('/api/products', { method: 'POST', body: { Link, image, Text, join_link, wa_group, subject } });
     result.textContent = '✓ מוצר נוסף בהצלחה';
     result.style.color = '#16a34a';
-    ['new-text','new-link','new-image','new-join','new-wa-group'].forEach(id => document.getElementById(id).value = '');
+    ['new-text','new-link','new-image'].forEach(id => document.getElementById(id).value = '');
   } catch (err) {
     result.textContent = '✗ שגיאה: ' + err.message;
     result.style.color = '#dc2626';
@@ -1434,14 +1548,9 @@ function refreshAliSubjectSelect() {
   if (current) sel.value = current;
 }
 
-// Auto-fill wa_group and join_link when niche is selected
+// Load WA groups when niche is selected in AliExpress form
 document.getElementById('ali-subject-select').addEventListener('change', function() {
-  const subjectId = this.value;
-  const subj = subjectId ? (_subjects || []).find(s => s.id === subjectId) : null;
-  const waInput   = document.getElementById('ali-wa-group');
-  const joinInput = document.getElementById('ali-join-link');
-  if (waInput)   waInput.value   = subj?.waGroupName || '';
-  if (joinInput) joinInput.value = subj?.joinLink    || '';
+  loadWaGroupsForSelect('ali-wa-group-select', this.value);
 });
 
 // Weighted score: rate 40%, volume 40%, price 20% (lower = better), stock bonus
@@ -1553,9 +1662,15 @@ function renderAliGrid() {
       const card     = addBtn.closest('[data-product-idx]');
       const idx      = parseInt(card.dataset.productIdx, 10);
       const product  = _aliLastProducts[idx];
-      const subject   = document.getElementById('ali-subject-select').value;
-      const waGroup   = document.getElementById('ali-wa-group').value.trim();
-      const joinLink  = document.getElementById('ali-join-link').value.trim();
+      const subject  = document.getElementById('ali-subject-select').value;
+      const waGroupSel = document.getElementById('ali-wa-group-select');
+      const waGroupId  = waGroupSel ? waGroupSel.value : '';
+      // Resolve wa_group string and join_link from selected group
+      const selectedWaGroup = waGroupId && _waGroupsCache[subject]
+        ? (_waGroupsCache[subject].find(g => g.id === waGroupId) || null)
+        : null;
+      const waGroup  = selectedWaGroup?.waGroup || '';
+      const joinLink = selectedWaGroup?.joinLink || '';
       const feedback  = card.querySelector('.ali-add-feedback');
 
       addBtn.disabled = true;
@@ -1650,6 +1765,72 @@ document.getElementById('btn-ali-next-page').addEventListener('click', () => doA
   s.textContent = '@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }';
   document.head.appendChild(s);
 })();
+
+// ── WA Groups Management (niche settings card) ────────────────────────────────
+
+async function loadAndRenderWaGroups(subjectId) {
+  const listEl = document.getElementById(`wa-groups-list-${subjectId}`);
+  if (!listEl) return;
+  invalidateWaCache(subjectId);
+  const groups = await loadWaGroupsForSubject(subjectId);
+  renderWaGroupsList(subjectId, groups);
+}
+
+function renderWaGroupsList(subjectId, groups) {
+  const listEl = document.getElementById(`wa-groups-list-${subjectId}`);
+  if (!listEl) return;
+  if (!groups.length) {
+    listEl.innerHTML = '<div style="font-size:12px;color:var(--on-surface-var);">אין קבוצות עדיין — הוסף קבוצה ראשונה</div>';
+    return;
+  }
+  listEl.innerHTML = groups.map(g => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:8px;border:1px solid rgba(255,255,255,0.07);">
+      <div>
+        <div style="font-size:13px;font-weight:600;">${escHtml(g.name)}</div>
+        <div style="font-size:11px;color:var(--on-surface-var);direction:ltr;">${escHtml(g.waGroup)}${g.joinLink ? ' · קישור ✓' : ''}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="deleteWaGroup('${g.id}','${subjectId}')" style="color:#dc2626;padding:4px 8px;">
+        <span class="material-symbols-outlined" style="font-size:14px;">delete</span>
+      </button>
+    </div>`).join('');
+}
+
+window.showAddWaGroup = (subjectId) => {
+  document.getElementById(`add-wa-group-form-${subjectId}`).style.display = '';
+};
+window.hideAddWaGroup = (subjectId) => {
+  document.getElementById(`add-wa-group-form-${subjectId}`).style.display = 'none';
+};
+
+window.saveNewWaGroup = async (subjectId) => {
+  const name    = document.getElementById(`new-wa-name-${subjectId}`).value.trim();
+  const waGroup = document.getElementById(`new-wa-group-id-${subjectId}`).value.trim();
+  const joinLink= document.getElementById(`new-wa-join-${subjectId}`).value.trim();
+  if (!name || !waGroup) { alert('שם ומזהה קבוצה הם שדות חובה'); return; }
+  try {
+    await api(`/api/subjects/${subjectId}/whatsapp-groups`, {
+      method: 'POST',
+      body: { name, waGroup, joinLink },
+    });
+    ['new-wa-name','new-wa-group-id','new-wa-join'].forEach(id =>
+      document.getElementById(`${id}-${subjectId}`).value = ''
+    );
+    hideAddWaGroup(subjectId);
+    await loadAndRenderWaGroups(subjectId);
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
+
+window.deleteWaGroup = async (groupId, subjectId) => {
+  if (!confirm('למחוק את הקבוצה?')) return;
+  try {
+    await api(`/api/subjects/whatsapp-groups/${groupId}`, { method: 'DELETE' });
+    await loadAndRenderWaGroups(subjectId);
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
 
 // Load subjects first so selects are populated before products/schedules render
 loadSubjects().then(() => {
@@ -1848,4 +2029,30 @@ document.getElementById('btn-invite-submit')?.addEventListener('click', async ()
 document.getElementById('btn-refresh-users')?.addEventListener('click', () => {
   loadUsers();
   loadInvites();
+});
+
+// ── Migrate subjects from Google Sheets ───────────────────────────────────────
+document.getElementById('btn-migrate-subjects')?.addEventListener('click', async () => {
+  const btn = document.getElementById('btn-migrate-subjects');
+  const result = document.getElementById('migrate-subjects-result');
+  btn.disabled = true;
+  btn.textContent = 'מייבא...';
+  result.textContent = '';
+  result.style.color = 'var(--on-surface-var)';
+  try {
+    const data = await fetch('/api/users/migrate-subjects', { method: 'POST' }).then(r => r.json());
+    if (!data.success) throw new Error(data.error);
+    result.style.color = 'var(--success, #4caf50)';
+    result.textContent = `✓ יובאו ${data.inserted} נישות, דולגו ${data.skipped} קיימות.`;
+    if (data.inserted > 0) {
+      // Refresh niches list
+      loadSubjects();
+    }
+  } catch (err) {
+    result.style.color = 'var(--error, #f44336)';
+    result.textContent = `✗ שגיאה: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">cloud_download</span> הפעל ייבוא';
+  }
 });

@@ -6,12 +6,12 @@ const workflow = require('../services/workflow');
 // POST /api/send/execute — run next unsent product
 router.post('/execute', async (req, res) => {
   try {
-    const { subject, platforms } = req.body || {};
-    const result = await workflow.run(null, {
-      userId:    req.user.id,
-      subjectId: subject || undefined,
-      platforms: platforms || ['whatsapp', 'facebook', 'instagram'],
-    });
+    const { subject, platforms, waGroupIds } = req.body || {};
+    const opts = { userId: req.user.id };
+    if (platforms)              opts.platforms  = platforms;
+    if (subject !== undefined)  opts.subject    = subject;
+    if (waGroupIds)             opts.waGroupIds = waGroupIds;
+    const result = await workflow.run(null, opts);
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -40,12 +40,11 @@ router.post('/:id', async (req, res) => {
       subject:   r.subject_id || '',
     };
 
-    const { platforms = ['whatsapp', 'facebook', 'instagram'], subject } = req.body || {};
-    const result = await workflow.run(product, {
-      userId:    req.user.id,
-      subjectId: subject || r.subject_id || undefined,
-      platforms,
-    });
+    const { platforms = ['whatsapp', 'facebook', 'instagram'], subject, waGroupIds } = req.body || {};
+    const opts = { platforms, userId: req.user.id };
+    if (subject !== undefined) opts.subject    = subject;
+    if (waGroupIds)            opts.waGroupIds = waGroupIds;
+    const result = await workflow.run(product, opts);
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
