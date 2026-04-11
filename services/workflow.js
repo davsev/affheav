@@ -3,12 +3,18 @@ const openai = require('./openai');
 const whatsapp = require('./whatsapp');
 const facebook = require('./facebook');
 const instagram = require('./instagram');
+const { getSubjectById, getGroupsBySubject } = require('./subjectService');
 
-// Resolve subject config (credentials) by subject id
-async function resolveSubjectConfig(subjectId) {
-  if (!subjectId) return null;
-  const subjects = await googleSheets.getSubjects();
-  return subjects.find(s => s.id === subjectId) || null;
+const WA_GROUP_DELAY_MS = 2 * 60 * 1000; // 2 minutes between WhatsApp groups
+
+// Resolve subject config (credentials) by subject id and user id
+async function resolveSubjectConfig(subjectId, userId) {
+  if (!subjectId || !userId) return null;
+  return getSubjectById(subjectId, userId);
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // Global log emitter — set by server.js so routes/scheduler can share it
@@ -34,16 +40,24 @@ function log(msg, level = 'info') {
  * @param {string[]} [opts.platforms]  - Which platforms to send to
  * @param {string}   [opts.subject]    - Subject/niche id to filter products and use credentials for
  */
-async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook', 'instagram'], subject } = {}) {
+/**
+ * @param {object} [overrideProduct]
+ * @param {object} [opts]
+ * @param {string[]} [opts.platforms]       - ['whatsapp','facebook','instagram']
+ * @param {string}   [opts.subject]         - subject/niche id
+ * @param {string}   [opts.userId]          - owner user id (required for DB lookups)
+ * @param {string[]} [opts.waGroupIds]      - selected whatsapp_groups ids to send to
+ */
+async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook', 'instagram'], subject, userId, waGroupIds } = {}) {
   const sendWA = platforms.includes('whatsapp');
   const sendFB = platforms.includes('facebook');
   const sendIG = platforms.includes('instagram');
   log('▶ Workflow started');
 
   // Resolve subject credentials (if subject is specified)
-  const subjectConfig = subject ? await resolveSubjectConfig(subject) : null;
+  const subjectConfig = (subject && userId) ? await resolveSubjectConfig(subject, userId) : null;
   if (subject) {
-    log(`Subject: ${subjectConfig ? subjectConfig.name : subject}`);
+    log(`Niche: ${subjectConfig ? subjectConfig.name : subject}`);
   }
 
   // Step 1: Get product
@@ -53,7 +67,7 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
     log(`Using provided product: ${product.Text}`);
   } else {
     log('Fetching next unsent product from Google Sheets...');
-    product = await googleSheets.getNextUnsent(subject !== undefined ? { subject, waGroupName: subjectConfig?.waGroupName } : {});
+    product = await googleSheets.getNextUnsent(subject !== undefined ? { subject } : {});
     if (!product) {
       log('No unsent products found. Workflow complete.', 'warn');
       return { success: false, reason: 'no_unsent_products' };
@@ -93,25 +107,63 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
 
   const results = { product, message, whatsapp: null, facebook: null, instagram: null };
 
-  // Step 3: WhatsApp
+  // Step 3: WhatsApp — send to selected groups (or product's wa_group as fallback)
   if (sendWA) {
-    try {
-      log(`Sending to WhatsApp group: ${product.wa_group}`);
-      const waResult = await whatsapp.send({
-        text: message,
-        image: product.image,
-        wa_group: product.wa_group,
-        webhookUrl: subjectConfig?.whatsappUrl || null,
-      });
-      results.whatsapp = waResult;
-      if (waResult.success) {
-        log('✓ WhatsApp message sent successfully');
-      } else {
-        log(`⚠ WhatsApp response not OK: ${JSON.stringify(waResult.raw)}`, 'warn');
+    // Resolve which groups to send to
+    let groupsToSend = [];
+    if (waGroupIds && waGroupIds.length > 0 && subject && userId) {
+      // Fetch all groups for this niche and filter to selected ids
+      const allGroups = await getGroupsBySubject(subject, userId);
+      groupsToSend = allGroups.filter(g => waGroupIds.includes(g.id));
+    }
+
+    if (groupsToSend.length > 0) {
+      results.whatsapp = [];
+      for (let i = 0; i < groupsToSend.length; i++) {
+        const group = groupsToSend[i];
+        if (i > 0) {
+          log(`⏳ Waiting 2 minutes before sending to next group...`);
+          await sleep(WA_GROUP_DELAY_MS);
+        }
+        try {
+          log(`Sending to WhatsApp group: ${group.name} (${group.waGroup})`);
+          const waResult = await whatsapp.send({
+            text:       message,
+            image:      product.image,
+            wa_group:   group.waGroup,
+            webhookUrl: subjectConfig?.macrodroidUrl || null,
+          });
+          results.whatsapp.push({ group: group.name, ...waResult });
+          if (waResult.success) {
+            log(`✓ WhatsApp sent to "${group.name}"`);
+          } else {
+            log(`⚠ WhatsApp response not OK for "${group.name}": ${JSON.stringify(waResult.raw)}`, 'warn');
+          }
+        } catch (err) {
+          log(`✗ WhatsApp failed for "${group.name}": ${err.message}`, 'error');
+          results.whatsapp.push({ group: group.name, success: false, error: err.message });
+        }
       }
-    } catch (err) {
-      log(`✗ WhatsApp failed: ${err.message}`, 'error');
-      results.whatsapp = { success: false, error: err.message };
+    } else {
+      // Fallback: use product's wa_group string (legacy / no DB groups configured)
+      try {
+        log(`Sending to WhatsApp group: ${product.wa_group}`);
+        const waResult = await whatsapp.send({
+          text:       message,
+          image:      product.image,
+          wa_group:   product.wa_group,
+          webhookUrl: subjectConfig?.macrodroidUrl || null,
+        });
+        results.whatsapp = waResult;
+        if (waResult.success) {
+          log('✓ WhatsApp message sent successfully');
+        } else {
+          log(`⚠ WhatsApp response not OK: ${JSON.stringify(waResult.raw)}`, 'warn');
+        }
+      } catch (err) {
+        log(`✗ WhatsApp failed: ${err.message}`, 'error');
+        results.whatsapp = { success: false, error: err.message };
+      }
     }
   } else {
     log('⏭ WhatsApp skipped');

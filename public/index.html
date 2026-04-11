@@ -80,6 +80,12 @@
         <span>📸 Instagram</span>
       </label>
     </div>
+    <!-- WhatsApp groups selection — shown when WA is checked and niche is selected -->
+    <div id="modal-wa-groups-section" style="display:none;margin-top:12px;border-top:1px solid rgba(255,255,255,0.08);padding-top:12px;">
+      <div style="font-size:12px;font-weight:600;color:var(--on-surface-var);margin-bottom:8px;">קבוצות WhatsApp לשליחה:</div>
+      <div id="modal-wa-groups-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+      <div id="modal-wa-groups-empty" style="display:none;font-size:12px;color:var(--on-surface-var);">אין קבוצות מוגדרות לנישה זו</div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost btn-sm" id="modal-cancel" style="flex:1;justify-content:center;">ביטול</button>
       <button class="btn btn-primary btn-sm" id="modal-confirm" style="flex:1;justify-content:center;">
@@ -120,7 +126,7 @@
       <span class="material-symbols-outlined nav-icon">manage_search</span>חיפוש API
     </button>
 
-    <div class="nav-section-label" style="margin-top:8px;">נושאים</div>
+    <div class="nav-section-label" style="margin-top:8px;">נישות</div>
     <div class="sidebar-subjects" id="sidebar-subjects">
       <button class="subject-item active" data-subject="" style="--item-color:#702ae1">
         <span class="subject-dot" style="background:#702ae1;"></span>
@@ -228,13 +234,13 @@
       <div style="margin-bottom:32px;">
         <div class="page-eyebrow">סקירה כללית</div>
         <h1 class="page-title">לוח <span class="highlight">בקרה</span></h1>
-        <p class="page-sub">כלל הנושאים במבט אחד</p>
+        <p class="page-sub">כלל הנישות במבט אחד</p>
       </div>
       <!-- Subject analytics grid — rendered by JS -->
       <div id="dashboard-subjects-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px;margin-bottom:32px;">
         <div style="padding:40px;text-align:center;color:var(--on-surface-var);">
           <div style="font-size:40px;margin-bottom:12px;">📊</div>
-          <div>טוען נושאים...</div>
+          <div>טוען נישות...</div>
         </div>
       </div>
     </div>
@@ -336,8 +342,8 @@
             <input class="form-input" id="sched-cron" placeholder="0 12 * * 5" dir="ltr" />
           </div>
           <div class="form-group">
-            <label class="form-label">נושא</label>
-            <select class="form-input" id="sched-subject"><option value="">כל הנושאים</option></select>
+            <label class="form-label">נישה</label>
+            <select class="form-input" id="sched-subject"><option value="">כל הנישות</option></select>
           </div>
         </div>
         <div style="margin-top:10px;font-size:11px;color:var(--on-surface-var);font-family:var(--font-mono);">
@@ -433,16 +439,14 @@
             <input class="form-input" id="new-image" placeholder="https://..." dir="ltr" />
           </div>
           <div class="form-group">
-            <label class="form-label">קישור הצטרפות</label>
-            <input class="form-input" id="new-join" placeholder="https://chat.whatsapp.com/..." dir="ltr" />
+            <label class="form-label">נישה</label>
+            <select class="form-input" id="new-subject"><option value="">ללא נישה</option></select>
           </div>
           <div class="form-group">
-            <label class="form-label">שם קבוצת WA</label>
-            <input class="form-input" id="new-wa-group" placeholder="fishing" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">נושא</label>
-            <select class="form-input" id="new-subject"><option value="">ללא נושא</option></select>
+            <label class="form-label">קבוצת WA</label>
+            <select class="form-input" id="new-wa-group-select">
+              <option value="">בחר קבוצה...</option>
+            </select>
           </div>
         </div>
         <button class="btn btn-primary" style="margin-top:22px;" id="btn-add-product">
@@ -477,12 +481,10 @@
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">קבוצת WA (לשמירה)</label>
-            <input class="form-input" id="ali-wa-group" placeholder="fishing" />
-          </div>
-          <div class="form-group form-full">
-            <label class="form-label">קישור הצטרפות לקבוצה</label>
-            <input class="form-input" id="ali-join-link" placeholder="https://chat.whatsapp.com/..." dir="ltr" />
+            <label class="form-label">קבוצת WA</label>
+            <select class="form-input" id="ali-wa-group-select">
+              <option value="">בחר קבוצה...</option>
+            </select>
           </div>
         </div>
         <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
@@ -553,7 +555,7 @@
       <section style="margin-bottom:36px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;">
         <div>
           <div class="page-eyebrow">ניהול פרויקטים</div>
-          <h1 class="page-title" style="margin-bottom:0;">הגדרות <span class="highlight">נישות ונושאים</span></h1>
+          <h1 class="page-title" style="margin-bottom:0;">ניהול <span class="highlight">נישות</span></h1>
         </div>
         <button class="btn btn-primary" id="btn-new-niche">
           <span class="material-symbols-outlined" style="font-size:16px;">add_circle</span>
@@ -573,7 +575,7 @@
           <div class="card-title">נישה חדשה</div>
           <div class="form-grid">
             <div class="form-group">
-              <label class="form-label">שם נושא *</label>
+              <label class="form-label">שם נישה *</label>
               <input class="form-input" id="subj-name" placeholder="aquarium" />
             </div>
             <div class="form-group">
@@ -615,7 +617,7 @@
           </div>
           <div style="display:flex;gap:12px;margin-top:16px;align-items:center;">
             <button class="btn btn-primary" id="btn-add-subject">
-              <span class="material-symbols-outlined" style="font-size:15px;">add</span>הוסף נושא
+              <span class="material-symbols-outlined" style="font-size:15px;">add</span>הוסף נישה
             </button>
             <button class="btn btn-ghost" id="btn-cancel-new-niche">ביטול</button>
             <div id="subject-form-result" style="font-size:13px;"></div>

@@ -3,13 +3,14 @@ const router = express.Router();
 const googleSheets = require('../services/googleSheets');
 const workflow = require('../services/workflow');
 
-// POST /api/execute — run next unsent product (optional body: { subject, platforms })
+// POST /api/execute — run next unsent product (optional body: { subject, platforms, waGroupIds })
 router.post('/execute', async (req, res) => {
   try {
-    const { subject, platforms } = req.body || {};
-    const opts = {};
-    if (platforms) opts.platforms = platforms;
+    const { subject, platforms, waGroupIds } = req.body || {};
+    const opts = { userId: req.user.id };
+    if (platforms)   opts.platforms  = platforms;
     if (subject !== undefined) opts.subject = subject;
+    if (waGroupIds)  opts.waGroupIds = waGroupIds;
     const result = await workflow.run(null, opts);
     res.json(result);
   } catch (err) {
@@ -31,9 +32,10 @@ router.post('/:rowNumber', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Product not found' });
     }
 
-    const { platforms = ['whatsapp', 'facebook'], subject } = req.body || {};
-    const opts = { platforms };
-    if (subject !== undefined) opts.subject = subject;
+    const { platforms = ['whatsapp', 'facebook'], subject, waGroupIds } = req.body || {};
+    const opts = { platforms, userId: req.user.id };
+    if (subject !== undefined) opts.subject    = subject;
+    if (waGroupIds)            opts.waGroupIds = waGroupIds;
     const result = await workflow.run(product, opts);
     res.json(result);
   } catch (err) {
