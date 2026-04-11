@@ -2,6 +2,8 @@ const express = require('express');
 const router  = express.Router();
 const { listUsers, findUserById, updateUserById, deleteUser } = require('../services/userService');
 const { createInvitation, listInvitations, deleteInvitation, validateToken } = require('../services/inviteService');
+const { query } = require('../db');
+const { getSubjects } = require('../services/googleSheets');
 
 const isAdmin = (req, res, next) => {
   if (req.user?.role === 'admin') return next();
@@ -94,6 +96,86 @@ router.delete('/invites/:id', isAdmin, async (req, res) => {
   try {
     await deleteInvitation(req.params.id);
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── Admin: one-time migrate subjects from Google Sheets → PostgreSQL ──────────
+router.post('/migrate-subjects', isAdmin, async (req, res) => {
+  try {
+    const { rows: adminRows } = await query(
+      `SELECT id, email FROM users WHERE id = $1 LIMIT 1`,
+      [req.user.id]
+    );
+    if (!adminRows.length) {
+      return res.status(400).json({ success: false, error: 'Admin user not found in DB' });
+    }
+    const adminId = adminRows[0].id;
+
+    const subjects = await getSubjects();
+    if (!subjects.length) {
+      return res.json({ success: true, inserted: 0, skipped: 0, message: 'No subjects found in Google Sheets' });
+    }
+
+    let inserted = 0;
+    let skipped  = 0;
+    const details = [];
+
+    for (const s of subjects) {
+      const { rows: existing } = await query(
+        `SELECT id FROM subjects WHERE user_id = $1 AND name = $2 LIMIT 1`,
+        [adminId, s.name]
+      );
+      if (existing.length) {
+        details.push(`skipped: ${s.name}`);
+        skipped++;
+        continue;
+      }
+
+      await query(
+        `INSERT INTO subjects
+           (user_id, name, macrodroid_url, facebook_page_id, facebook_token,
+            facebook_app_id, facebook_app_secret, instagram_account_id,
+            join_link, openai_prompt, wa_enabled, fb_enabled, instagram_enabled)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [
+          adminId,
+          s.name,
+          s.whatsappUrl        || null,
+          s.facebookPageId     || null,
+          s.facebookToken      || null,
+          s.facebookAppId      || null,
+          s.facebookAppSecret  || null,
+          s.instagramAccountId || null,
+          s.joinLink           || null,
+          s.prompt             || null,
+          s.waEnabled          !== false,
+          s.fbEnabled          !== false,
+          s.instagramEnabled   === true,
+        ]
+      );
+
+      if (s.waGroupName) {
+        const { rows: newSubj } = await query(
+          `SELECT id FROM subjects WHERE user_id = $1 AND name = $2 LIMIT 1`,
+          [adminId, s.name]
+        );
+        if (newSubj.length) {
+          await query(
+            `INSERT INTO whatsapp_groups (user_id, subject_id, name, wa_group, join_link)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [adminId, newSubj[0].id, s.waGroupName, s.waGroupName, s.joinLink || null]
+          );
+          details.push(`migrated: ${s.name} + group: ${s.waGroupName}`);
+        }
+      } else {
+        details.push(`migrated: ${s.name}`);
+      }
+      inserted++;
+    }
+
+    res.json({ success: true, inserted, skipped, details });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
