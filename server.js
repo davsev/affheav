@@ -225,6 +225,7 @@ app.listen(PORT, async () => {
     console.warn('[db] DATABASE_URL not set — skipping DB migration');
   }
   scheduler.setWorkflowRunner((opts) => workflow.run(null, opts || {}));
+  // opts contains { userId, subjectId } passed by the scheduler per job
   const count = await scheduler.startAll();
   console.log(`📅 ${count} schedule(s) loaded\n`);
 });
