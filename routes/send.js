@@ -1,15 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const googleSheets = require('../services/googleSheets');
+const { query } = require('../db');
 const workflow = require('../services/workflow');
 
-// POST /api/execute — run next unsent product (optional body: { subject, platforms })
+// POST /api/send/execute — run next unsent product
 router.post('/execute', async (req, res) => {
   try {
-    const { subject, platforms } = req.body || {};
-    const opts = {};
-    if (platforms) opts.platforms = platforms;
-    if (subject !== undefined) opts.subject = subject;
+    const { subject, platforms, waGroupIds } = req.body || {};
+    const opts = { userId: req.user.id };
+    if (platforms)              opts.platforms  = platforms;
+    if (subject !== undefined)  opts.subject    = subject;
+    if (waGroupIds)             opts.waGroupIds = waGroupIds;
     const result = await workflow.run(null, opts);
     res.json(result);
   } catch (err) {
@@ -17,23 +18,32 @@ router.post('/execute', async (req, res) => {
   }
 });
 
-// POST /api/send/:rowNumber — send a specific product by row number
-router.post('/:rowNumber', async (req, res) => {
-  const rowNumber = parseInt(req.params.rowNumber, 10);
-  if (isNaN(rowNumber)) {
-    return res.status(400).json({ success: false, error: 'Invalid row number' });
-  }
-
+// POST /api/send/:id — send a specific product by UUID
+router.post('/:id', async (req, res) => {
   try {
-    const products = await googleSheets.getAllProducts();
-    const product = products.find(p => p.row_number === rowNumber);
-    if (!product) {
-      return res.status(404).json({ success: false, error: 'Product not found' });
-    }
+    const { rows } = await query(
+      'SELECT * FROM products WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ success: false, error: 'Product not found' });
 
-    const { platforms = ['whatsapp', 'facebook'], subject } = req.body || {};
-    const opts = { platforms };
-    if (subject !== undefined) opts.subject = subject;
+    const r = rows[0];
+    const product = {
+      id:        r.id,
+      long_url:  r.long_url   || '',
+      Link:      r.short_link || '',
+      image:     r.image      || '',
+      Text:      r.text       || '',
+      join_link: r.join_link  || '',
+      wa_group:  r.wa_group   || '',
+      sent:      r.sent_at    ? new Date(r.sent_at).toISOString() : '',
+      subject:   r.subject_id || '',
+    };
+
+    const { platforms = ['whatsapp', 'facebook', 'instagram'], subject, waGroupIds } = req.body || {};
+    const opts = { platforms, userId: req.user.id };
+    if (subject !== undefined) opts.subject    = subject;
+    if (waGroupIds)            opts.waGroupIds = waGroupIds;
     const result = await workflow.run(product, opts);
     res.json(result);
   } catch (err) {

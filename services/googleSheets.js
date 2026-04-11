@@ -302,4 +302,15 @@ async function getRecentLogs(limit = 500) {
   }
 }
 
-module.exports = { getAllProducts, getNextUnsent, markSent, addProduct, updateProductText, updateProductLink, getSetting, setSetting, moveRow, syncClicks, getSubjects, saveSubjects, appendLogs, getRecentLogs };
+// Mark a row as migrated to DB (writes "✓ DB" in column D)
+async function markMigratedToDb(rowNumber) {
+  const sheets = await getClient();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `${SHEET_NAME}!D${rowNumber}`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [['✓ DB']] },
+  });
+}
+
+module.exports = { getAllProducts, getNextUnsent, markSent, addProduct, updateProductText, updateProductLink, getSetting, setSetting, moveRow, syncClicks, getSubjects, saveSubjects, appendLogs, getRecentLogs, markMigratedToDb };
