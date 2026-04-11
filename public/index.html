@@ -734,6 +734,24 @@
           <div style="padding:40px;text-align:center;color:var(--on-surface-var);">טוען...</div>
         </div>
       </div>
+
+      <!-- Admin tools -->
+      <div class="card" style="margin-top:24px;">
+        <div class="toolbar" style="margin-bottom:16px;">
+          <h2 style="font-size:16px;font-weight:700;margin:0;">כלי מנהל</h2>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:14px;font-weight:600;margin-bottom:4px;">ייבוא נישות מ-Google Sheets</div>
+            <div style="font-size:12px;color:var(--on-surface-var);">מעביר נישות קיימות מה-Settings tab לבסיס הנתונים. בטוח להפעיל מספר פעמים.</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btn-migrate-subjects" style="white-space:nowrap;">
+            <span class="material-symbols-outlined" style="font-size:15px;">cloud_download</span>
+            הפעל ייבוא
+          </button>
+        </div>
+        <div id="migrate-subjects-result" style="margin-top:12px;font-size:13px;min-height:18px;"></div>
+      </div>
     </div><!-- /tab-users -->
 
   </div><!-- /content -->
