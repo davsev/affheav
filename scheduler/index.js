@@ -12,6 +12,53 @@ function stopAll() {
   activeJobs = {};
 }
 
+// ── Single-job scheduling ─────────────────────────────────────────────────────
+// Stops any existing job for s.id, then schedules it fresh (if enabled).
+// Used by add/update so we never restart unrelated running jobs.
+function _scheduleOne(s) {
+  if (activeJobs[s.id]) {
+    activeJobs[s.id].stop();
+    delete activeJobs[s.id];
+  }
+  if (!s.enabled) return;
+  if (!cron.validate(s.cron)) {
+    console.warn(`[scheduler] Invalid cron: "${s.cron}" (id: ${s.id})`);
+    return;
+  }
+  activeJobs[s.id] = cron.schedule(s.cron, async () => {
+    // Acquire advisory lock — prevents duplicate firing when multiple instances run
+    let acquired = false;
+    try {
+      const { rows } = await query(
+        `SELECT pg_try_advisory_lock(('x' || substr(md5($1), 1, 16))::bit(64)::bigint) AS acquired`,
+        [s.id]
+      );
+      acquired = rows[0].acquired;
+    } catch (err) {
+      console.error(`[scheduler] Lock check failed for job ${s.id}:`, err.message);
+    }
+    if (!acquired) {
+      console.log(`[scheduler] Skipping job "${s.label}" — already running on another instance`);
+      return;
+    }
+    console.log(`[scheduler] Firing job: ${s.label} (${s.cron})`);
+    try {
+      if (_runWorkflow) {
+        await _runWorkflow({ userId: s.user_id, subjectId: s.subject_id || undefined });
+      }
+    } catch (err) {
+      console.error(`[scheduler] Workflow error in job ${s.id}:`, err.message);
+    } finally {
+      await query(
+        `SELECT pg_advisory_unlock(('x' || substr(md5($1), 1, 16))::bit(64)::bigint)`,
+        [s.id]
+      ).catch(e => console.error(`[scheduler] Lock release failed for job ${s.id}:`, e.message));
+    }
+  }, { timezone: 'Asia/Jerusalem' });
+  console.log(`[scheduler] Scheduled: ${s.label} → ${s.cron}`);
+}
+
+// ── Bulk startup ──────────────────────────────────────────────────────────────
 async function startAll() {
   let schedules = [];
   try {
@@ -23,25 +70,7 @@ async function startAll() {
   }
 
   stopAll();
-
-  for (const s of schedules) {
-    if (!cron.validate(s.cron)) {
-      console.warn(`[scheduler] Invalid cron: "${s.cron}" (id: ${s.id})`);
-      continue;
-    }
-    activeJobs[s.id] = cron.schedule(s.cron, async () => {
-      console.log(`[scheduler] Firing job: ${s.label} (${s.cron})`);
-      if (_runWorkflow) {
-        try {
-          await _runWorkflow({ userId: s.user_id, subjectId: s.subject_id || undefined });
-        } catch (err) {
-          console.error(`[scheduler] Workflow error in job ${s.id}:`, err.message);
-        }
-      }
-    }, { timezone: 'Asia/Jerusalem' });
-    console.log(`[scheduler] Scheduled: ${s.label} → ${s.cron}`);
-  }
-
+  for (const s of schedules) _scheduleOne(s);
   return schedules.length;
 }
 
@@ -63,7 +92,7 @@ async function add({ userId, label, cron: cronExpr, enabled = true, subjectId = 
      VALUES ($1,$2,$3,$4,$5) RETURNING *`,
     [userId, subjectId, label, cronExpr, enabled]
   );
-  await startAll();
+  _scheduleOne(rows[0]); // only starts the new job — others keep running
   return _formatRow(rows[0]);
 }
 
@@ -86,14 +115,14 @@ async function update(id, userId, { label, cron: cronExpr, enabled, subject }) {
      WHERE id = $5 AND user_id = $6
      RETURNING *`,
     [
-      label   ?? null,
+      label    ?? null,
       cronExpr ?? null,
       enabled  ?? null,
       subject !== undefined ? (subject || null) : cur.subject_id,
       id, userId,
     ]
   );
-  await startAll();
+  _scheduleOne(rows[0]); // only restarts this job — others keep running
   return _formatRow(rows[0]);
 }
 

@@ -18,27 +18,32 @@ No test runner or linter is configured.
 ### Data Flow
 
 ```
-User/Cron → POST /api/send → workflow.js → googleSheets.js (fetch unsent product)
+User/Cron → POST /api/send → workflow.js → db (fetch unsent product)
+                                         → spooMe.js (shorten URL via spoo.me)
                                          → openai.js (generate Hebrew message)
                                          → whatsapp.js (MacroDroid webhook)
                                          → facebook.js (Graph API)
                                          → instagram.js (Content Publishing API)
-                                         → googleSheets.js (mark sent + log)
+                                         → db (mark sent + log)
 ```
 
 ### Key Modules
 
-- **server.js** — Express app, Passport Google OAuth, SSE log streaming, route mounting
+- **server.js** — Express app, Passport Google OAuth, SSE log streaming (ring buffer, 500 entries), route mounting
 - **services/workflow.js** — Orchestrates the full product-send pipeline
-- **services/googleSheets.js** — Primary data store: products, schedules, settings, logs, subjects (niches)
+- **services/googleSheets.js** — Legacy sync only (products migration from Sheets); logs still flushed here every 60s
+- **services/subjectService.js** — Subject/niche CRUD against PostgreSQL
+- **services/promptStore.js** — Per-subject OpenAI prompt persistence
+- **services/spooMe.js** — URL shortening via spoo.me API (`SPOOME_API_KEY`); also fetches click stats for all account URLs
 - **services/openai.js** — Generates Hebrew marketing messages; adds Shabbat/Motzei Shabbat greetings based on day/time in `Asia/Jerusalem`
-- **scheduler/index.js** — node-cron job manager; schedules loaded from Google Sheets on startup
-- **routes/** — One file per resource: products, send, schedules, subjects, facebook, prompt, scrape, aliexpress-api
-- **public/app.js** — Vanilla JS frontend (1631 lines), Hebrew RTL dark-theme UI
+- **scheduler/index.js** — node-cron job manager; schedules loaded from DB on startup
+- **routes/** — One file per resource: products, send, schedules, subjects, facebook, prompt, scrape, aliexpress-api, users
+- **public/app.js** — Vanilla JS frontend, Hebrew RTL dark-theme UI
+- **scrapers/aliexpress.js** — Playwright-based AliExpress product scraper
 
 ### Multi-Niche (Subjects)
 
-Each "subject" (niche) has its own WhatsApp group, Facebook page, Instagram account, MacroDroid webhook, and optional OpenAI prompt override. Products are tagged with `subject=id` in Google Sheets column K. Schedules can be scoped to a specific subject.
+Each "subject" (niche) has its own WhatsApp group(s), Facebook page, Instagram account, MacroDroid webhook, and optional OpenAI prompt override. A subject can have multiple `whatsapp_groups` rows (separate table) — products carry a `whatsapp_group_id` FK. Schedules can be scoped to a specific subject.
 
 ### Authentication & User Management
 
@@ -51,7 +56,7 @@ Google OAuth 2.0 via Passport.js. Invite-only registration: admin sends email in
 
 ### Database (PostgreSQL)
 
-All data is stored in PostgreSQL (replaces Google Sheets as primary store — Sheets still used for legacy product sync). Tables: `users`, `invitations`, `subjects`, `products`, `schedules`, `settings`, `logs`. Schema is auto-migrated on startup via `db/migrate.js` (idempotent `CREATE TABLE IF NOT EXISTS`).
+All data is stored in PostgreSQL (primary store). Google Sheets is legacy-only (one-time product migration via `db/migrate-subjects-from-sheets.js`; logs still appended there). Tables: `users`, `invitations`, `subjects`, `whatsapp_groups`, `products`, `schedules`, `settings`, `logs`. Schema is auto-migrated on startup via `db/migrate.js` (idempotent `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE` for columns added post-initial migration).
 
 - **`db/index.js`** — `pg` Pool, exports `query(sql, params)`
 - **`db/migrate.js`** — idempotent schema creation, called on startup if `DATABASE_URL` is set
@@ -84,4 +89,5 @@ SESSION_SECRET=...
 DATABASE_URL=postgresql://...         # Railway PostgreSQL plugin sets this automatically
 ADMIN_GOOGLE_EMAIL=your@gmail.com     # Bootstrap super-admin on first login
 APP_BASE_URL=https://...              # Used for generating invite links
+SPOOME_API_KEY=...                    # spoo.me URL shortening + click tracking (optional)
 ```

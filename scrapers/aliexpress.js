@@ -9,7 +9,7 @@
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
-const { getSetting, setSetting } = require('../services/googleSheets');
+const { query } = require('../db');
 
 const COOKIES_FILE = path.join(__dirname, '../config/portal-cookies.json');
 const TRACKING_ID = process.env.ALIEXPRESS_TRACKING_ID || 'TechSalebuy';
@@ -18,31 +18,43 @@ const SEARCH_URL = 'https://www.aliexpress.com/w/wholesale-fishing.html?sortType
 
 // ── Cookie helpers ─────────────────────────────────────────────────────────────
 
-async function loadCookies() {
+async function loadCookies(userId) {
   // Try local file first
   if (fs.existsSync(COOKIES_FILE)) {
     try {
       return JSON.parse(fs.readFileSync(COOKIES_FILE, 'utf8'));
     } catch { /* fall through */ }
   }
-  // Fall back to Google Sheets
-  try {
-    const saved = await getSetting('portal_cookies');
-    if (saved) return JSON.parse(saved);
-  } catch { /* ignore */ }
+  // Fall back to DB
+  if (userId) {
+    try {
+      const { rows } = await query(
+        `SELECT value FROM settings WHERE user_id = $1 AND key = 'portal_cookies' LIMIT 1`,
+        [userId]
+      );
+      if (rows[0]?.value) return JSON.parse(rows[0].value);
+    } catch { /* ignore */ }
+  }
   return null;
 }
 
-async function saveCookies(cookies) {
+async function saveCookies(userId, cookies) {
   // Save locally
   try {
     fs.mkdirSync(path.dirname(COOKIES_FILE), { recursive: true });
     fs.writeFileSync(COOKIES_FILE, JSON.stringify(cookies, null, 2));
   } catch { /* ignore */ }
-  // Save to Google Sheets for Railway
-  try {
-    await setSetting('portal_cookies', JSON.stringify(cookies));
-  } catch { /* ignore */ }
+  // Save to DB for Railway (survives restarts)
+  if (userId) {
+    try {
+      await query(
+        `INSERT INTO settings (user_id, key, value)
+         VALUES ($1, 'portal_cookies', $2)
+         ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [userId, JSON.stringify(cookies)]
+      );
+    } catch { /* ignore */ }
+  }
 }
 
 // ── Single product scraper ─────────────────────────────────────────────────────
@@ -88,8 +100,8 @@ async function scrapeProduct(url) {
 
 // ── Fishing product search + affiliate link generation ─────────────────────────
 
-async function searchFishingProducts({ limit = 10, wa_group = '', join_link = '' } = {}) {
-  const cookies = await loadCookies();
+async function searchFishingProducts({ limit = 10, wa_group = '', join_link = '', userId = null } = {}) {
+  const cookies = await loadCookies(userId);
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
@@ -167,7 +179,7 @@ async function searchFishingProducts({ limit = 10, wa_group = '', join_link = ''
 
     // Save cookies now that we know we're logged in
     const updatedCookies = await context.cookies();
-    await saveCookies(updatedCookies);
+    await saveCookies(userId, updatedCookies);
 
     for (const product of products) {
       try {
@@ -242,8 +254,8 @@ async function searchFishingProducts({ limit = 10, wa_group = '', join_link = ''
 
 // ── Save portal cookies (called after manual login flow) ───────────────────────
 
-async function savePortalCookiesFromContext(cookies) {
-  await saveCookies(cookies);
+async function savePortalCookiesFromContext(cookies, userId = null) {
+  await saveCookies(userId, cookies);
 }
 
 module.exports = { scrapeProduct, searchFishingProducts, savePortalCookiesFromContext };
