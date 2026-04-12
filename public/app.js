@@ -1222,6 +1222,7 @@ async function loadSchedules() {
           </div>
         </div>
         <div class="schedule-actions">
+          <button class="btn btn-sm" style="background:rgba(22,163,74,0.12);color:#16a34a;border:1px solid rgba(22,163,74,0.2);font-size:13px;padding:4px 10px;" onclick="fireScheduleNow('${s.id}')" title="הרץ עכשיו">▶</button>
           <label class="toggle" title="${s.enabled ? 'פעיל' : 'לא פעיל'}">
             <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleSchedule('${s.id}', this.checked)" />
             <span class="slider"></span>
@@ -1266,6 +1267,14 @@ window.deleteSchedule = async (id) => {
   try {
     await api(`/api/schedules/${id}`, { method: 'DELETE' });
     await loadSchedules();
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
+
+window.fireScheduleNow = async (id) => {
+  try {
+    await api(`/api/schedules/${id}/fire`, { method: 'POST' });
   } catch (err) {
     alert('שגיאה: ' + err.message);
   }
