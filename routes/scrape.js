@@ -1,8 +1,23 @@
 const express = require('express');
 const router = express.Router();
 const { scrapeProduct, searchFishingProducts } = require('../scrapers/aliexpress');
-const googleSheets = require('../services/googleSheets');
 const workflow = require('../services/workflow');
+const { query } = require('../db');
+const { shortenUrl } = require('../services/spooMe');
+
+async function saveProductToDB(userId, { Link, image, Text, join_link, wa_group, subject }) {
+  const shortLink = await shortenUrl(Link);
+  const { rows: maxRow } = await query(
+    'SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM products WHERE user_id = $1',
+    [userId]
+  );
+  await query(
+    `INSERT INTO products (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, sort_order)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [userId, subject || null, Link, shortLink, image, Text, join_link, wa_group, maxRow[0].next_order]
+  );
+  return shortLink;
+}
 
 // POST /api/scrape/aliexpress
 // Body: { url, join_link, wa_group, autoSend (bool) }
@@ -18,23 +33,17 @@ router.post('/aliexpress', async (req, res) => {
     const { text, image, affiliateLink } = await scrapeProduct(url);
     workflow.log(`Scraped: "${text}"`);
 
-    const product = {
-      Link: affiliateLink,
-      image,
-      Text: text,
-      join_link,
-      wa_group,
-      subject,
-    };
+    const product = { Link: affiliateLink, image, Text: text, join_link, wa_group, subject };
 
-    // Save to Google Sheet
-    await googleSheets.addProduct(product);
-    workflow.log(`✓ Product added to Google Sheet`);
+    const shortLink = await saveProductToDB(req.user.id, product);
+    workflow.log(`✓ Product saved to DB`);
 
-    // Optionally send immediately
     if (autoSend) {
       workflow.log(`Auto-sending product...`);
-      const result = await workflow.run({ ...product, row_number: null });
+      const result = await workflow.run(
+        { ...product, Link: shortLink },
+        { userId: req.user.id, subject: subject || undefined }
+      );
       return res.json({ success: true, product, sendResult: result });
     }
 
@@ -53,15 +62,15 @@ router.post('/fishing-search', async (req, res) => {
   workflow.log(`🔍 Starting fishing product search (limit: ${limit})...`);
 
   try {
-    const products = await searchFishingProducts({ limit, wa_group, join_link });
+    const products = await searchFishingProducts({ limit, wa_group, join_link, userId: req.user.id });
 
-    workflow.log(`Found ${products.length} products — saving to Google Sheet...`);
+    workflow.log(`Found ${products.length} products — saving to DB...`);
 
     let saved = 0;
     let skipped = 0;
     for (const product of products) {
       try {
-        await googleSheets.addProduct({ ...product, subject });
+        await saveProductToDB(req.user.id, { ...product, subject });
         workflow.log(`✓ Added: ${product.Text?.slice(0, 60)}${product.affiliateGenerated ? ' (affiliate ✓)' : ' (no affiliate)'}`);
         saved++;
       } catch (err) {

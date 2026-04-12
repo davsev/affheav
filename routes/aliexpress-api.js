@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const axios = require('axios');
-const googleSheets = require('../services/googleSheets');
 const workflow = require('../services/workflow');
 const { query } = require('../db');
 
@@ -86,14 +85,14 @@ router.post('/search', async (req, res) => {
   }
 });
 
-// GET /api/aliexpress/existing — returns Set of long_urls already in the sheet
+// GET /api/aliexpress/existing — returns long_urls already in DB
 router.get('/existing', async (req, res) => {
   try {
-    const products = await googleSheets.getAllProducts({ includeAll: true });
-    const urls = products
-      .map(p => p.long_url)
-      .filter(Boolean);
-    res.json({ success: true, urls });
+    const { rows } = await query(
+      'SELECT long_url FROM products WHERE user_id = $1 AND long_url IS NOT NULL',
+      [req.user.id]
+    );
+    res.json({ success: true, urls: rows.map(r => r.long_url) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message, urls: [] });
   }

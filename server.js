@@ -2,12 +2,13 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session);
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const workflow = require('./services/workflow');
 const scheduler = require('./scheduler');
-const { appendLogs, getRecentLogs } = require('./services/googleSheets');
 const { migrate } = require('./db/migrate');
+const { query, pool } = require('./db');
 const { findUser, createUser, updateUser } = require('./services/userService');
 const { validateToken, markUsed } = require('./services/inviteService');
 
@@ -16,7 +17,7 @@ app.set('trust proxy', 1); // Trust Railway/proxy HTTPS headers
 app.use(express.json());
 
 // ── Session ───────────────────────────────────────────────────────────────────
-app.use(session({
+const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'dev-secret-change-in-prod',
   resave: false,
   saveUninitialized: false,
@@ -24,7 +25,19 @@ app.use(session({
     secure: process.env.NODE_ENV === 'production',
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
   },
-}));
+};
+
+// Persist sessions to PostgreSQL so restarts don't log everyone out
+if (process.env.DATABASE_URL) {
+  sessionConfig.store = new pgSession({
+    pool,
+    tableName: 'sessions',
+    createTableIfMissing: true, // auto-creates the sessions table
+    pruneSessionInterval: 60 * 60, // prune expired sessions every hour
+  });
+}
+
+app.use(session(sessionConfig));
 
 // ── Passport / Google OAuth ───────────────────────────────────────────────────
 app.use(passport.initialize());
@@ -135,22 +148,15 @@ app.get('/api/me', (req, res) => {
   res.json({ success: true, user: { id, email, name, photo, role } });
 });
 
-// ── Load persisted prompt ─────────────────────────────────────────────────────
+// ── Prompt store (loaded from DB after startup) ───────────────────────────────
 const promptStore = require('./services/promptStore');
-const { getSetting } = require('./services/googleSheets');
-getSetting('openai_prompt').then(saved => {
-  if (saved) {
-    promptStore.set(saved);
-    console.log('✓ Loaded prompt from Google Sheets');
-  }
-}).catch(() => {});
 
 // ── SSE Log Stream ────────────────────────────────────────────────────────────
 const sseClients = new Set();
 const logHistory = [];
 const LOG_HISTORY_MAX = 500;
 
-// Buffer for pending log entries not yet flushed to Google Sheets
+// Buffer for pending log entries not yet flushed to PostgreSQL
 let _pendingLogs = [];
 
 app.get('/api/logs', isAuthenticated, (req, res) => {
@@ -163,12 +169,15 @@ app.get('/api/logs', isAuthenticated, (req, res) => {
   req.on('close', () => sseClients.delete(res));
 });
 
-// Persistent log history from Google Sheets (authenticated)
+// Persistent log history from PostgreSQL (authenticated)
 app.get('/api/logs/history', isAuthenticated, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 500, 2000);
-    const logs = await getRecentLogs(limit);
-    res.json({ success: true, logs });
+    const { rows } = await query(
+      'SELECT ts, level, msg FROM logs ORDER BY ts DESC LIMIT $1',
+      [limit]
+    );
+    res.json({ success: true, logs: rows.reverse() });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -182,18 +191,26 @@ function emitLog(entry) {
   for (const client of sseClients) client.write(data);
 }
 
-// Flush pending logs to Google Sheets every 60 seconds
-setInterval(async () => {
+// Flush pending logs to PostgreSQL every 60 seconds
+async function flushLogs(entries) {
+  if (!entries.length) return;
+  try {
+    const values = entries.flatMap(e => [e.ts, e.level, e.msg]);
+    const placeholders = entries.map((_, i) => `($${i * 3 + 1}, $${i * 3 + 2}, $${i * 3 + 3})`).join(', ');
+    await query(`INSERT INTO logs (ts, level, msg) VALUES ${placeholders}`, values);
+  } catch (err) {
+    console.error('[logs] DB flush failed:', err.message);
+  }
+}
+
+setInterval(() => {
   if (_pendingLogs.length === 0) return;
-  const batch = _pendingLogs.splice(0);
-  await appendLogs(batch);
+  flushLogs(_pendingLogs.splice(0));
 }, 60 * 1000);
 
 // Flush on graceful shutdown
 process.on('SIGTERM', async () => {
-  if (_pendingLogs.length > 0) {
-    await appendLogs(_pendingLogs.splice(0));
-  }
+  if (_pendingLogs.length > 0) await flushLogs(_pendingLogs.splice(0));
   process.exit(0);
 });
 
@@ -221,6 +238,19 @@ app.listen(PORT, async () => {
   console.log(`\n🎯 Affiliate Heaven running at http://localhost:${PORT}\n`);
   if (process.env.DATABASE_URL) {
     await migrate().catch(err => console.error('[db] Migration failed:', err.message));
+    // Load persisted prompt from DB (admin user's settings)
+    try {
+      const { rows } = await query(
+        `SELECT s.value FROM settings s
+         JOIN users u ON u.id = s.user_id
+         WHERE u.role = 'admin' AND s.key = 'openai_prompt'
+         LIMIT 1`
+      );
+      if (rows[0]?.value) {
+        promptStore.set(rows[0].value);
+        console.log('✓ Loaded prompt from DB');
+      }
+    } catch { /* non-fatal */ }
   } else {
     console.warn('[db] DATABASE_URL not set — skipping DB migration');
   }
