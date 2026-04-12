@@ -104,6 +104,8 @@ async function migrate() {
       ADD COLUMN IF NOT EXISTS whatsapp_group_id UUID REFERENCES whatsapp_groups(id) ON DELETE SET NULL
   `);
   await query(`CREATE INDEX IF NOT EXISTS products_wa_group_id ON products(whatsapp_group_id)`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS skip_ai BOOLEAN NOT NULL DEFAULT false`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS send_count INTEGER NOT NULL DEFAULT 0`);
 
   // ── Schedules ─────────────────────────────────────────────────────────────
   await query(`
