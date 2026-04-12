@@ -3,9 +3,16 @@ const { query } = require('../db');
 
 let activeJobs = {}; // id → cron.ScheduledTask
 let _runWorkflow = null;
+let _log = null; // injected from server.js so scheduler events appear in the UI log stream
 
 function setWorkflowRunner(fn) { _runWorkflow = fn; }
+function setLogger(fn) { _log = fn; }
 function getActiveJobs() { return activeJobs; }
+
+function log(msg, level = 'info') {
+  if (_log) _log(`[scheduler] ${msg}`, level);
+  else console.log(`[scheduler] [${level}] ${msg}`);
+}
 
 function stopAll() {
   for (const job of Object.values(activeJobs)) job.stop();
@@ -30,13 +37,15 @@ async function startAll() {
       continue;
     }
     activeJobs[s.id] = cron.schedule(s.cron, async () => {
-      console.log(`[scheduler] Firing job: ${s.label} (${s.cron})`);
+      log(`Firing job: "${s.label}" (${s.cron})`);
       if (_runWorkflow) {
         try {
           await _runWorkflow({ userId: s.user_id, subject: s.subject_id || undefined });
         } catch (err) {
-          console.error(`[scheduler] Workflow error in job ${s.id}:`, err.message);
+          log(`Workflow error in job "${s.label}": ${err.message}`, 'error');
         }
+      } else {
+        log('No workflow runner registered — job skipped', 'warn');
       }
     }, { timezone: 'Asia/Jerusalem' });
     console.log(`[scheduler] Scheduled: ${s.label} → ${s.cron}`);
@@ -106,4 +115,4 @@ async function remove(id, userId) {
   if (activeJobs[id]) { activeJobs[id].stop(); delete activeJobs[id]; }
 }
 
-module.exports = { startAll, stopAll, getActiveJobs, add, update, remove, setWorkflowRunner };
+module.exports = { startAll, stopAll, getActiveJobs, add, update, remove, setWorkflowRunner, setLogger };
