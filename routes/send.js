@@ -38,6 +38,7 @@ router.post('/:id', async (req, res) => {
       wa_group:  r.wa_group   || '',
       sent:      r.sent_at    ? new Date(r.sent_at).toISOString() : '',
       subject:   r.subject_id || '',
+      skip_ai:   r.skip_ai    || false,
     };
 
     const { platforms = ['whatsapp', 'facebook', 'instagram'], subject, waGroupIds } = req.body || {};

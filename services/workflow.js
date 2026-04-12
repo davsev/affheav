@@ -59,6 +59,7 @@ async function getNextUnsent({ userId, subject } = {}) {
     wa_group:  r.wa_group    || '',
     sent:      r.sent_at     ? new Date(r.sent_at).toISOString() : '',
     subject:   r.subject_id  || '',
+    skip_ai:   r.skip_ai     || false,
   };
 }
 
@@ -80,6 +81,7 @@ async function markSent(productId, { sentAt, facebookAt, instagramAt } = {}) {
     values.push(instagramAt ? new Date(instagramAt) : null);
   }
   if (!updates.length) return;
+  updates.push(`send_count = send_count + 1`);
   updates.push(`updated_at = NOW()`);
   values.push(productId);
   await query(`UPDATE products SET ${updates.join(', ')} WHERE id = $${i}`, values);
@@ -131,7 +133,10 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
   const hasNichePrompt = !!(subjectConfig?.prompt && subjectConfig.prompt.trim());
   const isSavedMessage = !hasNichePrompt && /[\u05D0-\u05EA]/.test(product.Text) && product.Link && product.Text.includes(product.Link);
   let message;
-  if (isSavedMessage) {
+  if (product.skip_ai) {
+    message = product.Text;
+    log(`skip_ai flag set — using product text as-is (${message.length} chars)`);
+  } else if (isSavedMessage) {
     message = product.Text;
     log(`Using saved Hebrew message (${message.length} chars)`);
   } else {

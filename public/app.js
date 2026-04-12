@@ -878,6 +878,9 @@ function renderProducts(products) {
     const clicksCell = p.clicks == null
       ? '<span style="color:var(--label-4);font-size:11px;">—</span>'
       : `<span style="font-weight:600;color:var(--blue);">${p.clicks}</span>`;
+    const sendCountBadge = p.send_count > 1
+      ? `<span style="font-size:10px;color:var(--on-surface-var);margin-right:4px;" title="נשלח ${p.send_count} פעמים">(×${p.send_count})</span>`
+      : '';
     return `
     <tr draggable="true" data-row="${p.row_number}">
       <td><span class="drag-handle" title="גרור לסידור מחדש">⠿</span></td>
@@ -885,10 +888,15 @@ function renderProducts(products) {
       <td style="max-width:200px;word-break:break-word;">${escHtml(p.Text)}</td>
       <td><a href="${escHtml(p.Link)}" target="_blank" style="color:var(--blue);font-size:12px;" dir="ltr">🔗 קישור</a></td>
       <td>${escHtml(p.wa_group)}</td>
-      <td>${p.sent ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>` : '<span class="badge badge-unsent">טרם נשלח</span>'}</td>
+      <td>${sendCountBadge}${p.sent ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>` : '<span class="badge badge-unsent">טרם נשלח</span>'}</td>
       <td>${p.facebook ? `<span class="badge badge-fb">${fmtDate(p.facebook)}</span>` : '—'}</td>
       <td>${clicksCell}</td>
-      <td><button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct('${p.id}', this)" title="${p.sent ? 'שלח שוב' : 'שלח'}">▶ שלח</button></td>
+      <td style="white-space:nowrap;display:flex;gap:4px;align-items:center;">
+        <button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct('${p.id}', this)" title="${p.sent ? 'שלח שוב' : 'שלח'}">▶ שלח</button>
+        <button class="btn btn-sm btn-ghost" onclick="editProduct('${p.id}')" title="ערוך טקסט">✏</button>
+        ${p.sent ? `<button class="btn btn-sm btn-ghost" onclick="unsendProduct('${p.id}', this)" title="החזר למוצרים שלא נשלחו" style="font-size:11px;">↩</button>` : ''}
+        <button class="btn btn-sm btn-ghost" onclick="deleteProduct('${p.id}', this)" title="מחק מוצר" style="color:#f87171;">✕</button>
+      </td>
     </tr>`;
   }).join('');
 
@@ -907,6 +915,9 @@ function renderProducts(products) {
         const sentBadge = p.sent
           ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>`
           : `<span class="badge badge-unsent">ממתין</span>`;
+        const sendCountBadge = p.send_count > 1
+          ? `<span style="font-size:10px;color:var(--on-surface-var);" title="נשלח ${p.send_count} פעמים">×${p.send_count}</span>`
+          : '';
         return `
         <div class="product-card">
           ${p.image
@@ -916,12 +927,18 @@ function renderProducts(products) {
             <div class="product-card-title">${escHtml(p.Text)}</div>
             <div class="product-card-meta">
               ${sentBadge}
+              ${sendCountBadge}
               ${clicksHtml}
             </div>
           </div>
           <div class="product-card-footer">
             <a href="${escHtml(p.Link)}" target="_blank" style="color:var(--accent);font-size:12px;" dir="ltr">🔗 קישור</a>
-            <button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct('${p.id}', this)">▶ שלח</button>
+            <div style="display:flex;gap:4px;">
+              <button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct('${p.id}', this)">▶ שלח</button>
+              <button class="btn btn-sm btn-ghost" onclick="editProduct('${p.id}')" title="ערוך טקסט">✏</button>
+              ${p.sent ? `<button class="btn btn-sm btn-ghost" onclick="unsendProduct('${p.id}', this)" title="החזר למוצרים שלא נשלחו" style="font-size:11px;">↩</button>` : ''}
+              <button class="btn btn-sm btn-ghost" onclick="deleteProduct('${p.id}', this)" title="מחק מוצר" style="color:#f87171;">✕</button>
+            </div>
           </div>
         </div>`;
       }).join('');
@@ -991,6 +1008,78 @@ async function loadProducts() {
     tbody.innerHTML = `<tr><td colspan="9" class="empty-state" style="color:#f87171;">${escHtml(err.message)}</td></tr>`;
   }
 }
+
+window.deleteProduct = async (id, btn) => {
+  if (!confirm('למחוק את המוצר לצמיתות?')) return;
+  btn.disabled = true;
+  try {
+    await api(`/api/products/${id}`, { method: 'DELETE' });
+    await loadProducts();
+  } catch (err) {
+    alert('שגיאה במחיקה: ' + err.message);
+    btn.disabled = false;
+  }
+};
+
+window.unsendProduct = async (id, btn) => {
+  if (!confirm('להחזיר את המוצר לרשימת המוצרים שטרם נשלחו?')) return;
+  btn.disabled = true;
+  try {
+    await api(`/api/products/${id}/unsend`, { method: 'POST' });
+    await loadProducts();
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+    btn.disabled = false;
+  }
+};
+
+window.editProduct = (id) => {
+  const product = _lastProducts.find(p => p.id === id);
+  if (!product) return;
+
+  const modal   = document.getElementById('edit-product-modal');
+  const textarea = document.getElementById('edit-product-text');
+  const skipAi  = document.getElementById('edit-product-skip-ai');
+  const result  = document.getElementById('edit-product-result');
+  const confirmBtn = document.getElementById('edit-product-confirm');
+  const cancelBtn  = document.getElementById('edit-product-cancel');
+
+  textarea.value   = product.Text;
+  skipAi.checked   = product.skip_ai || false;
+  result.textContent = '';
+  modal.style.display = 'flex';
+
+  const cleanup = () => {
+    modal.style.display = 'none';
+    confirmBtn.removeEventListener('click', onConfirm);
+    cancelBtn.removeEventListener('click', onCancel);
+  };
+
+  const onCancel = () => cleanup();
+
+  const onConfirm = async () => {
+    const newText = textarea.value.trim();
+    if (!newText) { result.textContent = 'טקסט לא יכול להיות ריק'; result.style.color = '#f87171'; return; }
+    confirmBtn.disabled = true;
+    result.textContent = 'שומר...';
+    result.style.color = 'var(--on-surface-var)';
+    try {
+      await api(`/api/products/${id}`, { method: 'PUT', body: { Text: newText, skip_ai: skipAi.checked } });
+      result.textContent = '✓ נשמר';
+      result.style.color = '#4ade80';
+      await loadProducts();
+      setTimeout(cleanup, 800);
+    } catch (err) {
+      result.textContent = '✗ ' + err.message;
+      result.style.color = '#f87171';
+    } finally {
+      confirmBtn.disabled = false;
+    }
+  };
+
+  confirmBtn.addEventListener('click', onConfirm);
+  cancelBtn.addEventListener('click', onCancel);
+};
 
 window.sendProduct = async (rowNumber, btn) => {
   const modal = document.getElementById('send-modal');

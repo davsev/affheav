@@ -95,6 +95,25 @@
   </div>
 </div>
 
+<!-- ── Edit Product Modal ──────────────────────────────────────────────── -->
+<div id="edit-product-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;">
+  <div class="modal-box" style="width:min(480px,94vw);">
+    <div class="modal-title">עריכת טקסט מוצר</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px;">
+      <textarea id="edit-product-text" rows="6" style="width:100%;background:var(--surface-1);color:var(--on-surface);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:10px 12px;font-size:13px;resize:vertical;" dir="auto"></textarea>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--on-surface-var);cursor:pointer;">
+        <input type="checkbox" id="edit-product-skip-ai" style="width:16px;height:16px;cursor:pointer;" />
+        <span>דלג על יצירת טקסט ב-OpenAI בשליחה (השתמש בטקסט כפי שהוא)</span>
+      </label>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-ghost btn-sm" id="edit-product-cancel" style="flex:1;justify-content:center;">ביטול</button>
+      <button class="btn btn-primary btn-sm" id="edit-product-confirm" style="flex:1;justify-content:center;">שמור</button>
+    </div>
+    <div id="edit-product-result" style="margin-top:8px;font-size:12px;min-height:16px;"></div>
+  </div>
+</div>
+
 <!-- ── Sidebar overlay (mobile) ───────────────────────────────────────── -->
 <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 

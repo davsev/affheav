@@ -21,6 +21,8 @@ function rowToProduct(r, idx) {
     clicks:     r.clicks      ?? null,
     subject:    r.subject_id  || '',
     sort_order: r.sort_order,
+    skip_ai:    r.skip_ai     || false,
+    send_count: r.send_count  || 0,
   };
 }
 
@@ -80,6 +82,59 @@ router.post('/', async (req, res) => {
       [req.user.id, subject || null, Link, shortLink, image || '', Text, join_link, wa_group, resolvedGroupId, maxRow[0].next_order]
     );
     res.json({ success: true, product: rowToProduct(rows[0], 0) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE /api/products/:id — remove a product
+router.delete('/:id', async (req, res) => {
+  try {
+    const { rowCount } = await query(
+      'DELETE FROM products WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+    if (!rowCount) return res.status(404).json({ success: false, error: 'Product not found' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PUT /api/products/:id — edit text and/or skip_ai flag
+router.put('/:id', async (req, res) => {
+  const { Text, skip_ai } = req.body;
+  if (Text === undefined && skip_ai === undefined) {
+    return res.status(400).json({ success: false, error: 'Nothing to update' });
+  }
+  try {
+    const updates = ['updated_at = NOW()'];
+    const values  = [];
+    let i = 1;
+    if (Text !== undefined)    { updates.push(`text = $${i++}`);    values.push(Text); }
+    if (skip_ai !== undefined) { updates.push(`skip_ai = $${i++}`); values.push(!!skip_ai); }
+    values.push(req.params.id, req.user.id);
+    const { rows } = await query(
+      `UPDATE products SET ${updates.join(', ')} WHERE id = $${i++} AND user_id = $${i} RETURNING *`,
+      values
+    );
+    if (!rows[0]) return res.status(404).json({ success: false, error: 'Product not found' });
+    res.json({ success: true, product: rowToProduct(rows[0], 0) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/products/:id/unsend — reset sent_at so product appears unsent again
+router.post('/:id/unsend', async (req, res) => {
+  try {
+    const { rowCount } = await query(
+      `UPDATE products SET sent_at = NULL, facebook_at = NULL, instagram_at = NULL, updated_at = NOW()
+       WHERE id = $1 AND user_id = $2`,
+      [req.params.id, req.user.id]
+    );
+    if (!rowCount) return res.status(404).json({ success: false, error: 'Product not found' });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
