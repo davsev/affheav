@@ -166,10 +166,15 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
   if (sendWA) {
     // Resolve which groups to send to
     let groupsToSend = [];
-    if (waGroupIds && waGroupIds.length > 0 && subject && userId) {
-      // Fetch all groups for this niche and filter to selected ids
+    if (subject && userId) {
       const allGroups = await getGroupsBySubject(subject, userId);
-      groupsToSend = allGroups.filter(g => waGroupIds.includes(g.id));
+      if (waGroupIds && waGroupIds.length > 0) {
+        // Manual send: filter to only the selected groups
+        groupsToSend = allGroups.filter(g => waGroupIds.includes(g.id));
+      } else {
+        // Scheduler (or send-all): use every group configured for this niche
+        groupsToSend = allGroups;
+      }
     }
 
     if (groupsToSend.length > 0) {
