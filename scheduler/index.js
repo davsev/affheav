@@ -36,22 +36,39 @@ async function startAll() {
       console.warn(`[scheduler] Invalid cron: "${s.cron}" (id: ${s.id})`);
       continue;
     }
-    activeJobs[s.id] = cron.schedule(s.cron, async () => {
-      log(`Firing job: "${s.label}" (${s.cron})`);
-      if (_runWorkflow) {
-        try {
-          await _runWorkflow({ userId: s.user_id, subject: s.subject_id || undefined });
-        } catch (err) {
-          log(`Workflow error in job "${s.label}": ${err.message}`, 'error');
-        }
-      } else {
-        log('No workflow runner registered — job skipped', 'warn');
-      }
-    }, { timezone: 'Asia/Jerusalem' });
-    console.log(`[scheduler] Scheduled: ${s.label} → ${s.cron}`);
+    activeJobs[s.id] = cron.schedule(s.cron, () => runJob(s), { timezone: 'Asia/Jerusalem' });
+    log(`Registered: "${s.label}" → ${s.cron}`);
+  }
+
+  if (schedules.length) {
+    log(`📅 ${schedules.length} schedule(s) active: ${schedules.map(s => `"${s.label}"`).join(', ')}`);
+  } else {
+    log('No enabled schedules found');
   }
 
   return schedules.length;
+}
+
+async function runJob(s) {
+  log(`Firing job: "${s.label}" (${s.cron})`);
+  if (_runWorkflow) {
+    try {
+      await _runWorkflow({ userId: s.user_id, subject: s.subject_id || undefined });
+    } catch (err) {
+      log(`Workflow error in job "${s.label}": ${err.message}`, 'error');
+    }
+  } else {
+    log('No workflow runner registered — job skipped', 'warn');
+  }
+}
+
+async function fireNow(id, userId) {
+  const { rows } = await query(
+    'SELECT * FROM schedules WHERE id = $1 AND user_id = $2',
+    [id, userId]
+  );
+  if (!rows[0]) throw new Error(`Schedule not found: ${id}`);
+  await runJob(rows[0]);
 }
 
 function _formatRow(s) {
@@ -115,4 +132,4 @@ async function remove(id, userId) {
   if (activeJobs[id]) { activeJobs[id].stop(); delete activeJobs[id]; }
 }
 
-module.exports = { startAll, stopAll, getActiveJobs, add, update, remove, setWorkflowRunner, setLogger };
+module.exports = { startAll, stopAll, getActiveJobs, add, update, remove, setWorkflowRunner, setLogger, fireNow };

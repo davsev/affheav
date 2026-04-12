@@ -50,6 +50,15 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+router.post('/:id/fire', async (req, res) => {
+  try {
+    await scheduler.fireNow(req.params.id, req.user.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     await scheduler.remove(req.params.id, req.user.id);
