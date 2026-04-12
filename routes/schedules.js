@@ -52,8 +52,14 @@ router.put('/:id', async (req, res) => {
 
 router.post('/:id/fire', async (req, res) => {
   try {
-    await scheduler.fireNow(req.params.id, req.user.id);
-    res.json({ success: true });
+    const { query } = require('../db');
+    const { rows } = await query(
+      'SELECT id FROM schedules WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ success: false, error: 'Schedule not found' });
+    res.json({ success: true }); // respond immediately — workflow result appears in logs panel
+    scheduler.fireNow(req.params.id, req.user.id).catch(() => {}); // errors already logged internally
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }
