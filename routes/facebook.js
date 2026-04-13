@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { refreshToken, getTokenInfo, generatePermanentPageToken } = require('../services/facebook');
-const { getSubjects } = require('../services/googleSheets');
+const { getSubjectsByUser } = require('../services/subjectService');
 
 // POST /api/facebook/refresh-token
 router.post('/refresh-token', async (req, res) => {
@@ -28,8 +28,8 @@ router.get('/token-info', async (req, res) => {
   try {
     let credentials = {};
     if (req.query.subjectId) {
-      const subjects = await getSubjects();
-      const subject = subjects.find(s => s.id === req.query.subjectId);
+      const subjects = await getSubjectsByUser(req.user.id);
+      const subject = subjects.find(s => String(s.id) === String(req.query.subjectId));
       if (!subject) return res.status(404).json({ success: false, error: 'Subject not found' });
       credentials = {
         facebookToken:     subject.facebookToken,
@@ -53,8 +53,8 @@ router.post('/generate-page-token', async (req, res) => {
 
     let opts = { shortUserToken };
     if (subjectId) {
-      const subjects = await getSubjects();
-      const subject = subjects.find(s => s.id === subjectId);
+      const subjects = await getSubjectsByUser(req.user.id);
+      const subject = subjects.find(s => String(s.id) === String(subjectId));
       if (!subject) return res.status(404).json({ success: false, error: 'Subject not found' });
       opts.pageId         = subject.facebookPageId;
       opts.facebookAppId  = subject.facebookAppId;
