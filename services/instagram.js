@@ -44,6 +44,31 @@ async function postPhoto({ igUserId, accessToken, imageUrl, caption }) {
     throw new Error(`Instagram container creation failed: ${detail}`);
   }
 
+  // Step 1.5: Wait for container to be ready (Instagram needs time to process the image)
+  const MAX_POLLS = 10;
+  const POLL_INTERVAL_MS = 3000;
+  for (let i = 0; i < MAX_POLLS; i++) {
+    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+    try {
+      const statusRes = await axios.get(`${BASE}/${creationId}`, {
+        params: { fields: 'status_code', access_token: accessToken },
+        timeout: 15000,
+      });
+      const status = statusRes.data?.status_code;
+      if (status === 'FINISHED') break;
+      if (status === 'ERROR' || status === 'EXPIRED') {
+        throw new Error(`Instagram container processing failed with status: ${status}`);
+      }
+      // IN_PROGRESS — keep polling
+    } catch (err) {
+      if (err.message.startsWith('Instagram container')) throw err;
+      // network hiccup — continue polling
+    }
+    if (i === MAX_POLLS - 1) {
+      throw new Error('Instagram container was not ready after 30 seconds');
+    }
+  }
+
   // Step 2: Publish the container
   try {
     const publishRes = await axios.post(
