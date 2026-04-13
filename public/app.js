@@ -583,6 +583,7 @@ function renderActiveNicheCard() {
 
   // Load WA groups for this niche after rendering
   loadAndRenderWaGroups(s.id);
+  attachNicheAutoSave(s.id);
 }
 
 function renderNicheGrid() {
@@ -705,6 +706,32 @@ window.doGeneratePageToken = async () => {
 document.getElementById('gen-token-modal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeGenerateTokenModal();
 });
+
+const _nicheDebounceTimers = {};
+function scheduleNicheSave(id) {
+  clearTimeout(_nicheDebounceTimers[id]);
+  _nicheDebounceTimers[id] = setTimeout(() => saveNiche(id), 800);
+}
+
+function attachNicheAutoSave(id) {
+  const inputIds = [
+    `niche-prompt-${id}`,
+    `niche-wa-url-${id}`,
+    `niche-fb-page-${id}`,
+    `niche-fb-token-${id}`,
+    `niche-fb-app-id-${id}`,
+    `niche-fb-app-secret-${id}`,
+    `niche-ig-account-${id}`,
+  ];
+  inputIds.forEach(fieldId => {
+    const el = document.getElementById(fieldId);
+    if (el) el.addEventListener('input', () => scheduleNicheSave(id));
+  });
+  ['wa-toggle', 'fb-toggle', 'ig-toggle'].forEach(prefix => {
+    const el = document.getElementById(`${prefix}-${id}`);
+    if (el) el.addEventListener('click', () => scheduleNicheSave(id));
+  });
+}
 
 window.saveNiche = async (id) => {
   const result = document.getElementById(`niche-save-result-${id}`);
