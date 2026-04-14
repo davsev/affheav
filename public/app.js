@@ -565,11 +565,23 @@ function renderActiveNicheCard() {
                 <span class="material-symbols-outlined">photo_camera</span>
                 הגדרות Instagram
               </div>
-              <div class="form-grid">
+              <div class="form-grid" style="margin-bottom:24px;">
                 <div class="form-group form-full" style="grid-column:1/-1;">
                   <label class="form-label">Instagram Business Account ID ${s.instagramAccountId ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#dc2626;font-size:10px;">לא מוגדר</span>'}</label>
                   <input class="form-input" type="password" id="niche-ig-account-${s.id}" value="" placeholder="${s.instagramAccountId ? 'השאר ריק לשמור ערך קיים' : '17841400000000000'}" dir="ltr" style="font-size:13px;" />
                   <div style="font-size:10px;color:var(--on-surface-var);margin-top:4px;">נמצא ב-Meta Graph API Explorer: GET /me/accounts → Instagram Business Account ID. משתמש באותו Access Token של Facebook.</div>
+                </div>
+              </div>
+
+              <div class="niche-field-label">
+                <span class="material-symbols-outlined">shopping_bag</span>
+                הגדרות AliExpress
+              </div>
+              <div class="form-grid">
+                <div class="form-group form-full" style="grid-column:1/-1;">
+                  <label class="form-label">Tracking ID ${s.aliexpressTrackingId ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#6b7280;font-size:10px;">ברירת מחדל</span>'}</label>
+                  <input class="form-input" type="password" id="niche-ali-tracking-${s.id}" value="" placeholder="${s.aliexpressTrackingId ? 'השאר ריק לשמור ערך קיים' : 'הזן Tracking ID (ישתמש בברירת מחדל אם ריק)'}" dir="ltr" style="font-size:13px;" />
+                  <div style="font-size:10px;color:var(--on-surface-var);margin-top:4px;">ה-Tracking ID ישמש בחיפוש מוצרי AliExpress עבור נישה זו. כל לינק שותפים שייווצר יהיה משויך ל-ID זה.</div>
                 </div>
               </div>
             </div>
@@ -755,7 +767,8 @@ window.saveNiche = async (id) => {
         facebookToken:       document.getElementById(`niche-fb-token-${id}`)?.value.trim() || '',
         facebookAppId:       document.getElementById(`niche-fb-app-id-${id}`)?.value.trim() || '',
         facebookAppSecret:   document.getElementById(`niche-fb-app-secret-${id}`)?.value.trim() || '',
-        instagramAccountId:  document.getElementById(`niche-ig-account-${id}`)?.value.trim() || '',
+        instagramAccountId:      document.getElementById(`niche-ig-account-${id}`)?.value.trim() || '',
+        aliexpressTrackingId:    document.getElementById(`niche-ali-tracking-${id}`)?.value.trim() || '',
       },
     });
     if (result) { result.style.color = '#16a34a'; result.textContent = '✓ נשמר'; }
@@ -1845,7 +1858,7 @@ async function doAliSearch(page) {
   try {
     // Fetch search results and existing products in parallel
     const [data, existingData] = await Promise.all([
-      api('/api/aliexpress/search', { method: 'POST', body: { keywords, page_no: page } }),
+      api('/api/aliexpress/search', { method: 'POST', body: { keywords, page_no: page, subjectId: document.getElementById('ali-subject-select')?.value || undefined } }),
       api('/api/aliexpress/existing').catch(() => ({ urls: [] })),
     ]);
 

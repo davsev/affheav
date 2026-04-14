@@ -7,9 +7,9 @@ const workflow = require('../services/workflow');
 const { query } = require('../db');
 
 const ALIEXPRESS_ENDPOINT = 'https://api-sg.aliexpress.com/sync';
-const TRACKING_ID = 'TechSalebuy';
+const DEFAULT_TRACKING_ID = process.env.ALIEXPRESS_TRACKING_ID || 'TechSalebuy';
 
-function buildSignedUrl(keywords, pageNo = 1) {
+function buildSignedUrl(keywords, pageNo = 1, trackingId = DEFAULT_TRACKING_ID) {
   const APP_KEY = process.env.ALIEXPRESS_APP_KEY;
   const APP_SECRET = process.env.ALIEXPRESS_APP_SECRET;
 
@@ -27,7 +27,7 @@ function buildSignedUrl(keywords, pageNo = 1) {
     sign_method: 'md5',
     target_currency: 'ILS',
     target_language: 'HE',
-    tracking_id: TRACKING_ID,
+    tracking_id: trackingId,
     sort: 'LAST_VOLUME_DESC',
     page_no: String(pageNo),
     page_size: '50',
@@ -60,16 +60,26 @@ function passesFilters(product) {
 }
 
 // POST /api/aliexpress/search
-// Body: { keywords }
+// Body: { keywords, subjectId? }
 router.post('/search', async (req, res) => {
-  const { keywords } = req.body;
+  const { keywords, subjectId, page_no } = req.body;
   if (!keywords || !keywords.trim()) {
     return res.status(400).json({ success: false, error: 'keywords is required' });
   }
 
   try {
-    workflow.log(`AliExpress API search: "${keywords}"`);
-    const url = buildSignedUrl(keywords.trim());
+    // Resolve per-subject tracking ID if a subject is selected
+    let trackingId = DEFAULT_TRACKING_ID;
+    if (subjectId) {
+      const { rows } = await query(
+        'SELECT aliexpress_tracking_id FROM subjects WHERE id = $1 AND user_id = $2 LIMIT 1',
+        [subjectId, req.user.id]
+      );
+      if (rows[0]?.aliexpress_tracking_id) trackingId = rows[0].aliexpress_tracking_id;
+    }
+
+    workflow.log(`AliExpress API search: "${keywords}" (tracking: ${trackingId})`);
+    const url = buildSignedUrl(keywords.trim(), page_no || 1, trackingId);
     const response = await axios.get(url, { timeout: 15000 });
 
     const products =
