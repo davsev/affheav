@@ -1,3 +1,6 @@
+import { api, escHtml, fmtDate }  from './utils.js';
+import { init as initScheduleModal, resetCronBuilder } from './schedule-modal.js';
+
 // ── Sidebar mobile toggle ─────────────────────────────────────────────────────
 function toggleSidebar() {
   const sidebar = document.getElementById('sidebar');
@@ -9,6 +12,10 @@ function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.remove('active');
 }
+// Expose to window — called from static onclick attributes in index.html
+window.toggleSidebar = toggleSidebar;
+window.closeSidebar  = closeSidebar;
+
 // Close sidebar when a nav item is tapped on mobile
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.tab-btn, .subject-item').forEach(btn => {
@@ -1250,6 +1257,9 @@ async function loadSchedules() {
         </div>
         <div class="schedule-actions">
           <button class="btn btn-sm" style="background:rgba(22,163,74,0.12);color:#16a34a;border:1px solid rgba(22,163,74,0.2);font-size:13px;padding:4px 10px;" onclick="fireScheduleNow('${s.id}')" title="הרץ עכשיו">▶</button>
+          <button class="btn btn-sm" style="background:rgba(112,42,225,0.08);color:var(--primary);border:1px solid rgba(112,42,225,0.2);padding:4px 8px;" onclick="openEditSchedule('${s.id}', ${JSON.stringify(s.label)}, ${JSON.stringify(s.cron)})" title="ערוך">
+            <span class="material-symbols-outlined" style="font-size:15px;line-height:1;">edit</span>
+          </button>
           <label class="toggle" title="${s.enabled ? 'פעיל' : 'לא פעיל'}">
             <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleSchedule('${s.id}', this.checked)" />
             <span class="slider"></span>
@@ -1307,6 +1317,9 @@ window.fireScheduleNow = async (id) => {
   }
 };
 
+// Inject loadSchedules callback into schedule-modal so it can refresh the list after saving
+initScheduleModal({ loadSchedules });
+
 document.getElementById('btn-add-schedule').addEventListener('click', async () => {
   const label   = document.getElementById('sched-label').value.trim();
   const cron    = document.getElementById('sched-cron').value.trim();
@@ -1315,8 +1328,8 @@ document.getElementById('btn-add-schedule').addEventListener('click', async () =
   try {
     await api('/api/schedules', { method: 'POST', body: { label, cron, subject } });
     document.getElementById('sched-label').value = '';
-    document.getElementById('sched-cron').value  = '';
     document.getElementById('sched-subject').value = '';
+    resetCronBuilder();
     await loadSchedules();
   } catch (err) {
     alert('שגיאה: ' + err.message);
@@ -1416,30 +1429,6 @@ document.getElementById('btn-refresh-fb').addEventListener('click', async () => 
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-async function api(url, opts = {}) {
-  const res = await fetch(url, {
-    method: opts.method || 'GET',
-    headers: opts.body ? { 'Content-Type': 'application/json' } : {},
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || res.statusText);
-  return data;
-}
-
-function escHtml(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function fmtDate(iso) {
-  if (!iso) return '';
-  try {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return iso; // show raw value if unparseable
-    return d.toLocaleDateString('he-IL', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
-  } catch { return iso; }
-}
-
 function showLogTab() {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
