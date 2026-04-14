@@ -929,7 +929,7 @@ function renderProducts(products) {
       ? `<span style="font-size:10px;color:var(--on-surface-var);margin-right:4px;" title="נשלח ${p.send_count} פעמים">(×${p.send_count})</span>`
       : '';
     return `
-    <tr draggable="true" data-row="${p.row_number}">
+    <tr draggable="true" data-id="${p.id}">
       <td><span class="drag-handle" title="גרור לסידור מחדש">⠿</span></td>
       <td>${p.image ? `<img class="img-thumb" src="${escHtml(p.image)}" onerror="this.style.display='none'" />` : '—'}</td>
       <td style="max-width:200px;word-break:break-word;">${escHtml(p.Text)}</td>
@@ -1019,8 +1019,8 @@ function initDragAndDrop(tbody) {
       e.preventDefault();
       if (!dragSrc || dragSrc === row) return;
 
-      const fromRow = parseInt(dragSrc.dataset.row);
-      const toRow   = parseInt(row.dataset.row);
+      const fromId = dragSrc.dataset.id;
+      const toId   = row.dataset.id;
 
       // Optimistic UI: move the row visually
       const allRows = [...tbody.querySelectorAll('tr')];
@@ -1030,7 +1030,7 @@ function initDragAndDrop(tbody) {
       else                  tbody.insertBefore(dragSrc, row);
 
       try {
-        await api('/api/products/reorder', { method: 'POST', body: { fromRow, toRow } });
+        await api('/api/products/reorder', { method: 'POST', body: { fromId, toId } });
       } catch (err) {
         alert('שגיאה בסידור מחדש: ' + err.message);
         loadProducts(); // revert on failure
