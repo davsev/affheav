@@ -1178,6 +1178,29 @@ window.sendProduct = async (rowNumber, btn) => {
 
 document.getElementById('btn-refresh-products').addEventListener('click', loadProducts);
 
+document.getElementById('btn-shuffle-products').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  btn.querySelector('span').style.animation = 'spin 0.6s linear infinite';
+  try {
+    const body = _currentSubject ? { subject: _currentSubject } : {};
+    const res = await api('/api/products/shuffle', { method: 'POST', body });
+    if (res.success) {
+      await loadProducts();
+      btn.querySelector('span').textContent = 'check';
+      btn.querySelector('span').style.animation = '';
+    } else {
+      btn.querySelector('span').style.animation = '';
+    }
+  } catch {
+    btn.querySelector('span').style.animation = '';
+  }
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.querySelector('span').textContent = 'shuffle';
+  }, 1500);
+});
+
 document.getElementById('btn-sync-clicks').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   btn.disabled = true;
