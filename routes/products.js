@@ -200,11 +200,11 @@ router.post('/shorten-all', async (req, res) => {
   }
 });
 
-// POST /api/products/reorder — move a row to a new position
+// POST /api/products/reorder — move a product to a new position
 router.post('/reorder', async (req, res) => {
-  const { fromRow, toRow } = req.body;
-  if (!fromRow || !toRow || fromRow === toRow) {
-    return res.status(400).json({ success: false, error: 'fromRow and toRow required and must differ' });
+  const { fromId, toId } = req.body;
+  if (!fromId || !toId || fromId === toId) {
+    return res.status(400).json({ success: false, error: 'fromId and toId required and must differ' });
   }
   try {
     const { rows: products } = await query(
@@ -212,16 +212,23 @@ router.post('/reorder', async (req, res) => {
        ORDER BY sort_order ASC NULLS LAST, created_at ASC`,
       [req.user.id]
     );
-    const fromIdx = fromRow - 2;
-    const toIdx   = toRow   - 2;
-    if (fromIdx < 0 || toIdx < 0 || fromIdx >= products.length || toIdx >= products.length) {
-      return res.status(400).json({ success: false, error: 'Row out of range' });
+    const fromIdx = products.findIndex(p => p.id === fromId);
+    const toIdx   = products.findIndex(p => p.id === toId);
+    if (fromIdx === -1 || toIdx === -1) {
+      return res.status(400).json({ success: false, error: 'Product not found' });
     }
-    const fromProduct = products[fromIdx];
-    const toProduct   = products[toIdx];
-    // Swap sort_orders (fall back to index if null)
-    await query('UPDATE products SET sort_order = $1, updated_at = NOW() WHERE id = $2', [toProduct.sort_order ?? toIdx + 1, fromProduct.id]);
-    await query('UPDATE products SET sort_order = $1, updated_at = NOW() WHERE id = $2', [fromProduct.sort_order ?? fromIdx + 1, toProduct.id]);
+    // Remove the dragged item and re-insert at the target position.
+    // When dragging down (fromIdx < toIdx): insert AFTER target → splice at toIdx
+    // When dragging up   (fromIdx > toIdx): insert BEFORE target → splice at toIdx
+    // In both cases the correct insert index in the post-splice array is toIdx.
+    const [moved] = products.splice(fromIdx, 1);
+    products.splice(toIdx, 0, moved);
+    // Renumber all sort_orders 1..n so they stay compact and correct
+    await Promise.all(
+      products.map((p, i) =>
+        query('UPDATE products SET sort_order = $1, updated_at = NOW() WHERE id = $2', [i + 1, p.id])
+      )
+    );
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
