@@ -200,6 +200,51 @@ router.post('/shorten-all', async (req, res) => {
   }
 });
 
+// POST /api/products/shuffle — randomise the sending order
+router.post('/shuffle', async (req, res) => {
+  const { subject } = req.body;
+  try {
+    // Fetch the products to shuffle (scoped to subject if provided)
+    const params = subject ? [req.user.id, subject] : [req.user.id];
+    const whereClause = subject
+      ? 'WHERE user_id = $1 AND subject_id = $2'
+      : 'WHERE user_id = $1';
+    const { rows: products } = await query(
+      `SELECT id FROM products ${whereClause} ORDER BY RANDOM()`,
+      params
+    );
+    // Fetch all products for the user to determine the global sort_order baseline
+    // Products outside the shuffled scope keep their sort_orders; we slot shuffled
+    // products into the same positions they occupied before.
+    const { rows: allOrdered } = await query(
+      `SELECT id, sort_order FROM products WHERE user_id = $1
+       ORDER BY sort_order ASC NULLS LAST, created_at ASC`,
+      [req.user.id]
+    );
+    // Map each shuffled product id to a new sort_order drawn from the positions
+    // that those products held in the global ordered list.
+    const targetIds = new Set(products.map(p => p.id));
+    const slots = allOrdered
+      .filter(p => targetIds.has(p.id))
+      .map((p, i) => i + 1); // relative slot numbers within the scope
+
+    // Assign shuffled products to those slots in the global numbering
+    const slotValues = allOrdered
+      .filter(p => targetIds.has(p.id))
+      .map(p => p.sort_order ?? allOrdered.indexOf(p) + 1);
+
+    await Promise.all(
+      products.map((p, i) =>
+        query('UPDATE products SET sort_order = $1, updated_at = NOW() WHERE id = $2',
+          [slotValues[i], p.id])
+      )
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // POST /api/products/reorder — move a product to a new position
 router.post('/reorder', async (req, res) => {
   const { fromId, toId } = req.body;
