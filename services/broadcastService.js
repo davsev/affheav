@@ -165,6 +165,24 @@ function _getJerusalemDayOfMonth(date) {
   return parseInt(datePart.split('/')[1], 10);
 }
 
+const DAY_NAMES_HE = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+
+/**
+ * Convert a recurrence object to a human-readable Hebrew description.
+ *
+ * @param {{ mode: string, hour: number, day?: number, n?: number }|null} recurrence
+ * @returns {string}
+ */
+function recurrenceToDescription(recurrence) {
+  if (!recurrence) return '';
+  const { mode, hour, day, n } = recurrence;
+  const h = String(parseInt(hour, 10)).padStart(2, '0') + ':00';
+  if (mode === 'daily')        return `כל יום ב-${h}`;
+  if (mode === 'weekly')       return `כל יום ${DAY_NAMES_HE[parseInt(day, 10)] || ''} ב-${h}`;
+  if (mode === 'every_n_days') return `כל ${n} ימים ב-${h}`;
+  return '';
+}
+
 /**
  * Convert a DB row to the API object shape.
  *
@@ -174,18 +192,19 @@ function _getJerusalemDayOfMonth(date) {
 function _row(r) {
   if (!r) return null;
   return {
-    id:         r.id,
-    userId:     r.user_id,
-    subjectId:  r.subject_id,
-    label:      r.label,
-    text:       r.text,
-    imageUrl:   r.image_url,
-    recurrence: r.recurrence,
-    cron:       r.cron,
-    enabled:    r.enabled,
-    nextRunAt:  computeNextRun(r.recurrence, r.enabled),
-    createdAt:  r.created_at,
-    updatedAt:  r.updated_at,
+    id:                 r.id,
+    userId:             r.user_id,
+    subjectId:          r.subject_id,
+    label:              r.label,
+    text:               r.text,
+    imageUrl:           r.image_url,
+    recurrence:         r.recurrence,
+    cron:               r.cron,
+    enabled:            r.enabled,
+    scheduleDescription: recurrenceToDescription(r.recurrence),
+    nextRunAt:          computeNextRun(r.recurrence, r.enabled),
+    createdAt:          r.created_at,
+    updatedAt:          r.updated_at,
   };
 }
 
