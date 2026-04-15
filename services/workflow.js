@@ -205,13 +205,18 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
         }
       }
     } else {
-      // Fallback: use product's wa_group string (legacy / no DB groups configured)
+      // Fallback: use niche-level wa_group, then product's wa_group (legacy)
+      const waGroup = subjectConfig?.waGroup || product.wa_group;
+      if (!waGroup) {
+        log('⚠ No WhatsApp group configured for this niche — skipping WhatsApp', 'warn');
+        results.whatsapp = { success: false, error: 'no_wa_group_configured' };
+      } else {
       try {
-        log(`Sending to WhatsApp group: ${product.wa_group}`);
+        log(`Sending to WhatsApp group: ${waGroup}`);
         const waResult = await whatsapp.send({
           text:       message,
           image:      product.image,
-          wa_group:   product.wa_group,
+          wa_group:   waGroup,
           webhookUrl: subjectConfig?.macrodroidUrl || null,
         });
         results.whatsapp = waResult;
@@ -224,6 +229,7 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
         log(`✗ WhatsApp failed: ${err.message}`, 'error');
         results.whatsapp = { success: false, error: err.message };
       }
+      } // end else (waGroup exists)
     }
   } else {
     log('⏭ WhatsApp skipped');

@@ -9,6 +9,7 @@ function _row(r) {
     userId:              r.user_id,
     name:                r.name,
     color:               r.color || '',
+    waGroup:             r.wa_group || '',
     macrodroidUrl:       r.macrodroid_url || '',
     facebookPageId:      r.facebook_page_id || '',
     facebookToken:       r.facebook_token || '',

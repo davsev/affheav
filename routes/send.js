@@ -11,8 +11,17 @@ router.post('/execute', async (req, res) => {
     if (platforms)              opts.platforms  = platforms;
     if (subject !== undefined)  opts.subject    = subject;
     if (waGroupIds)             opts.waGroupIds = waGroupIds;
-    const result = await workflow.run(null, opts);
-    res.json(result);
+
+    // Quick check: are there any unsent products?
+    const countQ = subject
+      ? await query('SELECT 1 FROM products WHERE user_id=$1 AND subject_id=$2 AND sent_at IS NULL AND short_link IS NOT NULL AND short_link != \'\' LIMIT 1', [req.user.id, subject])
+      : await query('SELECT 1 FROM products WHERE user_id=$1 AND sent_at IS NULL AND short_link IS NOT NULL AND short_link != \'\' LIMIT 1', [req.user.id]);
+    if (!countQ.rows[0]) {
+      return res.json({ success: false, reason: 'no_unsent_products' });
+    }
+
+    res.json({ success: true }); // respond immediately — full result appears in logs panel
+    workflow.run(null, opts).catch(err => workflow.log(`Execute error: ${err.message}`, 'error'));
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
