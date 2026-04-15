@@ -209,6 +209,7 @@ app.use('/api/facebook',      isAuthenticated, require('./routes/facebook'));
 app.use('/api/prompt',        isAuthenticated, require('./routes/prompt'));
 app.use('/api/aliexpress',    isAuthenticated, require('./routes/aliexpress-api'));
 app.use('/api/users',         isAuthenticated, require('./routes/users'));
+app.use('/api/broadcasts',   isAuthenticated, require('./routes/broadcasts'));
 
 // ── Static + SPA Fallback ─────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
