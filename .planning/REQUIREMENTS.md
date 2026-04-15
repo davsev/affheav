@@ -13,7 +13,7 @@
 - [x] **BCAST-04**: User can edit an existing broadcast message (label, content, image, schedule, niche)
 - [x] **BCAST-05**: User can delete a broadcast message (with confirmation)
 - [x] **BCAST-06**: User can enable or disable a broadcast message without deleting it
-- [ ] **BCAST-07**: User can fire a broadcast message immediately regardless of its schedule
+- [x] **BCAST-07**: User can fire a broadcast message immediately regardless of its schedule
 
 ### Scheduling
 
@@ -72,7 +72,7 @@
 | BCAST-04 | Phase 1 | Complete |
 | BCAST-05 | Phase 1 | Complete |
 | BCAST-06 | Phase 1 | Complete |
-| BCAST-07 | Phase 1 | Pending |
+| BCAST-07 | Phase 1 | Complete |
 | SCHED-01 | Phase 1 | Complete |
 | SCHED-02 | Phase 1 | Complete |
 | SCHED-03 | Phase 1 | Complete |
