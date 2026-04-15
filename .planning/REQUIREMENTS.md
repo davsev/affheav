@@ -7,8 +7,8 @@
 
 ### Broadcast Message Management
 
-- [ ] **BCAST-01**: User can create a broadcast message with a label and pre-written text content
-- [ ] **BCAST-02**: User can assign a broadcast message to a specific niche (required — no "all niches" option)
+- [x] **BCAST-01**: User can create a broadcast message with a label and pre-written text content
+- [x] **BCAST-02**: User can assign a broadcast message to a specific niche (required — no "all niches" option)
 - [ ] **BCAST-03**: User can optionally upload an image to attach to a broadcast message
 - [ ] **BCAST-04**: User can edit an existing broadcast message (label, content, image, schedule, niche)
 - [ ] **BCAST-05**: User can delete a broadcast message (with confirmation)
@@ -66,8 +66,8 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BCAST-01 | Phase 1 | Pending |
-| BCAST-02 | Phase 1 | Pending |
+| BCAST-01 | Phase 1 | Complete |
+| BCAST-02 | Phase 1 | Complete |
 | BCAST-03 | Phase 1 | Pending |
 | BCAST-04 | Phase 1 | Pending |
 | BCAST-05 | Phase 1 | Pending |

@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 ## Current Position
 
 Phase: 1 of 3 (Backend Foundation)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-04-15 — Roadmap created; phases derived from 15 v1 requirements
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-04-15 — Completed plan 01: broadcast_messages DB migration
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 11%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: -
+- Total plans completed: 1
+- Average duration: 8 min
+- Total execution time: 8 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01-backend-foundation | 1 | 8 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: none yet
+- Last 5 plans: 01-01 (8 min)
 - Trend: -
 
 *Updated after each plan completion*
@@ -47,6 +47,8 @@ Recent decisions affecting current work:
 - Human-friendly recurrence builder (daily/weekly/every-N-days) — raw cron hidden from user
 - WhatsApp + Facebook only (no Instagram) for this milestone
 - Local image upload to public/uploads/broadcasts/ — no cloud storage
+- [01-01] subject_id is NOT NULL on broadcast_messages — no all-niches option (satisfies BCAST-02)
+- [01-01] recurrence (JSONB) + cron (VARCHAR) stored as a pair — JSONB for edit-modal pre-population, VARCHAR for scheduler use
 
 ### Pending Todos
 
@@ -60,5 +62,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-15
-Stopped at: Roadmap created; ready to run /gsd:plan-phase 1
+Stopped at: Completed 01-backend-foundation-01-PLAN.md (broadcast_messages migration)
 Resume file: None
