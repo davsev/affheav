@@ -68,7 +68,7 @@
 |-------------|-------|--------|
 | BCAST-01 | Phase 1 | Pending |
 | BCAST-02 | Phase 1 | Pending |
-| BCAST-03 | Phase 2 | Pending |
+| BCAST-03 | Phase 1 | Pending |
 | BCAST-04 | Phase 1 | Pending |
 | BCAST-05 | Phase 1 | Pending |
 | BCAST-06 | Phase 1 | Pending |
@@ -89,4 +89,4 @@
 
 ---
 *Requirements defined: 2026-04-15*
-*Last updated: 2026-04-15 after initial definition*
+*Last updated: 2026-04-15 after roadmap creation (BCAST-03 moved Phase 2 → Phase 1: image upload is a backend data concern, not a delivery concern)*
