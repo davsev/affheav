@@ -9,18 +9,18 @@
 
 - [x] **BCAST-01**: User can create a broadcast message with a label and pre-written text content
 - [x] **BCAST-02**: User can assign a broadcast message to a specific niche (required — no "all niches" option)
-- [ ] **BCAST-03**: User can optionally upload an image to attach to a broadcast message
-- [ ] **BCAST-04**: User can edit an existing broadcast message (label, content, image, schedule, niche)
-- [ ] **BCAST-05**: User can delete a broadcast message (with confirmation)
-- [ ] **BCAST-06**: User can enable or disable a broadcast message without deleting it
+- [x] **BCAST-03**: User can optionally upload an image to attach to a broadcast message
+- [x] **BCAST-04**: User can edit an existing broadcast message (label, content, image, schedule, niche)
+- [x] **BCAST-05**: User can delete a broadcast message (with confirmation)
+- [x] **BCAST-06**: User can enable or disable a broadcast message without deleting it
 - [ ] **BCAST-07**: User can fire a broadcast message immediately regardless of its schedule
 
 ### Scheduling
 
-- [ ] **SCHED-01**: User can set a daily recurrence at a specific hour (e.g. every day at 22:00)
-- [ ] **SCHED-02**: User can set a weekly recurrence on a specific day + hour (e.g. every Friday at 18:00)
-- [ ] **SCHED-03**: User can set an every-N-days recurrence at a specific hour (e.g. every 3 days at 11:00)
-- [ ] **SCHED-04**: Broadcast message list shows next scheduled run time for each enabled message
+- [x] **SCHED-01**: User can set a daily recurrence at a specific hour (e.g. every day at 22:00)
+- [x] **SCHED-02**: User can set a weekly recurrence on a specific day + hour (e.g. every Friday at 18:00)
+- [x] **SCHED-03**: User can set an every-N-days recurrence at a specific hour (e.g. every 3 days at 11:00)
+- [x] **SCHED-04**: Broadcast message list shows next scheduled run time for each enabled message
 
 ### Delivery
 
@@ -68,15 +68,15 @@
 |-------------|-------|--------|
 | BCAST-01 | Phase 1 | Complete |
 | BCAST-02 | Phase 1 | Complete |
-| BCAST-03 | Phase 1 | Pending |
-| BCAST-04 | Phase 1 | Pending |
-| BCAST-05 | Phase 1 | Pending |
-| BCAST-06 | Phase 1 | Pending |
+| BCAST-03 | Phase 1 | Complete |
+| BCAST-04 | Phase 1 | Complete |
+| BCAST-05 | Phase 1 | Complete |
+| BCAST-06 | Phase 1 | Complete |
 | BCAST-07 | Phase 1 | Pending |
-| SCHED-01 | Phase 1 | Pending |
-| SCHED-02 | Phase 1 | Pending |
-| SCHED-03 | Phase 1 | Pending |
-| SCHED-04 | Phase 1 | Pending |
+| SCHED-01 | Phase 1 | Complete |
+| SCHED-02 | Phase 1 | Complete |
+| SCHED-03 | Phase 1 | Complete |
+| SCHED-04 | Phase 1 | Complete |
 | DLVR-01 | Phase 2 | Pending |
 | DLVR-02 | Phase 2 | Pending |
 | UI-01 | Phase 3 | Pending |

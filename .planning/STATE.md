@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 ## Current Position
 
 Phase: 1 of 3 (Backend Foundation)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-04-15 — Completed plan 01: broadcast_messages DB migration
+Last activity: 2026-04-15 — Completed plan 02: broadcastService.js CRUD + recurrenceToCron + computeNextRun
 
-Progress: [█░░░░░░░░░] 11%
+Progress: [██░░░░░░░░] 22%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 8 min
-- Total execution time: 8 min
+- Total plans completed: 2
+- Average duration: 5 min
+- Total execution time: 10 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-backend-foundation | 1 | 8 min | 8 min |
+| 01-backend-foundation | 2 | 10 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (8 min)
-- Trend: -
+- Last 5 plans: 01-01 (8 min), 01-02 (2 min)
+- Trend: faster
 
 *Updated after each plan completion*
 
@@ -49,6 +49,8 @@ Recent decisions affecting current work:
 - Local image upload to public/uploads/broadcasts/ — no cloud storage
 - [01-01] subject_id is NOT NULL on broadcast_messages — no all-niches option (satisfies BCAST-02)
 - [01-01] recurrence (JSONB) + cron (VARCHAR) stored as a pair — JSONB for edit-modal pre-population, VARCHAR for scheduler use
+- [Phase 01-backend-foundation]: computeNextRun uses toLocaleString Asia/Jerusalem for display-only next-run; precision within minutes acceptable
+- [Phase 01-backend-foundation]: recurrence JSONB JSON.stringify'd before pg INSERT — pg driver needs string for JSONB params
 
 ### Pending Todos
 
@@ -62,5 +64,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-15
-Stopped at: Completed 01-backend-foundation-01-PLAN.md (broadcast_messages migration)
+Stopped at: Completed 01-backend-foundation-02-PLAN.md (broadcastService)
 Resume file: None
