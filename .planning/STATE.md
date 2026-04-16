@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 ## Current Position
 
 Phase: 2 of 3 (Scheduler & Delivery)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-04-16 — Completed plan 01: broadcastDelivery.js + facebook.postText()
+Plan: 2 of 2 in current phase
+Status: Phase complete — ready for Phase 3
+Last activity: 2026-04-16 — Completed plan 02: broadcast scheduler wiring + fire-now delivery
 
-Progress: [████░░░░░░] 44%
+Progress: [██████░░░░] 67%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: 5 min
-- Total execution time: 19 min
+- Total execution time: 24 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-backend-foundation | 3 | 15 min | 5 min |
-| 02-scheduler-delivery | 1 | 4 min | 4 min |
+| 02-scheduler-delivery | 2 | 9 min | 4.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (8 min), 01-02 (2 min), 01-03 (5 min), 02-01 (4 min)
+- Last 5 plans: 01-02 (2 min), 01-03 (5 min), 02-01 (4 min), 02-02 (5 min)
 - Trend: consistent
 
 *Updated after each plan completion*
@@ -57,6 +57,10 @@ Recent decisions affecting current work:
 - [02-01]: _normalize() accepts both camelCase (broadcastService) and snake_case (DB row) — fire-now and scheduler pass different shapes
 - [02-01]: postText() routes to /feed, postPhoto() routes to /photos — text-only broadcasts must use postText() or Facebook rejects null URL
 - [02-01]: WA_GROUP_DELAY_MS = 2 minutes — matches workflow.js convention for sequential group sends
+- [02-02]: broadcastDelivery lazy-required inside runBroadcastJob() — avoids circular dep risk at startup, Node.js caches require() so no perf penalty
+- [02-02]: startBroadcasts() outer try-catch returns 0 on DB error — broadcast startup never blocks product schedule loading
+- [02-02]: fire-now returns { success: true, fired: true } immediately, delivery runs async — consistent with schedules.js pattern
+- [02-02]: PATCH /enabled triggers full startBroadcasts() reload — keeps in-memory cron jobs in sync with DB state on every toggle
 
 ### Pending Todos
 
@@ -64,11 +68,11 @@ None yet.
 
 ### Blockers/Concerns
 
-- Scheduler (scheduler/index.js) currently only loads product schedules — Phase 2 must extend it to also load broadcast_messages without breaking existing product job behavior
-- app.js is 2254 lines — Phase 3 UI additions should use a new public/broadcast-modal.js file (follow schedule-modal.js pattern) rather than expanding app.js further
+- app.js is 2254+ lines — Phase 3 UI additions should use a new public/broadcast-modal.js file (follow schedule-modal.js pattern) rather than expanding app.js further
+- localhost images not fetchable by Facebook Graph API in dev — only works in production with public URL
 
 ## Session Continuity
 
 Last session: 2026-04-16
-Stopped at: Completed 02-scheduler-delivery-01-PLAN.md (broadcastDelivery.js + facebook.postText)
+Stopped at: Completed 02-scheduler-delivery-02-PLAN.md (broadcast scheduler wiring + fire-now delivery)
 Resume file: None
