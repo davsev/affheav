@@ -1372,6 +1372,111 @@ document.getElementById('btn-add-schedule').addEventListener('click', async () =
   }
 });
 
+// ── Broadcasts ─────────────────────────────────────────────────────────────────
+let _broadcasts = [];
+
+async function loadBroadcasts() {
+  const container = document.getElementById('broadcasts-list');
+  if (!container) return;
+  try {
+    const data = await api('/api/broadcasts');
+    _broadcasts = data.broadcasts || [];
+    if (!_broadcasts.length) {
+      container.innerHTML = '<div class="empty-state">אין הודעות שידור</div>';
+      return;
+    }
+    const DAYS_HE = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+    function bcastRecurrenceLabel(b) {
+      if (b.recurrenceLabel) return b.recurrenceLabel;
+      const r = b.recurrence;
+      if (!r) return b.cron || '';
+      const hh = String(r.hour ?? 0).padStart(2, '0');
+      if (r.frequency === 'daily')        return `כל יום ב-${hh}:00`;
+      if (r.frequency === 'weekly')       return `כל ${DAYS_HE[r.day ?? 0]} ב-${hh}:00`;
+      if (r.frequency === 'every_n_days') return `כל ${r.n ?? 2} ימים ב-${hh}:00`;
+      return b.cron || '';
+    }
+    container.innerHTML = _broadcasts.map(b => {
+      const subj = _subjects.find(x => x.id === b.subjectId);
+      const subjChip = subj
+        ? `<span style="font-size:10.5px;background:rgba(2,132,199,0.12);color:#0284c7;padding:2px 8px;border-radius:20px;font-weight:600;">${escHtml(subj.name)}</span>`
+        : '';
+      const platformChips = [
+        `<span style="font-size:10.5px;background:rgba(29,161,242,0.1);color:#1d9bf0;padding:2px 8px;border-radius:20px;">WhatsApp</span>`,
+        `<span style="font-size:10.5px;background:rgba(24,119,242,0.1);color:#1877f2;padding:2px 8px;border-radius:20px;">Facebook</span>`,
+      ].join(' ');
+      const preview = escHtml((b.text || '').slice(0, 80)) + ((b.text || '').length > 80 ? '…' : '');
+      const schedLabel = bcastRecurrenceLabel(b);
+      const imgIcon = b.imageUrl
+        ? `<span class="material-symbols-outlined" title="יש תמונה" style="font-size:14px;color:var(--on-surface-var);vertical-align:middle;">image</span>`
+        : '';
+      return `
+      <div class="schedule-item" id="bcast-${escHtml(String(b.id))}">
+        <div style="flex:1;min-width:0;">
+          <div class="schedule-label" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
+            ${escHtml(b.label)}${imgIcon}${subjChip}${platformChips}
+          </div>
+          <div class="bcast-msg-preview">${preview}</div>
+          <div class="schedule-cron">${escHtml(schedLabel)}</div>
+          ${b.nextRunAt ? `<div style="font-size:11px;color:var(--on-surface-var);">הבא: ${fmtDate(b.nextRunAt)}</div>` : ''}
+        </div>
+        <div class="schedule-actions">
+          <button class="btn btn-sm" style="background:rgba(22,163,74,0.12);color:#16a34a;border:1px solid rgba(22,163,74,0.2);font-size:13px;padding:4px 10px;" onclick="fireBroadcastNow('${escHtml(String(b.id))}')" title="שלח עכשיו">▶</button>
+          <button class="btn btn-sm" style="background:rgba(112,42,225,0.08);color:var(--primary);border:1px solid rgba(112,42,225,0.2);padding:4px 8px;" onclick="openEditBroadcast('${escHtml(String(b.id))}')" title="ערוך">
+            <span class="material-symbols-outlined" style="font-size:15px;line-height:1;">edit</span>
+          </button>
+          <label class="toggle" title="${b.enabled ? 'פעיל' : 'לא פעיל'}">
+            <input type="checkbox" ${b.enabled ? 'checked' : ''} onchange="toggleBroadcast('${escHtml(String(b.id))}', this.checked)" />
+            <span class="slider"></span>
+          </label>
+          <button class="btn btn-danger btn-sm" onclick="deleteBroadcast('${escHtml(String(b.id))}')">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    container.innerHTML = `<div class="empty-state" style="color:#f87171;">${escHtml(err.message)}</div>`;
+  }
+}
+
+window.fireBroadcastNow = async (id) => {
+  try {
+    await api(`/api/broadcasts/${id}/fire-now`, { method: 'POST' });
+    alert('ההודעה נשלחת!');
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
+
+window.toggleBroadcast = async (id, enabled) => {
+  try {
+    await api(`/api/broadcasts/${id}/enabled`, { method: 'PATCH', body: { enabled } });
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+    await loadBroadcasts();
+  }
+};
+
+window.deleteBroadcast = async (id) => {
+  if (!confirm('למחוק הודעת שידור זו?')) return;
+  try {
+    await api(`/api/broadcasts/${id}`, { method: 'DELETE' });
+    await loadBroadcasts();
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
+
+// Stub — replaced by broadcast-modal.js in Plan 02
+window.openAddBroadcast = () => { alert('בקרוב'); };
+window.openEditBroadcast = (id) => { alert('בקרוב: ' + id); };
+window.closeBroadcastModal = () => {
+  const m = document.getElementById('broadcast-modal');
+  if (m) m.style.display = 'none';
+};
+window.saveBroadcast = () => {};
+
+document.getElementById('btn-add-broadcast').addEventListener('click', () => openAddBroadcast());
+
 // ── Scraper ───────────────────────────────────────────────────────────────────
 document.getElementById('btn-scrape').addEventListener('click', async (btn) => {
   const url = document.getElementById('scrape-url').value.trim();
@@ -2009,6 +2114,7 @@ window.deleteWaGroup = async (groupId, subjectId) => {
 loadSubjects().then(() => {
   loadProducts();
   loadSchedules();
+  loadBroadcasts();
 });
 
 // ── Users Admin ───────────────────────────────────────────────────────────────
