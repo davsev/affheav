@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const { query } = require('../db');
 
 let activeJobs = {}; // id → cron.ScheduledTask
+let activeBroadcastJobs = {}; // broadcastId → cron.ScheduledTask
 let _runWorkflow = null;
 let _log = null; // injected from server.js so scheduler events appear in the UI log stream
 
@@ -17,6 +18,51 @@ function log(msg, level = 'info') {
 function stopAll() {
   for (const job of Object.values(activeJobs)) job.stop();
   activeJobs = {};
+}
+
+function stopBroadcasts() {
+  for (const job of Object.values(activeBroadcastJobs)) job.stop();
+  activeBroadcastJobs = {};
+}
+
+async function startBroadcasts() {
+  let broadcasts = [];
+  try {
+    const { rows } = await query('SELECT * FROM broadcast_messages WHERE enabled = true');
+    broadcasts = rows;
+  } catch (err) {
+    log(`Could not load broadcast_messages: ${err.message}`, 'warn');
+    return 0;
+  }
+
+  stopBroadcasts();
+
+  for (const b of broadcasts) {
+    if (!cron.validate(b.cron)) {
+      log(`Invalid cron for broadcast "${b.label}": "${b.cron}"`, 'warn');
+      continue;
+    }
+    activeBroadcastJobs[b.id] = cron.schedule(b.cron, () => runBroadcastJob(b), { timezone: 'Asia/Jerusalem' });
+    log(`Broadcast registered: "${b.label}" → ${b.cron}`);
+  }
+
+  if (broadcasts.length) {
+    log(`📡 ${broadcasts.length} broadcast(s) active: ${broadcasts.map(b => `"${b.label}"`).join(', ')}`);
+  } else {
+    log('No enabled broadcasts found');
+  }
+
+  return broadcasts.length;
+}
+
+async function runBroadcastJob(b) {
+  const broadcastDelivery = require('../services/broadcastDelivery');
+  log(`Firing broadcast: "${b.label}" (${b.cron})`);
+  try {
+    await broadcastDelivery.send(b, b.user_id);
+  } catch (err) {
+    log(`Broadcast "${b.label}" error: ${err.message}`, 'error');
+  }
 }
 
 async function startAll() {
@@ -132,4 +178,9 @@ async function remove(id, userId) {
   if (activeJobs[id]) { activeJobs[id].stop(); delete activeJobs[id]; }
 }
 
-module.exports = { startAll, stopAll, getActiveJobs, add, update, remove, setWorkflowRunner, setLogger, fireNow };
+module.exports = {
+  startAll, stopAll, getActiveJobs,
+  startBroadcasts, stopBroadcasts,
+  add, update, remove,
+  setWorkflowRunner, setLogger, fireNow,
+};
