@@ -5,32 +5,33 @@
 See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** Niche owners can schedule evergreen messages to reach their audiences at the right time — without touching the product pipeline.
-**Current focus:** Phase 1 — Backend Foundation
+**Current focus:** Phase 2 — Scheduler & Delivery
 
 ## Current Position
 
-Phase: 1 of 3 (Backend Foundation)
-Plan: 3 of 3 in current phase
+Phase: 2 of 3 (Scheduler & Delivery)
+Plan: 1 of 2 in current phase
 Status: In progress
-Last activity: 2026-04-15 — Completed plan 03: broadcasts router (multer + all 8 endpoints + server.js mount)
+Last activity: 2026-04-16 — Completed plan 01: broadcastDelivery.js + facebook.postText()
 
-Progress: [███░░░░░░░] 33%
+Progress: [████░░░░░░] 44%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
+- Total plans completed: 4
 - Average duration: 5 min
-- Total execution time: 15 min
+- Total execution time: 19 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-backend-foundation | 3 | 15 min | 5 min |
+| 02-scheduler-delivery | 1 | 4 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (8 min), 01-02 (2 min), 01-03 (5 min)
+- Last 5 plans: 01-01 (8 min), 01-02 (2 min), 01-03 (5 min), 02-01 (4 min)
 - Trend: consistent
 
 *Updated after each plan completion*
@@ -53,6 +54,9 @@ Recent decisions affecting current work:
 - [Phase 01-backend-foundation]: recurrence JSONB JSON.stringify'd before pg INSERT — pg driver needs string for JSONB params
 - [01-03]: Multer diskStorage with uuid filenames — avoids collisions, no cloud dependency
 - [01-03]: fire-now stubbed in Phase 1 — returns whatsapp/facebook stubbed:true; Phase 2 wires real delivery
+- [02-01]: _normalize() accepts both camelCase (broadcastService) and snake_case (DB row) — fire-now and scheduler pass different shapes
+- [02-01]: postText() routes to /feed, postPhoto() routes to /photos — text-only broadcasts must use postText() or Facebook rejects null URL
+- [02-01]: WA_GROUP_DELAY_MS = 2 minutes — matches workflow.js convention for sequential group sends
 
 ### Pending Todos
 
@@ -65,6 +69,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-15
-Stopped at: Completed 01-backend-foundation-03-PLAN.md (broadcasts router)
+Last session: 2026-04-16
+Stopped at: Completed 02-scheduler-delivery-01-PLAN.md (broadcastDelivery.js + facebook.postText)
 Resume file: None

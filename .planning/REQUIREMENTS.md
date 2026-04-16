@@ -24,8 +24,8 @@
 
 ### Delivery
 
-- [ ] **DLVR-01**: Scheduled broadcast sends text (+ optional image) to the niche's Facebook page via Graph API
-- [ ] **DLVR-02**: Scheduled broadcast sends text (+ optional image) to the niche's WhatsApp group via MacroDroid webhook
+- [x] **DLVR-01**: Scheduled broadcast sends text (+ optional image) to the niche's Facebook page via Graph API
+- [x] **DLVR-02**: Scheduled broadcast sends text (+ optional image) to the niche's WhatsApp group via MacroDroid webhook
 
 ### UI
 
@@ -77,8 +77,8 @@
 | SCHED-02 | Phase 1 | Complete |
 | SCHED-03 | Phase 1 | Complete |
 | SCHED-04 | Phase 1 | Complete |
-| DLVR-01 | Phase 2 | Pending |
-| DLVR-02 | Phase 2 | Pending |
+| DLVR-01 | Phase 2 | Complete |
+| DLVR-02 | Phase 2 | Complete |
 | UI-01 | Phase 3 | Pending |
 | UI-02 | Phase 3 | Pending |
 
