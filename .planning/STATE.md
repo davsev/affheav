@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-04-15)
 
 **Core value:** Niche owners can schedule evergreen messages to reach their audiences at the right time — without touching the product pipeline.
-**Current focus:** Phase 2 — Scheduler & Delivery
+**Current focus:** Phase 3 — Frontend UI
 
 ## Current Position
 
-Phase: 2 of 3 (Scheduler & Delivery)
-Plan: 2 of 2 in current phase
-Status: Phase complete — ready for Phase 3
-Last activity: 2026-04-16 — Completed plan 02: broadcast scheduler wiring + fire-now delivery
+Phase: 3 of 3 (Frontend UI)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-04-16 — Completed plan 03-01: broadcast messages list UI
 
-Progress: [██████░░░░] 67%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -31,8 +31,12 @@ Progress: [██████░░░░] 67%
 | 02-scheduler-delivery | 2 | 9 min | 4.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (2 min), 01-03 (5 min), 02-01 (4 min), 02-02 (5 min)
+- Last 5 plans: 01-02 (2 min), 01-03 (5 min), 02-01 (4 min), 02-02 (5 min), 03-01 (7 min)
 - Trend: consistent
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| 03-frontend-ui | 1 (of 2) | 7 min | 7 min |
 
 *Updated after each plan completion*
 
@@ -61,6 +65,7 @@ Recent decisions affecting current work:
 - [02-02]: startBroadcasts() outer try-catch returns 0 on DB error — broadcast startup never blocks product schedule loading
 - [02-02]: fire-now returns { success: true, fired: true } immediately, delivery runs async — consistent with schedules.js pattern
 - [02-02]: PATCH /enabled triggers full startBroadcasts() reload — keeps in-memory cron jobs in sync with DB state on every toggle
+- [Phase 03-frontend-ui]: PATCH /api/broadcasts/:id/enabled confirmed as correct endpoint
 
 ### Pending Todos
 
@@ -74,5 +79,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-16
-Stopped at: Completed 02-scheduler-delivery-02-PLAN.md (broadcast scheduler wiring + fire-now delivery)
+Stopped at: Completed 03-frontend-ui-01-PLAN.md (broadcast messages list UI)
 Resume file: None
