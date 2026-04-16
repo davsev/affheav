@@ -1,3 +1,7 @@
+import { api, escHtml, fmtDate }  from './utils.js';
+import { init as initScheduleModal, resetCronBuilder } from './schedule-modal.js';
+import { initBroadcastModal } from './broadcast-modal.js';
+
 // ── Sidebar mobile toggle ─────────────────────────────────────────────────────
 function toggleSidebar() {
   const sidebar = document.getElementById('sidebar');
@@ -9,6 +13,10 @@ function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.remove('active');
 }
+// Expose to window — called from static onclick attributes in index.html
+window.toggleSidebar = toggleSidebar;
+window.closeSidebar  = closeSidebar;
+
 // Close sidebar when a nav item is tapped on mobile
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.tab-btn, .subject-item').forEach(btn => {
@@ -159,6 +167,7 @@ async function loadSubjects() {
   try {
     const { subjects } = await api('/api/subjects');
     _subjects = subjects || [];
+    window._subjects = _subjects;
     populateSubjectSelects();
     renderSettingsPage();
   } catch (err) {
@@ -558,11 +567,23 @@ function renderActiveNicheCard() {
                 <span class="material-symbols-outlined">photo_camera</span>
                 הגדרות Instagram
               </div>
-              <div class="form-grid">
+              <div class="form-grid" style="margin-bottom:24px;">
                 <div class="form-group form-full" style="grid-column:1/-1;">
                   <label class="form-label">Instagram Business Account ID ${s.instagramAccountId ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#dc2626;font-size:10px;">לא מוגדר</span>'}</label>
                   <input class="form-input" type="password" id="niche-ig-account-${s.id}" value="" placeholder="${s.instagramAccountId ? 'השאר ריק לשמור ערך קיים' : '17841400000000000'}" dir="ltr" style="font-size:13px;" />
                   <div style="font-size:10px;color:var(--on-surface-var);margin-top:4px;">נמצא ב-Meta Graph API Explorer: GET /me/accounts → Instagram Business Account ID. משתמש באותו Access Token של Facebook.</div>
+                </div>
+              </div>
+
+              <div class="niche-field-label">
+                <span class="material-symbols-outlined">shopping_bag</span>
+                הגדרות AliExpress
+              </div>
+              <div class="form-grid">
+                <div class="form-group form-full" style="grid-column:1/-1;">
+                  <label class="form-label">Tracking ID ${s.aliexpressTrackingId ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#6b7280;font-size:10px;">ברירת מחדל</span>'}</label>
+                  <input class="form-input" type="password" id="niche-ali-tracking-${s.id}" value="" placeholder="${s.aliexpressTrackingId ? 'השאר ריק לשמור ערך קיים' : 'הזן Tracking ID (ישתמש בברירת מחדל אם ריק)'}" dir="ltr" style="font-size:13px;" />
+                  <div style="font-size:10px;color:var(--on-surface-var);margin-top:4px;">ה-Tracking ID ישמש בחיפוש מוצרי AliExpress עבור נישה זו. כל לינק שותפים שייווצר יהיה משויך ל-ID זה.</div>
                 </div>
               </div>
             </div>
@@ -583,6 +604,7 @@ function renderActiveNicheCard() {
 
   // Load WA groups for this niche after rendering
   loadAndRenderWaGroups(s.id);
+  attachNicheAutoSave(s.id);
 }
 
 function renderNicheGrid() {
@@ -706,6 +728,32 @@ document.getElementById('gen-token-modal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeGenerateTokenModal();
 });
 
+const _nicheDebounceTimers = {};
+function scheduleNicheSave(id) {
+  clearTimeout(_nicheDebounceTimers[id]);
+  _nicheDebounceTimers[id] = setTimeout(() => saveNiche(id), 800);
+}
+
+function attachNicheAutoSave(id) {
+  const inputIds = [
+    `niche-prompt-${id}`,
+    `niche-wa-url-${id}`,
+    `niche-fb-page-${id}`,
+    `niche-fb-token-${id}`,
+    `niche-fb-app-id-${id}`,
+    `niche-fb-app-secret-${id}`,
+    `niche-ig-account-${id}`,
+  ];
+  inputIds.forEach(fieldId => {
+    const el = document.getElementById(fieldId);
+    if (el) el.addEventListener('input', () => scheduleNicheSave(id));
+  });
+  ['wa-toggle', 'fb-toggle', 'ig-toggle'].forEach(prefix => {
+    const el = document.getElementById(`${prefix}-${id}`);
+    if (el) el.addEventListener('click', () => scheduleNicheSave(id));
+  });
+}
+
 window.saveNiche = async (id) => {
   const result = document.getElementById(`niche-save-result-${id}`);
   try {
@@ -721,7 +769,8 @@ window.saveNiche = async (id) => {
         facebookToken:       document.getElementById(`niche-fb-token-${id}`)?.value.trim() || '',
         facebookAppId:       document.getElementById(`niche-fb-app-id-${id}`)?.value.trim() || '',
         facebookAppSecret:   document.getElementById(`niche-fb-app-secret-${id}`)?.value.trim() || '',
-        instagramAccountId:  document.getElementById(`niche-ig-account-${id}`)?.value.trim() || '',
+        instagramAccountId:      document.getElementById(`niche-ig-account-${id}`)?.value.trim() || '',
+        aliexpressTrackingId:    document.getElementById(`niche-ali-tracking-${id}`)?.value.trim() || '',
       },
     });
     if (result) { result.style.color = '#16a34a'; result.textContent = '✓ נשמר'; }
@@ -882,7 +931,7 @@ function renderProducts(products) {
       ? `<span style="font-size:10px;color:var(--on-surface-var);margin-right:4px;" title="נשלח ${p.send_count} פעמים">(×${p.send_count})</span>`
       : '';
     return `
-    <tr draggable="true" data-row="${p.row_number}">
+    <tr draggable="true" data-id="${p.id}">
       <td><span class="drag-handle" title="גרור לסידור מחדש">⠿</span></td>
       <td>${p.image ? `<img class="img-thumb" src="${escHtml(p.image)}" onerror="this.style.display='none'" />` : '—'}</td>
       <td style="max-width:200px;word-break:break-word;">${escHtml(p.Text)}</td>
@@ -972,8 +1021,8 @@ function initDragAndDrop(tbody) {
       e.preventDefault();
       if (!dragSrc || dragSrc === row) return;
 
-      const fromRow = parseInt(dragSrc.dataset.row);
-      const toRow   = parseInt(row.dataset.row);
+      const fromId = dragSrc.dataset.id;
+      const toId   = row.dataset.id;
 
       // Optimistic UI: move the row visually
       const allRows = [...tbody.querySelectorAll('tr')];
@@ -983,7 +1032,7 @@ function initDragAndDrop(tbody) {
       else                  tbody.insertBefore(dragSrc, row);
 
       try {
-        await api('/api/products/reorder', { method: 'POST', body: { fromRow, toRow } });
+        await api('/api/products/reorder', { method: 'POST', body: { fromId, toId } });
       } catch (err) {
         alert('שגיאה בסידור מחדש: ' + err.message);
         loadProducts(); // revert on failure
@@ -1131,6 +1180,29 @@ window.sendProduct = async (rowNumber, btn) => {
 
 document.getElementById('btn-refresh-products').addEventListener('click', loadProducts);
 
+document.getElementById('btn-shuffle-products').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  btn.querySelector('span').style.animation = 'spin 0.6s linear infinite';
+  try {
+    const body = _currentSubject ? { subject: _currentSubject } : {};
+    const res = await api('/api/products/shuffle', { method: 'POST', body });
+    if (res.success) {
+      await loadProducts();
+      btn.querySelector('span').textContent = 'check';
+      btn.querySelector('span').style.animation = '';
+    } else {
+      btn.querySelector('span').style.animation = '';
+    }
+  } catch {
+    btn.querySelector('span').style.animation = '';
+  }
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.querySelector('span').textContent = 'shuffle';
+  }, 1500);
+});
+
 document.getElementById('btn-sync-clicks').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   btn.disabled = true;
@@ -1222,6 +1294,10 @@ async function loadSchedules() {
           </div>
         </div>
         <div class="schedule-actions">
+          <button class="btn btn-sm" style="background:rgba(22,163,74,0.12);color:#16a34a;border:1px solid rgba(22,163,74,0.2);font-size:13px;padding:4px 10px;" onclick="fireScheduleNow('${s.id}')" title="הרץ עכשיו">▶</button>
+          <button class="btn btn-sm" style="background:rgba(112,42,225,0.08);color:var(--primary);border:1px solid rgba(112,42,225,0.2);padding:4px 8px;" onclick="openEditSchedule('${s.id}', ${JSON.stringify(s.label)}, ${JSON.stringify(s.cron)})" title="ערוך">
+            <span class="material-symbols-outlined" style="font-size:15px;line-height:1;">edit</span>
+          </button>
           <label class="toggle" title="${s.enabled ? 'פעיל' : 'לא פעיל'}">
             <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleSchedule('${s.id}', this.checked)" />
             <span class="slider"></span>
@@ -1271,6 +1347,17 @@ window.deleteSchedule = async (id) => {
   }
 };
 
+window.fireScheduleNow = async (id) => {
+  try {
+    await api(`/api/schedules/${id}/fire`, { method: 'POST' });
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
+
+// Inject loadSchedules callback into schedule-modal so it can refresh the list after saving
+initScheduleModal({ loadSchedules });
+
 document.getElementById('btn-add-schedule').addEventListener('click', async () => {
   const label   = document.getElementById('sched-label').value.trim();
   const cron    = document.getElementById('sched-cron').value.trim();
@@ -1279,13 +1366,113 @@ document.getElementById('btn-add-schedule').addEventListener('click', async () =
   try {
     await api('/api/schedules', { method: 'POST', body: { label, cron, subject } });
     document.getElementById('sched-label').value = '';
-    document.getElementById('sched-cron').value  = '';
     document.getElementById('sched-subject').value = '';
+    resetCronBuilder();
     await loadSchedules();
   } catch (err) {
     alert('שגיאה: ' + err.message);
   }
 });
+
+// ── Broadcasts ─────────────────────────────────────────────────────────────────
+let _broadcasts = [];
+
+async function loadBroadcasts() {
+  const container = document.getElementById('broadcasts-list');
+  if (!container) return;
+  try {
+    const data = await api('/api/broadcasts');
+    _broadcasts = data.broadcasts || [];
+    window._broadcasts = _broadcasts;
+    if (!_broadcasts.length) {
+      container.innerHTML = '<div class="empty-state">אין הודעות שידור</div>';
+      return;
+    }
+    const DAYS_HE = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+    function bcastRecurrenceLabel(b) {
+      if (b.recurrenceLabel) return b.recurrenceLabel;
+      const r = b.recurrence;
+      if (!r) return b.cron || '';
+      const hh = String(r.hour ?? 0).padStart(2, '0');
+      if (r.frequency === 'daily')        return `כל יום ב-${hh}:00`;
+      if (r.frequency === 'weekly')       return `כל ${DAYS_HE[r.day ?? 0]} ב-${hh}:00`;
+      if (r.frequency === 'every_n_days') return `כל ${r.n ?? 2} ימים ב-${hh}:00`;
+      return b.cron || '';
+    }
+    container.innerHTML = _broadcasts.map(b => {
+      const subj = _subjects.find(x => x.id === b.subjectId);
+      const subjChip = subj
+        ? `<span style="font-size:10.5px;background:rgba(2,132,199,0.12);color:#0284c7;padding:2px 8px;border-radius:20px;font-weight:600;">${escHtml(subj.name)}</span>`
+        : '';
+      const platformChips = [
+        `<span style="font-size:10.5px;background:rgba(29,161,242,0.1);color:#1d9bf0;padding:2px 8px;border-radius:20px;">WhatsApp</span>`,
+        `<span style="font-size:10.5px;background:rgba(24,119,242,0.1);color:#1877f2;padding:2px 8px;border-radius:20px;">Facebook</span>`,
+      ].join(' ');
+      const preview = escHtml((b.text || '').slice(0, 80)) + ((b.text || '').length > 80 ? '…' : '');
+      const schedLabel = bcastRecurrenceLabel(b);
+      const imgIcon = b.imageUrl
+        ? `<span class="material-symbols-outlined" title="יש תמונה" style="font-size:14px;color:var(--on-surface-var);vertical-align:middle;">image</span>`
+        : '';
+      return `
+      <div class="schedule-item" id="bcast-${escHtml(String(b.id))}">
+        <div style="flex:1;min-width:0;">
+          <div class="schedule-label" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
+            ${escHtml(b.label)}${imgIcon}${subjChip}${platformChips}
+          </div>
+          <div class="bcast-msg-preview">${preview}</div>
+          <div class="schedule-cron">${escHtml(schedLabel)}</div>
+          ${b.nextRunAt ? `<div style="font-size:11px;color:var(--on-surface-var);">הבא: ${fmtDate(b.nextRunAt)}</div>` : ''}
+        </div>
+        <div class="schedule-actions">
+          <button class="btn btn-sm" style="background:rgba(22,163,74,0.12);color:#16a34a;border:1px solid rgba(22,163,74,0.2);font-size:13px;padding:4px 10px;" onclick="fireBroadcastNow('${escHtml(String(b.id))}')" title="שלח עכשיו">▶</button>
+          <button class="btn btn-sm" style="background:rgba(112,42,225,0.08);color:var(--primary);border:1px solid rgba(112,42,225,0.2);padding:4px 8px;" onclick="openEditBroadcast('${escHtml(String(b.id))}')" title="ערוך">
+            <span class="material-symbols-outlined" style="font-size:15px;line-height:1;">edit</span>
+          </button>
+          <label class="toggle" title="${b.enabled ? 'פעיל' : 'לא פעיל'}">
+            <input type="checkbox" ${b.enabled ? 'checked' : ''} onchange="toggleBroadcast('${escHtml(String(b.id))}', this.checked)" />
+            <span class="slider"></span>
+          </label>
+          <button class="btn btn-danger btn-sm" onclick="deleteBroadcast('${escHtml(String(b.id))}')">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    container.innerHTML = `<div class="empty-state" style="color:#f87171;">${escHtml(err.message)}</div>`;
+  }
+}
+
+window.fireBroadcastNow = async (id) => {
+  try {
+    await api(`/api/broadcasts/${id}/fire-now`, { method: 'POST' });
+    alert('ההודעה נשלחת!');
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
+
+window.toggleBroadcast = async (id, enabled) => {
+  try {
+    await api(`/api/broadcasts/${id}/enabled`, { method: 'PATCH', body: { enabled } });
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+    await loadBroadcasts();
+  }
+};
+
+window.deleteBroadcast = async (id) => {
+  if (!confirm('למחוק הודעת שידור זו?')) return;
+  try {
+    await api(`/api/broadcasts/${id}`, { method: 'DELETE' });
+    await loadBroadcasts();
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
+
+// Initialize broadcast modal (replaces stubs with real handlers)
+initBroadcastModal({ loadBroadcasts });
+
+document.getElementById('btn-add-broadcast').addEventListener('click', () => openAddBroadcast());
 
 // ── Scraper ───────────────────────────────────────────────────────────────────
 document.getElementById('btn-scrape').addEventListener('click', async (btn) => {
@@ -1380,30 +1567,6 @@ document.getElementById('btn-refresh-fb').addEventListener('click', async () => 
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-async function api(url, opts = {}) {
-  const res = await fetch(url, {
-    method: opts.method || 'GET',
-    headers: opts.body ? { 'Content-Type': 'application/json' } : {},
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || res.statusText);
-  return data;
-}
-
-function escHtml(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function fmtDate(iso) {
-  if (!iso) return '';
-  try {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return iso; // show raw value if unparseable
-    return d.toLocaleDateString('he-IL', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
-  } catch { return iso; }
-}
-
 function showLogTab() {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -1820,7 +1983,7 @@ async function doAliSearch(page) {
   try {
     // Fetch search results and existing products in parallel
     const [data, existingData] = await Promise.all([
-      api('/api/aliexpress/search', { method: 'POST', body: { keywords, page_no: page } }),
+      api('/api/aliexpress/search', { method: 'POST', body: { keywords, page_no: page, subjectId: document.getElementById('ali-subject-select')?.value || undefined } }),
       api('/api/aliexpress/existing').catch(() => ({ urls: [] })),
     ]);
 
@@ -1948,6 +2111,7 @@ window.deleteWaGroup = async (groupId, subjectId) => {
 loadSubjects().then(() => {
   loadProducts();
   loadSchedules();
+  loadBroadcasts();
 });
 
 // ── Users Admin ───────────────────────────────────────────────────────────────

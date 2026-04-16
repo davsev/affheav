@@ -1,6 +1,6 @@
 const { query } = require('../db');
 
-const SENSITIVE = ['facebook_token', 'facebook_app_id', 'facebook_app_secret'];
+const SENSITIVE = ['facebook_token', 'facebook_app_id', 'facebook_app_secret', 'aliexpress_tracking_id'];
 
 function _row(r) {
   if (!r) return null;
@@ -9,6 +9,7 @@ function _row(r) {
     userId:              r.user_id,
     name:                r.name,
     color:               r.color || '',
+    waGroup:             r.wa_group || '',
     macrodroidUrl:       r.macrodroid_url || '',
     facebookPageId:      r.facebook_page_id || '',
     facebookToken:       r.facebook_token || '',
@@ -19,9 +20,10 @@ function _row(r) {
     prompt:              r.openai_prompt || '',
     waEnabled:           r.wa_enabled,
     fbEnabled:           r.fb_enabled,
-    instagramEnabled:    r.instagram_enabled,
-    createdAt:           r.created_at,
-    updatedAt:           r.updated_at,
+    instagramEnabled:      r.instagram_enabled,
+    aliexpressTrackingId:  r.aliexpress_tracking_id || '',
+    createdAt:             r.created_at,
+    updatedAt:             r.updated_at,
   };
 }
 
@@ -55,24 +57,25 @@ async function createSubject(userId, fields) {
     `INSERT INTO subjects
        (user_id, name, color, macrodroid_url, facebook_page_id, facebook_token,
         facebook_app_id, facebook_app_secret, instagram_account_id, join_link,
-        openai_prompt, wa_enabled, fb_enabled, instagram_enabled)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        openai_prompt, wa_enabled, fb_enabled, instagram_enabled, aliexpress_tracking_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
      RETURNING *`,
     [
       userId,
       fields.name,
-      fields.color               || null,
-      fields.macrodroidUrl       || null,
-      fields.facebookPageId      || null,
-      fields.facebookToken       || null,
-      fields.facebookAppId       || null,
-      fields.facebookAppSecret   || null,
-      fields.instagramAccountId  || null,
-      fields.joinLink            || null,
-      fields.prompt              || null,
-      fields.waEnabled           !== false,
-      fields.fbEnabled           !== false,
-      fields.instagramEnabled    === true,
+      fields.color                  || null,
+      fields.macrodroidUrl          || null,
+      fields.facebookPageId         || null,
+      fields.facebookToken          || null,
+      fields.facebookAppId          || null,
+      fields.facebookAppSecret      || null,
+      fields.instagramAccountId     || null,
+      fields.joinLink               || null,
+      fields.prompt                 || null,
+      fields.waEnabled              !== false,
+      fields.fbEnabled              !== false,
+      fields.instagramEnabled       === true,
+      fields.aliexpressTrackingId   || null,
     ]
   );
   return _row(rows[0]);
@@ -90,9 +93,10 @@ async function updateSubject(id, userId, fields) {
     instagramAccountId:   'instagram_account_id',
     joinLink:             'join_link',
     prompt:               'openai_prompt',
-    waEnabled:            'wa_enabled',
-    fbEnabled:            'fb_enabled',
-    instagramEnabled:     'instagram_enabled',
+    waEnabled:              'wa_enabled',
+    fbEnabled:              'fb_enabled',
+    instagramEnabled:       'instagram_enabled',
+    aliexpressTrackingId:   'aliexpress_tracking_id',
   };
 
   const updates = [];
@@ -102,7 +106,7 @@ async function updateSubject(id, userId, fields) {
   for (const [jsKey, col] of Object.entries(allowed)) {
     if (fields[jsKey] !== undefined) {
       // Sensitive: only update if new non-empty value provided
-      if (['facebookToken', 'facebookAppId', 'facebookAppSecret'].includes(jsKey)) {
+      if (['facebookToken', 'facebookAppId', 'facebookAppSecret', 'aliexpressTrackingId'].includes(jsKey)) {
         if (!fields[jsKey] || fields[jsKey].trim() === '') continue;
       }
       updates.push(`${col} = $${i++}`);

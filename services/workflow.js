@@ -70,7 +70,7 @@ async function markSent(productId, { sentAt, facebookAt, instagramAt } = {}) {
   let i = 1;
   if (sentAt !== null) {
     updates.push(`sent_at = $${i++}`);
-    values.push(sentAt ? new Date(sentAt) : new Date());
+    values.push(sentAt ? new Date(sentAt) : null);
   }
   if (facebookAt !== null) {
     updates.push(`facebook_at = $${i++}`);
@@ -166,10 +166,15 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
   if (sendWA) {
     // Resolve which groups to send to
     let groupsToSend = [];
-    if (waGroupIds && waGroupIds.length > 0 && subject && userId) {
-      // Fetch all groups for this niche and filter to selected ids
+    if (subject && userId) {
       const allGroups = await getGroupsBySubject(subject, userId);
-      groupsToSend = allGroups.filter(g => waGroupIds.includes(g.id));
+      if (waGroupIds && waGroupIds.length > 0) {
+        // Manual send: filter to only the selected groups
+        groupsToSend = allGroups.filter(g => waGroupIds.includes(g.id));
+      } else {
+        // Scheduler (or send-all): use every group configured for this niche
+        groupsToSend = allGroups;
+      }
     }
 
     if (groupsToSend.length > 0) {
@@ -200,13 +205,18 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
         }
       }
     } else {
-      // Fallback: use product's wa_group string (legacy / no DB groups configured)
+      // Fallback: use niche-level wa_group, then product's wa_group (legacy)
+      const waGroup = subjectConfig?.waGroup || product.wa_group;
+      if (!waGroup) {
+        log('⚠ No WhatsApp group configured for this niche — skipping WhatsApp', 'warn');
+        results.whatsapp = { success: false, error: 'no_wa_group_configured' };
+      } else {
       try {
-        log(`Sending to WhatsApp group: ${product.wa_group}`);
+        log(`Sending to WhatsApp group: ${waGroup}`);
         const waResult = await whatsapp.send({
           text:       message,
           image:      product.image,
-          wa_group:   product.wa_group,
+          wa_group:   waGroup,
           webhookUrl: subjectConfig?.macrodroidUrl || null,
         });
         results.whatsapp = waResult;
@@ -219,6 +229,7 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
         log(`✗ WhatsApp failed: ${err.message}`, 'error');
         results.whatsapp = { success: false, error: err.message };
       }
+      } // end else (waGroup exists)
     }
   } else {
     log('⏭ WhatsApp skipped');
@@ -276,10 +287,15 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
 
   // Step 6: Mark sent
   try {
-    // null = platform was skipped (preserve existing value), '' = tried but failed
-    const sentAt      = !sendWA ? null : (results.whatsapp?.success  ? new Date().toISOString() : '');
-    const facebookAt  = !sendFB ? null : (results.facebook?.success  ? new Date().toISOString() : '');
-    const instagramAt = !sendIG ? null : (results.instagram?.success  ? new Date().toISOString() : '');
+    // null  = platform was skipped (preserve existing DB value)
+    // null  = platform tried but failed (don't mark as sent so it can be retried)
+    // isoString = success
+    const waSuccess = Array.isArray(results.whatsapp)
+      ? results.whatsapp.some(r => r.success)
+      : !!results.whatsapp?.success;
+    const sentAt      = !sendWA ? null : (waSuccess               ? new Date().toISOString() : null);
+    const facebookAt  = !sendFB ? null : (results.facebook?.success ? new Date().toISOString() : null);
+    const instagramAt = !sendIG ? null : (results.instagram?.success ? new Date().toISOString() : null);
     await markSent(product.id, { sentAt, facebookAt, instagramAt });
     log('✓ DB updated');
   } catch (err) {

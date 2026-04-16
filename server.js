@@ -209,6 +209,7 @@ app.use('/api/facebook',      isAuthenticated, require('./routes/facebook'));
 app.use('/api/prompt',        isAuthenticated, require('./routes/prompt'));
 app.use('/api/aliexpress',    isAuthenticated, require('./routes/aliexpress-api'));
 app.use('/api/users',         isAuthenticated, require('./routes/users'));
+app.use('/api/broadcasts',   isAuthenticated, require('./routes/broadcasts'));
 
 // ── Static + SPA Fallback ─────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
@@ -224,8 +225,10 @@ app.listen(PORT, async () => {
   } else {
     console.warn('[db] DATABASE_URL not set — skipping DB migration');
   }
+  scheduler.setLogger(workflow.log);
   scheduler.setWorkflowRunner((opts) => workflow.run(null, opts || {}));
-  // opts contains { userId, subjectId } passed by the scheduler per job
   const count = await scheduler.startAll();
-  console.log(`📅 ${count} schedule(s) loaded\n`);
+  console.log(`📅 ${count} schedule(s) loaded`);
+  const bcount = await scheduler.startBroadcasts();
+  console.log(`📡 ${bcount} broadcast(s) loaded\n`);
 });
