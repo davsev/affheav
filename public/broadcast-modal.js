@@ -117,7 +117,7 @@ function openModal(broadcast = null) {
 
   // Recurrence
   const r = broadcast && broadcast.recurrence;
-  el('bcast-freq').value = r ? (r.frequency || 'daily') : 'daily';
+  el('bcast-freq').value = r ? (r.mode || 'daily') : 'daily';
   el('bcast-day').value  = r ? (r.day  ?? 5) : 5;  // default Friday
   el('bcast-n').value    = r ? (r.n    ?? 3) : 3;
   el('bcast-hour').value = r ? (r.hour ?? 18) : 18; // default 18:00
@@ -163,7 +163,7 @@ async function saveBroadcast() {
   if (!text)      { alert('יש להזין תוכן הודעה'); return; }
   if (text.length > MAX_CHARS) { alert(`ההודעה ארוכה מדי (מקסימום ${MAX_CHARS} תווים)`); return; }
 
-  const recurrence = { frequency: freq, hour };
+  const recurrence = { mode: freq, hour };
   if (freq === 'weekly')       recurrence.day = day;
   if (freq === 'every_n_days') recurrence.n   = n;
 
