@@ -1,5 +1,6 @@
 import { api, escHtml, fmtDate }  from './utils.js';
 import { init as initScheduleModal, resetCronBuilder } from './schedule-modal.js';
+import { initBroadcastModal } from './broadcast-modal.js';
 
 // ── Sidebar mobile toggle ─────────────────────────────────────────────────────
 function toggleSidebar() {
@@ -166,6 +167,7 @@ async function loadSubjects() {
   try {
     const { subjects } = await api('/api/subjects');
     _subjects = subjects || [];
+    window._subjects = _subjects;
     populateSubjectSelects();
     renderSettingsPage();
   } catch (err) {
@@ -1381,6 +1383,7 @@ async function loadBroadcasts() {
   try {
     const data = await api('/api/broadcasts');
     _broadcasts = data.broadcasts || [];
+    window._broadcasts = _broadcasts;
     if (!_broadcasts.length) {
       container.innerHTML = '<div class="empty-state">אין הודעות שידור</div>';
       return;
@@ -1466,14 +1469,8 @@ window.deleteBroadcast = async (id) => {
   }
 };
 
-// Stub — replaced by broadcast-modal.js in Plan 02
-window.openAddBroadcast = () => { alert('בקרוב'); };
-window.openEditBroadcast = (id) => { alert('בקרוב: ' + id); };
-window.closeBroadcastModal = () => {
-  const m = document.getElementById('broadcast-modal');
-  if (m) m.style.display = 'none';
-};
-window.saveBroadcast = () => {};
+// Initialize broadcast modal (replaces stubs with real handlers)
+initBroadcastModal({ loadBroadcasts });
 
 document.getElementById('btn-add-broadcast').addEventListener('click', () => openAddBroadcast());
 
