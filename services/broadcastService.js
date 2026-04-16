@@ -9,7 +9,7 @@ const path = require('path');
  * Convert a human-readable recurrence object to a cron expression string.
  * Throws a descriptive Error on any validation failure.
  *
- * @param {{ mode: string, hour: number, day?: number, n?: number }} recurrence
+ * @param {{ mode: string, hour: number, minute?: number, day?: number, n?: number, skipFriday?: boolean, skipSaturday?: boolean }} recurrence
  * @returns {string} cron expression
  */
 function recurrenceToCron(recurrence) {
@@ -18,33 +18,41 @@ function recurrenceToCron(recurrence) {
   }
 
   const VALID_MODES = ['daily', 'weekly', 'every_n_days'];
-  const { mode, hour, day, n } = recurrence;
+  const { mode, hour, minute = 0, day, n, skipFriday = false, skipSaturday = false } = recurrence;
 
   if (!VALID_MODES.includes(mode)) {
     throw new Error(`Invalid recurrence mode: ${mode}. Must be one of: ${VALID_MODES.join(', ')}`);
   }
 
-  const hourInt = parseInt(hour, 10);
-  if (!Number.isInteger(hourInt) || hourInt < 0 || hourInt > 23) {
-    throw new Error('hour must be an integer between 0 and 23');
+  const hourInt   = parseInt(hour, 10);
+  const minuteInt = parseInt(minute, 10);
+  if (!Number.isInteger(hourInt)   || hourInt   < 0 || hourInt   > 23) throw new Error('hour must be 0–23');
+  if (!Number.isInteger(minuteInt) || minuteInt < 0 || minuteInt > 59) throw new Error('minute must be 0–59');
+
+  // Build day-of-week restriction for daily mode (0=Sun … 6=Sat)
+  // For every_n_days the skip is enforced at runtime (cron OR-semantics break it)
+  let dowExpr = '*';
+  if (mode === 'daily' && (skipFriday || skipSaturday)) {
+    const allowed = [0, 1, 2, 3, 4, 5, 6].filter(d => !(skipFriday && d === 5) && !(skipSaturday && d === 6));
+    dowExpr = allowed.join(',');
   }
 
   let expr;
 
   if (mode === 'daily') {
-    expr = `0 ${hourInt} * * *`;
+    expr = `${minuteInt} ${hourInt} * * ${dowExpr}`;
   } else if (mode === 'weekly') {
     const dayInt = parseInt(day, 10);
     if (!Number.isInteger(dayInt) || dayInt < 0 || dayInt > 6) {
       throw new Error('day must be an integer between 0 (Sun) and 6 (Sat) for weekly mode');
     }
-    expr = `0 ${hourInt} * * ${dayInt}`;
+    expr = `${minuteInt} ${hourInt} * * ${dayInt}`;
   } else if (mode === 'every_n_days') {
     const nInt = parseInt(n, 10);
     if (!Number.isInteger(nInt) || nInt < 1 || nInt > 30) {
       throw new Error('n must be an integer between 1 and 30 for every_n_days mode');
     }
-    expr = `0 ${hourInt} */${nInt} * *`;
+    expr = `${minuteInt} ${hourInt} */${nInt} * *`;
   }
 
   if (!cron.validate(expr)) {
@@ -66,8 +74,9 @@ function recurrenceToCron(recurrence) {
 function computeNextRun(recurrence, enabled) {
   if (!enabled || !recurrence) return null;
 
-  const { mode, hour, day, n } = recurrence;
-  const hourInt = parseInt(hour, 10);
+  const { mode, hour, minute = 0, day, n } = recurrence;
+  const hourInt   = parseInt(hour, 10);
+  const minuteInt = parseInt(minute, 10);
   const now = new Date();
 
   // Get local time in Jerusalem timezone
@@ -79,40 +88,42 @@ function computeNextRun(recurrence, enabled) {
   // Parse "M/D/YYYY, HH:MM:SS" format returned by toLocaleString
   const [datePart, timePart] = jerusalemStr.split(', ');
   const [monthStr, dayStr, yearStr] = datePart.split('/');
-  const [localHourStr] = timePart.split(':');
+  const [localHourStr, localMinuteStr] = timePart.split(':');
 
-  const localHour = parseInt(localHourStr, 10);
+  const localHour   = parseInt(localHourStr, 10);
+  const localMinute = parseInt(localMinuteStr, 10);
   const localDay = new Date(`${yearStr}-${monthStr.padStart(2, '0')}-${dayStr.padStart(2, '0')}`).getDay(); // 0=Sun
 
-  // Start next from now with minutes/seconds/ms zeroed (working in UTC)
+  // Helper: has the fire time passed today?
+  const pastToday = localHour > hourInt || (localHour === hourInt && localMinute >= minuteInt);
+
+  // Start next from now with seconds/ms zeroed (working in UTC)
   const next = new Date(now);
   next.setUTCSeconds(0);
   next.setUTCMilliseconds(0);
-  next.setUTCMinutes(0);
 
   if (mode === 'daily') {
-    if (localHour >= hourInt) {
+    if (pastToday) {
       // Already past today's fire time — advance to tomorrow
       next.setUTCDate(next.getUTCDate() + 1);
     }
-    // Set hours accounting for Jerusalem offset by targeting the wall-clock hour
-    _setJerusalemHour(next, hourInt);
+    _setJerusalemTime(next, hourInt, minuteInt);
 
   } else if (mode === 'weekly') {
     const dayInt = parseInt(day, 10);
     let daysUntil = (dayInt - localDay + 7) % 7;
-    if (daysUntil === 0 && localHour >= hourInt) {
+    if (daysUntil === 0 && pastToday) {
       daysUntil = 7;
     }
     next.setUTCDate(next.getUTCDate() + daysUntil);
-    _setJerusalemHour(next, hourInt);
+    _setJerusalemTime(next, hourInt, minuteInt);
 
   } else if (mode === 'every_n_days') {
     const nInt = parseInt(n, 10);
-    if (localHour >= hourInt) {
+    if (pastToday) {
       next.setUTCDate(next.getUTCDate() + 1);
     }
-    _setJerusalemHour(next, hourInt);
+    _setJerusalemTime(next, hourInt, minuteInt);
 
     // Snap forward to the next calendar anchor: smallest date >= next where (date - 1) % n === 0
     // "date" here is the day-of-month in Jerusalem time
@@ -133,10 +144,11 @@ function computeNextRun(recurrence, enabled) {
  * This is an approximation: computes the current Jerusalem UTC offset and applies it.
  *
  * @param {Date} date
- * @param {number} targetHour - 0–23 local Jerusalem hour
+ * @param {number} targetHour   - 0–23 local Jerusalem hour
+ * @param {number} targetMinute - 0–59 local Jerusalem minute
  */
-function _setJerusalemHour(date, targetHour) {
-  // Compute Jerusalem offset in hours at the current date
+function _setJerusalemTime(date, targetHour, targetMinute = 0) {
+  // Compute Jerusalem UTC offset at this date
   const utcMs = date.getTime();
   const jerusalemStr = new Date(utcMs).toLocaleString('en-US', {
     timeZone: 'Asia/Jerusalem',
@@ -148,6 +160,7 @@ function _setJerusalemHour(date, targetHour) {
   const offsetHours = localHourNow - utcHourNow;
 
   date.setUTCHours(targetHour - offsetHours);
+  date.setUTCMinutes(targetMinute);
 }
 
 /**
@@ -170,16 +183,24 @@ const DAY_NAMES_HE = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמ�
 /**
  * Convert a recurrence object to a human-readable Hebrew description.
  *
- * @param {{ mode: string, hour: number, day?: number, n?: number }|null} recurrence
+ * @param {{ mode: string, hour: number, minute?: number, day?: number, n?: number, skipFriday?: boolean, skipSaturday?: boolean }|null} recurrence
  * @returns {string}
  */
 function recurrenceToDescription(recurrence) {
   if (!recurrence) return '';
-  const { mode, hour, day, n } = recurrence;
-  const h = String(parseInt(hour, 10)).padStart(2, '0') + ':00';
-  if (mode === 'daily')        return `כל יום ב-${h}`;
-  if (mode === 'weekly')       return `כל יום ${DAY_NAMES_HE[parseInt(day, 10)] || ''} ב-${h}`;
-  if (mode === 'every_n_days') return `כל ${n} ימים ב-${h}`;
+  const { mode, hour, minute = 0, day, n, skipFriday = false, skipSaturday = false } = recurrence;
+  const hh = String(parseInt(hour, 10)).padStart(2, '0');
+  const mm = String(parseInt(minute, 10)).padStart(2, '0');
+  const t  = `${hh}:${mm}`;
+
+  let skip = '';
+  if (skipFriday && skipSaturday) skip = ' (לא שישי ושבת)';
+  else if (skipFriday)            skip = ' (לא שישי)';
+  else if (skipSaturday)          skip = ' (לא שבת)';
+
+  if (mode === 'daily')        return `כל יום ב-${t}${skip}`;
+  if (mode === 'weekly')       return `כל יום ${DAY_NAMES_HE[parseInt(day, 10)] || ''} ב-${t}`;
+  if (mode === 'every_n_days') return `כל ${n} ימים ב-${t}${skip}`;
   return '';
 }
 

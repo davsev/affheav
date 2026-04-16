@@ -21,27 +21,38 @@ function populateHourSelect() {
   for (let h = 0; h < 24; h++) {
     const opt = document.createElement('option');
     opt.value = h;
-    opt.textContent = String(h).padStart(2, '0') + ':00';
+    opt.textContent = String(h).padStart(2, '0');
     sel.appendChild(opt);
   }
 }
 
 // ── Recurrence preview ─────────────────────────────────────────────────────────
 function updateRecurrencePreview() {
-  const freq = el('bcast-freq').value;
-  const day  = parseInt(el('bcast-day').value, 10);
-  const n    = parseInt(el('bcast-n').value, 10);
-  const hour = parseInt(el('bcast-hour').value, 10);
-  const hh   = String(hour).padStart(2, '0');
+  const freq    = el('bcast-freq').value;
+  const day     = parseInt(el('bcast-day').value, 10);
+  const n       = parseInt(el('bcast-n').value, 10);
+  const hour    = parseInt(el('bcast-hour').value, 10);
+  const minute  = parseInt(el('bcast-minute').value, 10);
+  const hh      = String(hour).padStart(2, '0');
+  const mm      = String(minute).padStart(2, '0');
+  const skipFri = el('bcast-skip-fri').checked;
+  const skipSat = el('bcast-skip-sat').checked;
 
   // Show/hide conditional rows
-  el('bcast-day').style.display   = freq === 'weekly'       ? ''     : 'none';
-  el('bcast-n-row').style.display = freq === 'every_n_days' ? 'flex' : 'none';
+  el('bcast-day').style.display    = freq === 'weekly'       ? ''     : 'none';
+  el('bcast-n-row').style.display  = freq === 'every_n_days' ? 'flex' : 'none';
+  // Skip checkboxes only make sense for daily / every_n_days
+  el('bcast-skip-row').style.display = freq === 'weekly' ? 'none' : 'flex';
+
+  let skip = '';
+  if (skipFri && skipSat) skip = ' (לא שישי ושבת)';
+  else if (skipFri)       skip = ' (לא שישי)';
+  else if (skipSat)       skip = ' (לא שבת)';
 
   let preview = '';
-  if (freq === 'daily')        preview = `כל יום ב-${hh}:00`;
-  if (freq === 'weekly')       preview = `כל ${DAYS_HE[day]} ב-${hh}:00`;
-  if (freq === 'every_n_days') preview = `כל ${n} ימים ב-${hh}:00`;
+  if (freq === 'daily')        preview = `כל יום ב-${hh}:${mm}${skip}`;
+  if (freq === 'weekly')       preview = `כל ${DAYS_HE[day]} ב-${hh}:${mm}`;
+  if (freq === 'every_n_days') preview = `כל ${n} ימים ב-${hh}:${mm}${skip}`;
   el('bcast-recurrence-preview').textContent = preview;
 }
 
@@ -117,10 +128,13 @@ function openModal(broadcast = null) {
 
   // Recurrence
   const r = broadcast && broadcast.recurrence;
-  el('bcast-freq').value = r ? (r.mode || 'daily') : 'daily';
-  el('bcast-day').value  = r ? (r.day  ?? 5) : 5;  // default Friday
-  el('bcast-n').value    = r ? (r.n    ?? 3) : 3;
-  el('bcast-hour').value = r ? (r.hour ?? 18) : 18; // default 18:00
+  el('bcast-freq').value        = r ? (r.mode       || 'daily') : 'daily';
+  el('bcast-day').value         = r ? (r.day        ?? 5) : 5;   // default Friday
+  el('bcast-n').value           = r ? (r.n          ?? 3) : 3;
+  el('bcast-hour').value        = r ? (r.hour       ?? 18) : 18; // default 18:00
+  el('bcast-minute').value      = r ? (r.minute     ?? 0)  : 0;
+  el('bcast-skip-fri').checked  = r ? (r.skipFriday  || false) : false;
+  el('bcast-skip-sat').checked  = r ? (r.skipSaturday || false) : false;
   updateRecurrencePreview();
 
   // Show modal
@@ -135,8 +149,6 @@ window.removeBroadcastImage = () => {
   el('bcast-image-remove').style.display = 'none';
   el('bcast-existing-image').style.display = 'none';
   _hasNewImage = false;
-  // If editing, mark that image should be cleared (send empty string for imageUrl)
-  // Actual clear happens on save — backend should handle null/empty imageUrl
 };
 
 // ── Close modal ────────────────────────────────────────────────────────────────
@@ -155,6 +167,9 @@ async function saveBroadcast() {
   const day       = parseInt(el('bcast-day').value, 10);
   const n         = parseInt(el('bcast-n').value, 10);
   const hour      = parseInt(el('bcast-hour').value, 10);
+  const minute    = parseInt(el('bcast-minute').value, 10);
+  const skipFri   = el('bcast-skip-fri').checked;
+  const skipSat   = el('bcast-skip-sat').checked;
   const fileInput = el('bcast-image-input');
 
   // Validation
@@ -163,9 +178,11 @@ async function saveBroadcast() {
   if (!text)      { alert('יש להזין תוכן הודעה'); return; }
   if (text.length > MAX_CHARS) { alert(`ההודעה ארוכה מדי (מקסימום ${MAX_CHARS} תווים)`); return; }
 
-  const recurrence = { mode: freq, hour };
+  const recurrence = { mode: freq, hour, minute };
   if (freq === 'weekly')       recurrence.day = day;
   if (freq === 'every_n_days') recurrence.n   = n;
+  if (freq !== 'weekly' && skipFri) recurrence.skipFriday  = true;
+  if (freq !== 'weekly' && skipSat) recurrence.skipSaturday = true;
 
   const btn = el('btn-save-broadcast');
   const origText = btn.innerHTML;
@@ -190,7 +207,6 @@ async function saveBroadcast() {
         const res = await fetch(`/api/broadcasts/${_editId}/image`, {
           method: 'POST',
           body: fd,
-          // No Content-Type header — browser sets multipart boundary automatically
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
@@ -199,7 +215,6 @@ async function saveBroadcast() {
       }
     } else {
       // ── Create mode ────────────────────────────────────────────────────
-      // Send everything as multipart FormData so image is included in one request
       const fd = new FormData();
       fd.append('label',      label);
       fd.append('text',       text);
@@ -210,7 +225,6 @@ async function saveBroadcast() {
       const res = await fetch('/api/broadcasts', {
         method: 'POST',
         body: fd,
-        // No Content-Type header — browser sets multipart boundary automatically
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -236,8 +250,11 @@ export function initBroadcastModal({ loadBroadcasts }) {
   // Character counter
   el('bcast-text').addEventListener('input', updateCharCount);
 
-  // Recurrence dropdowns
-  ['bcast-freq', 'bcast-day', 'bcast-n', 'bcast-hour'].forEach(id => {
+  // Recurrence controls — all trigger preview update
+  ['bcast-freq', 'bcast-day', 'bcast-n', 'bcast-hour', 'bcast-minute'].forEach(id => {
+    el(id).addEventListener('change', updateRecurrencePreview);
+  });
+  ['bcast-skip-fri', 'bcast-skip-sat'].forEach(id => {
     el(id).addEventListener('change', updateRecurrencePreview);
   });
 

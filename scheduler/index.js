@@ -70,6 +70,17 @@ async function runBroadcastJob(b) {
     log(`Broadcast "${b.label}" not found in DB — skipping`, 'warn');
     return;
   }
+  // For every_n_days with skip days, enforce the skip at runtime
+  // (cron day-of-month + day-of-week uses OR semantics so we can't use the cron field)
+  const rec = fresh.recurrence || {};
+  if (rec.mode === 'every_n_days' && (rec.skipFriday || rec.skipSaturday)) {
+    const dow = new Date().toLocaleDateString('en-US', { timeZone: 'Asia/Jerusalem', weekday: 'long' });
+    if ((rec.skipFriday && dow === 'Friday') || (rec.skipSaturday && dow === 'Saturday')) {
+      log(`Broadcast "${fresh.label}" skipped — ${dow} excluded by schedule`);
+      return;
+    }
+  }
+
   log(`Firing broadcast: "${fresh.label}" (${b.cron})`);
   try {
     await broadcastDelivery.send(fresh, fresh.user_id);
