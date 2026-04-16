@@ -1112,3 +1112,19 @@ tr[draggable].drag-over td { border-top: 2px solid var(--primary); background: r
   .form-grid { grid-template-columns: 1fr; }
   .page-title { font-size: 26px; }
 }
+
+/* ── Broadcast Messages ─────────────────────────────────────────────────── */
+.bcast-msg-preview {
+  font-size: 12px;
+  color: var(--on-surface-var);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 340px;
+}
+
+.modal-body.scrollable {
+  max-height: 62vh;
+  overflow-y: auto;
+}
