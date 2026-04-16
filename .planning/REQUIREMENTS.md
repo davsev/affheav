@@ -30,7 +30,7 @@
 ### UI
 
 - [x] **UI-01**: Broadcast messages section appears in the "לוחות זמנים" tab, below existing product schedules, visually separated
-- [ ] **UI-02**: Add/edit modal includes: label field, niche selector, textarea with character counter, image uploader with preview, recurrence builder with human-readable preview line
+- [x] **UI-02**: Add/edit modal includes: label field, niche selector, textarea with character counter, image uploader with preview, recurrence builder with human-readable preview line
 
 ## v2 Requirements
 
@@ -80,7 +80,7 @@
 | DLVR-01 | Phase 2 | Complete |
 | DLVR-02 | Phase 2 | Complete |
 | UI-01 | Phase 3 | Complete |
-| UI-02 | Phase 3 | Pending |
+| UI-02 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 15 total

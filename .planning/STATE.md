@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-04-15)
 ## Current Position
 
 Phase: 3 of 3 (Frontend UI)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-04-16 — Completed plan 03-01: broadcast messages list UI
+Plan: 2 of 2 in current phase
+Status: Complete
+Last activity: 2026-04-15 — Completed plan 03-02: broadcast add/edit modal
 
-Progress: [████████░░] 75%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -66,6 +66,8 @@ Recent decisions affecting current work:
 - [02-02]: fire-now returns { success: true, fired: true } immediately, delivery runs async — consistent with schedules.js pattern
 - [02-02]: PATCH /enabled triggers full startBroadcasts() reload — keeps in-memory cron jobs in sync with DB state on every toggle
 - [Phase 03-frontend-ui]: PATCH /api/broadcasts/:id/enabled confirmed as correct endpoint
+- [03-02]: window._subjects and window._broadcasts exposed at data-load time (not module init) so cross-module access always gets fresh data
+- [03-02]: Raw fetch() used for all FormData/multipart; api() only for JSON payloads — browser must set Content-Type boundary automatically
 
 ### Pending Todos
 
@@ -78,6 +80,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-16
-Stopped at: Completed 03-frontend-ui-01-PLAN.md (broadcast messages list UI)
+Last session: 2026-04-15
+Stopped at: Completed 03-02-PLAN.md (broadcast add/edit modal — all phases complete)
 Resume file: None
