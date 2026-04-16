@@ -4,6 +4,8 @@ const express = require('express');
 const multer  = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const { listByUser, getById, create, update, remove, setEnabled } = require('../services/broadcastService');
+const broadcastDelivery = require('../services/broadcastDelivery');
+const scheduler = require('../scheduler');
 
 // ── Upload Setup ───────────────────────────────────────────────────────────────
 
@@ -107,6 +109,7 @@ router.patch('/:id/enabled', async (req, res) => {
     }
     const msg = await setEnabled(req.params.id, req.user.id, enabled);
     if (!msg) return res.status(404).json({ success: false, error: 'Not found' });
+    await scheduler.startBroadcasts(); // sync cron jobs with DB state
     res.json({ success: true, broadcast: msg });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -126,13 +129,16 @@ router.post('/:id/image', upload.single('image'), async (req, res) => {
   }
 });
 
-// POST /:id/fire-now — Stubbed delivery (Phase 2 wires real delivery)
+// POST /:id/fire-now — Trigger delivery immediately (async, matches schedules.js pattern)
 router.post('/:id/fire-now', async (req, res) => {
   try {
     const msg = await getById(req.params.id, req.user.id);
     if (!msg) return res.status(404).json({ success: false, error: 'Not found' });
-    // Phase 2: replace stub with actual broadcastDelivery.send(msg)
-    res.json({ success: true, results: { whatsapp: { stubbed: true }, facebook: { stubbed: true } } });
+    // Respond immediately; delivery runs async (matches schedules.js pattern)
+    res.json({ success: true, fired: true });
+    broadcastDelivery.send(msg, req.user.id).catch(err => {
+      console.error(`[broadcasts] fire-now error for broadcast ${msg.id}: ${err.message}`);
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
