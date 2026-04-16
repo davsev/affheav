@@ -424,6 +424,21 @@
       </div>
     </div>
 
+    <!-- ── Broadcast Messages ─────────────────────────────────────── -->
+    <div style="margin:32px 0 16px;border-top:1.5px solid rgba(171,173,175,0.2);padding-top:28px;">
+      <h2 style="font-size:17px;font-weight:800;color:var(--on-surface);margin-bottom:4px;">הודעות שידור</h2>
+      <p style="font-size:13px;color:var(--on-surface-var);">הודעות חוזרות לקבוצות WhatsApp ודפי Facebook</p>
+    </div>
+    <div class="card" style="margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div class="card-title" style="margin:0;">הודעות פעילות</div>
+        <button class="btn btn-primary btn-sm" id="btn-add-broadcast">
+          <span class="material-symbols-outlined" style="font-size:15px;">add</span>הוסף הודעה
+        </button>
+      </div>
+      <div id="broadcasts-list"></div>
+    </div>
+
     <!-- ── Scraper ────────────────────────────────────────────────── -->
     <div class="tab-panel" id="tab-scraper">
       <div style="margin-bottom:28px;">
@@ -914,6 +929,105 @@
   </div>
 </div>
 
+<!-- ── Broadcast Add/Edit Modal ──────────────────────────────────────── -->
+<div id="broadcast-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeBroadcastModal()">
+  <div class="modal-sheet" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title" id="broadcast-modal-title">הוסף הודעת שידור</span>
+      <button class="modal-close-btn" onclick="closeBroadcastModal()" aria-label="סגור">
+        <span class="material-symbols-outlined" style="font-size:20px;">close</span>
+      </button>
+    </div>
+    <div class="modal-body scrollable" id="broadcast-modal-body">
+      <!-- Label -->
+      <div class="form-group" style="margin-bottom:18px;">
+        <label class="form-label" for="bcast-label">שם / כותרת</label>
+        <input class="form-input" id="bcast-label" placeholder="למשל: מבצע שישי שבועי" maxlength="120" />
+      </div>
+
+      <!-- Niche selector -->
+      <div class="form-group" style="margin-bottom:18px;">
+        <label class="form-label" for="bcast-subject">נישה</label>
+        <select class="form-input" id="bcast-subject"></select>
+      </div>
+
+      <!-- Message textarea + character counter -->
+      <div class="form-group" style="margin-bottom:18px;">
+        <label class="form-label" style="display:flex;justify-content:space-between;">
+          <span>הודעה</span>
+          <span id="bcast-char-count" style="font-size:11px;color:var(--on-surface-var);font-weight:400;">0/500</span>
+        </label>
+        <textarea class="form-input" id="bcast-text" rows="5" maxlength="550" placeholder="הקלד את תוכן ההודעה..."></textarea>
+      </div>
+
+      <!-- Image upload + preview -->
+      <div class="form-group" style="margin-bottom:18px;">
+        <label class="form-label">תמונה (אופציונלי)</label>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label class="btn btn-sm" style="cursor:pointer;background:rgba(112,42,225,0.08);color:var(--primary);border:1px solid rgba(112,42,225,0.2);">
+            <span class="material-symbols-outlined" style="font-size:15px;vertical-align:middle;">upload</span>
+            בחר תמונה
+            <input type="file" id="bcast-image-input" accept="image/*" style="display:none;" />
+          </label>
+          <button class="btn btn-sm" id="bcast-image-remove" style="display:none;background:rgba(220,38,38,0.08);color:#dc2626;border:1px solid rgba(220,38,38,0.2);" onclick="removeBroadcastImage()">הסר</button>
+        </div>
+        <div style="margin-top:8px;">
+          <img id="bcast-image-preview" src="" alt="תצוגה מקדימה" style="display:none;max-width:180px;max-height:120px;border-radius:8px;border:1px solid rgba(171,173,175,0.2);" />
+          <div id="bcast-existing-image" style="display:none;font-size:12px;color:var(--on-surface-var);margin-top:4px;"></div>
+        </div>
+      </div>
+
+      <!-- Recurrence builder -->
+      <div class="form-group" style="margin-bottom:8px;">
+        <label class="form-label">תדירות שליחה</label>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+          <select class="form-input" id="bcast-freq" style="width:auto;">
+            <option value="daily">יומי</option>
+            <option value="weekly">שבועי</option>
+            <option value="every_n_days">כל X ימים</option>
+          </select>
+          <!-- Day selector — shown for שבועי only -->
+          <select class="form-input" id="bcast-day" style="width:auto;display:none;">
+            <option value="0">ראשון</option>
+            <option value="1">שני</option>
+            <option value="2">שלישי</option>
+            <option value="3">רביעי</option>
+            <option value="4">חמישי</option>
+            <option value="5">שישי</option>
+            <option value="6">שבת</option>
+          </select>
+          <!-- N selector — shown for כל X ימים only -->
+          <div id="bcast-n-row" style="display:none;align-items:center;gap:6px;">
+            <span style="font-size:13px;">כל</span>
+            <select class="form-input" id="bcast-n" style="width:auto;">
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="7">7</option>
+              <option value="10">10</option>
+              <option value="14">14</option>
+            </select>
+            <span style="font-size:13px;">ימים</span>
+          </div>
+          <!-- Hour selector -->
+          <select class="form-input" id="bcast-hour" style="width:auto;"></select>
+        </div>
+        <!-- Live preview -->
+        <div style="font-size:13px;color:var(--primary);font-weight:600;min-height:20px;" id="bcast-recurrence-preview"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeBroadcastModal()">ביטול</button>
+      <button class="btn btn-primary" id="btn-save-broadcast" onclick="saveBroadcast()">
+        <span class="material-symbols-outlined" style="font-size:15px;">check</span>שמור
+      </button>
+    </div>
+  </div>
+</div>
+
+
 <script type="module" src="app.js"></script>
+<script type="module" src="broadcast-modal.js"></script>
 </body>
 </html>

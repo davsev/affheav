@@ -135,4 +135,31 @@ async function generatePermanentPageToken({ shortUserToken, pageId, facebookAppI
   return { pageToken: page.access_token, pageName: page.name };
 }
 
-module.exports = { postPhoto, refreshToken, getTokenInfo, generatePermanentPageToken };
+async function postText({ message, facebookPageId, facebookToken }) {
+  const pageId    = facebookPageId || process.env.FACEBOOK_PAGE_ID;
+  const pageToken = facebookToken  || process.env.FACEBOOK_ACCESS_TOKEN;
+
+  if (!pageId || !pageToken) {
+    throw new Error('FACEBOOK_PAGE_ID or FACEBOOK_ACCESS_TOKEN not set in .env');
+  }
+
+  try {
+    const response = await axios.post(
+      `${BASE}/${pageId}/feed`,
+      null,
+      {
+        params: {
+          message,
+          access_token: pageToken,
+        },
+        timeout: 30000,
+      }
+    );
+    return { success: true, data: response.data };
+  } catch (err) {
+    const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+    throw new Error(`postText failed: ${detail}`);
+  }
+}
+
+module.exports = { postPhoto, postText, refreshToken, getTokenInfo, generatePermanentPageToken };

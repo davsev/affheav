@@ -145,6 +145,25 @@ async function migrate() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS logs_user_ts ON logs(user_id, ts DESC)`);
 
+  // ── Broadcast Messages ────────────────────────────────────────────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS broadcast_messages (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      subject_id   UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+      label        VARCHAR(255) NOT NULL,
+      text         TEXT NOT NULL,
+      image_url    TEXT,
+      recurrence   JSONB NOT NULL,
+      cron         VARCHAR(100) NOT NULL,
+      enabled      BOOLEAN NOT NULL DEFAULT true,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS bcast_user_id    ON broadcast_messages(user_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS bcast_subject_id ON broadcast_messages(subject_id)`);
+
   console.log('✓ Database schema up to date');
 }
 
