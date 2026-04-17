@@ -2111,7 +2111,6 @@ window.deleteWaGroup = async (groupId, subjectId) => {
 loadSubjects().then(() => {
   loadProducts();
   loadSchedules();
-  loadBroadcasts();
 });
 
 // ── Users Admin ───────────────────────────────────────────────────────────────
@@ -2121,6 +2120,11 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       loadUsers();
       loadInvites();
+    });
+  }
+  if (btn.dataset.tab === 'schedules') {
+    btn.addEventListener('click', () => {
+      loadBroadcasts();
     });
   }
 });
