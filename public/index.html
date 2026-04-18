@@ -147,6 +147,9 @@
     <button class="tab-btn" data-tab="aliexpress-search">
       <span class="material-symbols-outlined nav-icon">manage_search</span>חיפוש API
     </button>
+    <button class="tab-btn" data-tab="analytics">
+      <span class="material-symbols-outlined nav-icon">bar_chart</span>רווחיות
+    </button>
 
     <div class="nav-section-label" style="margin-top:8px;">נישות</div>
     <div class="sidebar-subjects" id="sidebar-subjects">
@@ -611,6 +614,57 @@
       </div>
     </div>
 
+    <!-- ── Analytics (Profitability) ───────────────────────────── -->
+    <div class="tab-panel" id="tab-analytics">
+      <div style="margin-bottom:28px;">
+        <div class="page-eyebrow">נתונים פיננסיים</div>
+        <h1 class="page-title">ניתוח <span class="highlight">רווחיות</span></h1>
+        <p class="page-sub">עמלות AliExpress בפועל לפי נישה</p>
+      </div>
+
+      <!-- Disclaimer -->
+      <div style="background:rgba(112,42,225,0.07);border:1px solid rgba(112,42,225,0.2);border-radius:12px;padding:12px 16px;font-size:12px;color:var(--on-surface-var);margin-bottom:20px;line-height:1.6;">
+        <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;color:var(--primary);">info</span>
+        נתוני עמלות מתקבלים ישירות מ-API של AliExpress לפי tracking ID של כל נישה.
+        כדי לראות נתונים, ודא שה-tracking ID מוגדר בהגדרות הנישה.
+      </div>
+
+      <!-- Sync controls -->
+      <div class="card" style="margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <label style="font-size:12px;color:var(--on-surface-var);">מתאריך</label>
+            <input type="date" id="analytics-start-date" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;" />
+            <label style="font-size:12px;color:var(--on-surface-var);">עד</label>
+            <input type="date" id="analytics-end-date" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;" />
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-sync-commissions">
+            <span class="material-symbols-outlined" style="font-size:15px;">cloud_sync</span>
+            עדכן עמלות
+          </button>
+          <span id="analytics-sync-status" style="font-size:12px;color:var(--on-surface-var);"></span>
+        </div>
+      </div>
+
+      <!-- Per-niche summary cards -->
+      <div id="analytics-niches-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:24px;">
+        <div style="padding:40px;text-align:center;color:var(--on-surface-var);grid-column:1/-1;">
+          לחץ "עדכן עמלות" לטעינת נתונים
+        </div>
+      </div>
+
+      <!-- Orders table -->
+      <div class="card" id="analytics-orders-card" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <div class="card-title" style="margin:0;">פירוט הזמנות</div>
+          <select id="analytics-niche-filter" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;">
+            <option value="">כל הנישות</option>
+          </select>
+        </div>
+        <div id="analytics-orders-table"></div>
+      </div>
+    </div>
+
     <!-- ── Logs ──────────────────────────────────────────────────── -->
     <div class="tab-panel" id="tab-logs">
       <div style="margin-bottom:28px;">
@@ -862,6 +916,7 @@
     schedules: 'לוחות זמנים',
     scraper: 'סריקת AliExpress',
     'add-product': 'הוסף מוצר',
+    analytics: 'רווחיות',
     logs: 'לוג פעילות',
     settings: 'הגדרות',
     users: 'ניהול משתמשים'
