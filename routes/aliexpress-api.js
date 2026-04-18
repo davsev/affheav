@@ -1,52 +1,24 @@
 const express = require('express');
 const router = express.Router();
-const crypto = require('crypto');
-const axios = require('axios');
 const googleSheets = require('../services/googleSheets');
 const workflow = require('../services/workflow');
 const { query } = require('../db');
+const { signAndCall } = require('../services/aliexpressApi');
 
-const ALIEXPRESS_ENDPOINT = 'https://api-sg.aliexpress.com/sync';
 const DEFAULT_TRACKING_ID = process.env.ALIEXPRESS_TRACKING_ID || 'TechSalebuy';
 
-function buildSignedUrl(keywords, pageNo = 1, trackingId = DEFAULT_TRACKING_ID) {
-  const APP_KEY = process.env.ALIEXPRESS_APP_KEY;
-  const APP_SECRET = process.env.ALIEXPRESS_APP_SECRET;
-
-  if (!APP_KEY || !APP_SECRET) {
-    throw new Error('ALIEXPRESS_APP_KEY or ALIEXPRESS_APP_SECRET not configured');
-  }
-
-  const params = {
-    app_key: APP_KEY,
-    method: 'aliexpress.affiliate.product.query',
-    timestamp: Date.now().toString(),
-    format: 'json',
-    v: '2.0',
+async function searchProducts(keywords, pageNo = 1, trackingId = DEFAULT_TRACKING_ID) {
+  return signAndCall({
+    method:          'aliexpress.affiliate.product.query',
     keywords,
-    sign_method: 'md5',
     target_currency: 'ILS',
     target_language: 'HE',
-    tracking_id: trackingId,
-    sort: 'LAST_VOLUME_DESC',
-    page_no: String(pageNo),
-    page_size: '50',
-    fields: 'product_id,product_title,product_main_image_url,promotion_link,app_sale_price,evaluate_rate,lastest_volume,available_stock',
-  };
-
-  const sortedKeys = Object.keys(params).sort();
-  let signString = APP_SECRET;
-  sortedKeys.forEach(key => { signString += key + params[key]; });
-  signString += APP_SECRET;
-
-  const sign = crypto.createHash('md5').update(signString).digest('hex').toUpperCase();
-  params.sign = sign;
-
-  const qs = Object.keys(params)
-    .map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k]))
-    .join('&');
-
-  return ALIEXPRESS_ENDPOINT + '?' + qs;
+    tracking_id:     trackingId,
+    sort:            'LAST_VOLUME_DESC',
+    page_no:         String(pageNo),
+    page_size:       '50',
+    fields:          'product_id,product_title,product_main_image_url,promotion_link,app_sale_price,evaluate_rate,lastest_volume,available_stock',
+  });
 }
 
 function passesFilters(product) {
@@ -79,8 +51,7 @@ router.post('/search', async (req, res) => {
     }
 
     workflow.log(`AliExpress API search: "${keywords}" (tracking: ${trackingId})`);
-    const url = buildSignedUrl(keywords.trim(), page_no || 1, trackingId);
-    const response = await axios.get(url, { timeout: 15000 });
+    const response = await searchProducts(keywords.trim(), page_no || 1, trackingId);
 
     const products =
       response.data?.aliexpress_affiliate_product_query_response

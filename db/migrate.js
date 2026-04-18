@@ -164,6 +164,27 @@ async function migrate() {
   await query(`CREATE INDEX IF NOT EXISTS bcast_user_id    ON broadcast_messages(user_id)`);
   await query(`CREATE INDEX IF NOT EXISTS bcast_subject_id ON broadcast_messages(subject_id)`);
 
+  // ── Commission Snapshots (AliExpress affiliate orders) ───────────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS commission_snapshots (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      subject_id      UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+      tracking_id     TEXT NOT NULL,
+      order_id        TEXT NOT NULL,
+      order_amount    NUMERIC(12,2),
+      commission_rate NUMERIC(5,4),
+      commission_usd  NUMERIC(10,2),
+      order_status    TEXT,
+      payment_status  TEXT,
+      order_time      TIMESTAMPTZ,
+      fetched_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(user_id, order_id)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS commission_snapshots_subject ON commission_snapshots(subject_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS commission_snapshots_user    ON commission_snapshots(user_id)`);
+
   console.log('✓ Database schema up to date');
 }
 

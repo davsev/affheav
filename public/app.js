@@ -106,6 +106,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (el && typeof tabNames !== 'undefined') el.textContent = tabNames[btn.dataset.tab] || '';
     // Load dashboard when switching to it
     if (btn.dataset.tab === 'dashboard') renderDashboard();
+    if (btn.dataset.tab === 'analytics') renderAnalyticsSummary();
   });
 });
 
@@ -2358,4 +2359,188 @@ document.getElementById('btn-migrate-subjects')?.addEventListener('click', async
     btn.disabled = false;
     btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">cloud_download</span> הפעל ייבוא';
   }
+});
+
+// ── Analytics (Profitability) ─────────────────────────────────────────────────
+
+// Set default date range (last 30 days) on page load
+(function initAnalyticsDates() {
+  const now   = new Date();
+  const start = new Date(now);
+  start.setDate(start.getDate() - 30);
+  const startEl = document.getElementById('analytics-start-date');
+  const endEl   = document.getElementById('analytics-end-date');
+  if (startEl) startEl.value = start.toISOString().slice(0, 10);
+  if (endEl)   endEl.value   = now.toISOString().slice(0, 10);
+})();
+
+async function renderAnalyticsSummary() {
+  const grid = document.getElementById('analytics-niches-grid');
+  if (!grid) return;
+  grid.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);grid-column:1/-1;">טוען נתוני עמלות...</div>';
+
+  try {
+    const data = await api('/api/analytics/summary');
+    const niches = data.niches || [];
+
+    if (!niches.length) {
+      grid.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);grid-column:1/-1;">אין נישות מוגדרות</div>';
+      return;
+    }
+
+    grid.innerHTML = niches.map(n => renderNicheCard(n)).join('');
+
+    // Populate niche filter for orders table
+    const filter = document.getElementById('analytics-niche-filter');
+    if (filter) {
+      filter.innerHTML = '<option value="">כל הנישות</option>' +
+        niches.map(n => `<option value="${escHtml(n.id)}">${escHtml(n.name)}</option>`).join('');
+    }
+  } catch (err) {
+    grid.innerHTML = `<div style="padding:40px;text-align:center;color:#f87171;grid-column:1/-1;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+function renderNicheCard(n) {
+  const commission      = parseFloat(n.total_commission || 0);
+  const confirmed       = parseFloat(n.confirmed_commission || 0);
+  const orderValue      = parseFloat(n.total_order_value || 0);
+  const orders          = parseInt(n.total_orders || 0, 10);
+  const clicks          = parseInt(n.total_clicks || 0, 10);
+  const hasTrackingId   = !!n.tracking_id;
+  const lastSynced      = n.last_synced ? fmtDate(n.last_synced) : null;
+  const color           = n.color || '#702ae1';
+
+  const noDataMsg = !hasTrackingId
+    ? `<div style="color:#f59e0b;font-size:11px;margin-top:8px;display:flex;align-items:center;gap:4px;"><span class="material-symbols-outlined" style="font-size:13px;">warning</span>חסר Tracking ID בהגדרות הנישה</div>`
+    : (orders === 0 && !n.last_synced
+        ? `<div style="color:var(--on-surface-var);font-size:11px;margin-top:8px;">לחץ "עדכן עמלות" כדי לטעון נתונים</div>`
+        : '');
+
+  return `
+    <div class="dashboard-subject-card" style="border-top:3px solid ${escHtml(color)};">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div style="font-size:16px;font-weight:800;color:var(--on-surface);">${escHtml(n.name)}</div>
+        ${hasTrackingId ? `<span style="font-size:10px;background:rgba(22,163,74,0.1);color:#16a34a;padding:2px 8px;border-radius:20px;font-weight:600;">מחובר</span>` : `<span style="font-size:10px;background:rgba(245,158,11,0.1);color:#f59e0b;padding:2px 8px;border-radius:20px;font-weight:600;">לא מחובר</span>`}
+      </div>
+      <div class="dashboard-subject-kpi" style="grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="dashboard-kpi-item">
+          <div class="dashboard-kpi-label">עמלה כוללת</div>
+          <div class="dashboard-kpi-val" style="color:#16a34a;font-size:20px;">$${commission.toFixed(2)}</div>
+        </div>
+        <div class="dashboard-kpi-item">
+          <div class="dashboard-kpi-label">עמלה מאושרת</div>
+          <div class="dashboard-kpi-val" style="color:#059669;font-size:20px;">$${confirmed.toFixed(2)}</div>
+        </div>
+        <div class="dashboard-kpi-item">
+          <div class="dashboard-kpi-label">ערך הזמנות</div>
+          <div class="dashboard-kpi-val">$${orderValue.toFixed(2)}</div>
+        </div>
+        <div class="dashboard-kpi-item">
+          <div class="dashboard-kpi-label">הזמנות</div>
+          <div class="dashboard-kpi-val">${orders}</div>
+        </div>
+        <div class="dashboard-kpi-item">
+          <div class="dashboard-kpi-label">קליקים (spoo.me)</div>
+          <div class="dashboard-kpi-val" style="color:#702ae1;">${clicks.toLocaleString()}</div>
+        </div>
+        <div class="dashboard-kpi-item">
+          <div class="dashboard-kpi-label">שיעור המרה</div>
+          <div class="dashboard-kpi-val">${clicks > 0 && orders > 0 ? ((orders / clicks) * 100).toFixed(2) + '%' : '—'}</div>
+        </div>
+      </div>
+      ${noDataMsg}
+      ${lastSynced ? `<div style="font-size:10px;color:var(--on-surface-var);margin-top:8px;">עודכן: ${lastSynced}</div>` : ''}
+    </div>`;
+}
+
+// Sync button
+document.getElementById('btn-sync-commissions').addEventListener('click', async () => {
+  const btn    = document.getElementById('btn-sync-commissions');
+  const status = document.getElementById('analytics-sync-status');
+  const start  = document.getElementById('analytics-start-date').value;
+  const end    = document.getElementById('analytics-end-date').value;
+
+  btn.disabled = true;
+  status.textContent = 'מסנכרן עמלות...';
+  status.style.color = 'var(--on-surface-var)';
+
+  try {
+    const data = await api('/api/analytics/sync-commissions', {
+      method: 'POST',
+      body:   { startDate: start || undefined, endDate: end || undefined },
+    });
+
+    status.style.color = '#16a34a';
+    status.textContent = `✓ סונכרנו ${data.synced} הזמנות`;
+
+    // Refresh summary cards and orders
+    await renderAnalyticsSummary();
+    await loadAnalyticsOrders();
+    document.getElementById('analytics-orders-card').style.display = '';
+  } catch (err) {
+    status.style.color = '#f87171';
+    status.textContent = `✗ שגיאה: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+async function loadAnalyticsOrders(subjectId = '') {
+  const el = document.getElementById('analytics-orders-table');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const qs   = subjectId ? `?subjectId=${encodeURIComponent(subjectId)}` : '';
+    const data = await api(`/api/analytics/orders${qs}`);
+    const orders = data.orders || [];
+
+    if (!orders.length) {
+      el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">אין הזמנות בטווח הנבחר</div>';
+      return;
+    }
+
+    el.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>מס׳ הזמנה</th>
+              <th>נישה</th>
+              <th>ערך הזמנה</th>
+              <th>עמלה</th>
+              <th>סטטוס</th>
+              <th>תאריך</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${orders.map(o => {
+              const statusColor = (o.payment_status === 'confirmed' || o.order_status === 'finished')
+                ? '#16a34a' : '#f59e0b';
+              return `<tr>
+                <td style="font-family:var(--font-mono);font-size:11px;color:var(--on-surface-var);">${escHtml(String(o.order_id))}</td>
+                <td>
+                  <span style="display:inline-flex;align-items:center;gap:6px;">
+                    <span style="width:8px;height:8px;border-radius:50%;background:${escHtml(o.subject_color||'#702ae1')};flex-shrink:0;"></span>
+                    ${escHtml(o.subject_name || '—')}
+                  </span>
+                </td>
+                <td>$${parseFloat(o.order_amount||0).toFixed(2)}</td>
+                <td style="color:#16a34a;font-weight:700;">$${parseFloat(o.commission_usd||0).toFixed(2)}</td>
+                <td><span style="color:${statusColor};font-size:12px;font-weight:600;">${escHtml(o.payment_status || o.order_status || '—')}</span></td>
+                <td style="font-size:12px;color:var(--on-surface-var);">${o.order_time ? fmtDate(o.order_time) : '—'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch (err) {
+    el.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+// Niche filter for orders table
+document.getElementById('analytics-niche-filter').addEventListener('change', function () {
+  loadAnalyticsOrders(this.value);
 });
