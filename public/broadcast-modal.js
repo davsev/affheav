@@ -91,7 +91,6 @@ function setupImagePreview() {
       preview.style.display = 'block';
       el('bcast-image-remove').style.display = '';
       el('bcast-existing-image').style.display = 'none';
-      // clear file input so file doesn't override URL
       el('bcast-image-input').value = '';
       _hasNewImage = false;
     } else {
@@ -140,13 +139,11 @@ function openModal(broadcast = null) {
   el('bcast-existing-image').style.display = 'none';
   if (broadcast && broadcast.imageUrl) {
     if (broadcast.imageUrl.startsWith('http')) {
-      // External URL — populate the URL field and show preview
       el('bcast-image-url').value = broadcast.imageUrl;
       el('bcast-image-preview').src = broadcast.imageUrl;
       el('bcast-image-preview').style.display = 'block';
       el('bcast-image-remove').style.display = '';
     } else {
-      // Uploaded file — show as existing image label
       el('bcast-existing-image').textContent = `תמונה קיימת: ${broadcast.imageUrl}`;
       el('bcast-existing-image').style.display = 'block';
       el('bcast-image-remove').style.display = '';
@@ -198,7 +195,7 @@ async function saveBroadcast() {
   const minute    = parseInt(el('bcast-minute').value, 10);
   const skipFri   = el('bcast-skip-fri').checked;
   const skipSat   = el('bcast-skip-sat').checked;
-  const fileInput  = el('bcast-image-input');
+  const fileInput   = el('bcast-image-input');
   const externalUrl = el('bcast-image-url').value.trim();
 
   // Validation
@@ -223,12 +220,11 @@ async function saveBroadcast() {
 
     if (_editId) {
       // ── Edit mode ──────────────────────────────────────────────────────
-      // Step 1: Update fields (include external URL if provided)
       const putBody = { label, text, subjectId, recurrence };
       if (!hasFile && externalUrl) putBody.imageUrl = externalUrl;
       await api(`/api/broadcasts/${_editId}`, { method: 'PUT', body: putBody });
 
-      // Step 2: Upload new file if selected (overrides URL)
+      // Upload new file if selected (overrides URL)
       if (hasFile) {
         const fd = new FormData();
         fd.append('image', fileInput.files[0]);
