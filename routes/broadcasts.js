@@ -49,7 +49,9 @@ router.post('/', upload.single('image'), async (req, res) => {
     if (!label || !text || !subjectId || !recurrence) {
       return res.status(400).json({ success: false, error: 'label, text, subjectId, recurrence are required' });
     }
-    const imageUrl = req.file ? `/uploads/broadcasts/${req.file.filename}` : undefined;
+    const imageUrl = req.file
+      ? `/uploads/broadcasts/${req.file.filename}`
+      : (req.body.imageUrl || undefined);
     const msg = await create(req.user.id, { subjectId, label, text, recurrence, imageUrl });
     await scheduler.startBroadcasts(); // register new broadcast in cron
     res.status(201).json({ success: true, broadcast: msg });
@@ -82,6 +84,7 @@ router.put('/:id', upload.single('image'), async (req, res) => {
         : req.body.recurrence;
     }
     if (req.file) fields.imageUrl = `/uploads/broadcasts/${req.file.filename}`;
+    else if (req.body.imageUrl !== undefined) fields.imageUrl = req.body.imageUrl || null;
     const msg = await update(req.params.id, req.user.id, fields);
     if (!msg) return res.status(404).json({ success: false, error: 'Not found' });
     await scheduler.startBroadcasts(); // re-register in case recurrence changed

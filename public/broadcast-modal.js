@@ -71,6 +71,7 @@ function setupImagePreview() {
     const file = fileInput.files[0];
     if (!file) { return; }
     _hasNewImage = true;
+    el('bcast-image-url').value = ''; // clear URL field when file chosen
     const reader = new FileReader();
     reader.onload = (e) => {
       const preview = el('bcast-image-preview');
@@ -80,6 +81,21 @@ function setupImagePreview() {
       el('bcast-existing-image').style.display = 'none';
     };
     reader.readAsDataURL(file);
+  });
+
+  el('bcast-image-url').addEventListener('input', () => {
+    const url = el('bcast-image-url').value.trim();
+    const preview = el('bcast-image-preview');
+    if (url.startsWith('http')) {
+      preview.src = url;
+      preview.style.display = 'block';
+      el('bcast-image-remove').style.display = '';
+      el('bcast-existing-image').style.display = 'none';
+      el('bcast-image-input').value = '';
+      _hasNewImage = false;
+    } else {
+      preview.style.display = 'none';
+    }
   });
 }
 
@@ -116,14 +132,22 @@ function openModal(broadcast = null) {
 
   // Reset image state
   el('bcast-image-input').value = '';
+  el('bcast-image-url').value = '';
   el('bcast-image-preview').style.display = 'none';
   el('bcast-image-preview').src = '';
   el('bcast-image-remove').style.display = 'none';
   el('bcast-existing-image').style.display = 'none';
   if (broadcast && broadcast.imageUrl) {
-    el('bcast-existing-image').textContent = `תמונה קיימת: ${broadcast.imageUrl}`;
-    el('bcast-existing-image').style.display = 'block';
-    el('bcast-image-remove').style.display = '';
+    if (broadcast.imageUrl.startsWith('http')) {
+      el('bcast-image-url').value = broadcast.imageUrl;
+      el('bcast-image-preview').src = broadcast.imageUrl;
+      el('bcast-image-preview').style.display = 'block';
+      el('bcast-image-remove').style.display = '';
+    } else {
+      el('bcast-existing-image').textContent = `תמונה קיימת: ${broadcast.imageUrl}`;
+      el('bcast-existing-image').style.display = 'block';
+      el('bcast-image-remove').style.display = '';
+    }
   }
 
   // Recurrence
@@ -144,6 +168,7 @@ function openModal(broadcast = null) {
 // ── Remove image ───────────────────────────────────────────────────────────────
 window.removeBroadcastImage = () => {
   el('bcast-image-input').value = '';
+  el('bcast-image-url').value = '';
   el('bcast-image-preview').style.display = 'none';
   el('bcast-image-preview').src = '';
   el('bcast-image-remove').style.display = 'none';
@@ -170,7 +195,8 @@ async function saveBroadcast() {
   const minute    = parseInt(el('bcast-minute').value, 10);
   const skipFri   = el('bcast-skip-fri').checked;
   const skipSat   = el('bcast-skip-sat').checked;
-  const fileInput = el('bcast-image-input');
+  const fileInput   = el('bcast-image-input');
+  const externalUrl = el('bcast-image-url').value.trim();
 
   // Validation
   if (!label)     { alert('יש להזין שם להודעה'); return; }
@@ -194,13 +220,11 @@ async function saveBroadcast() {
 
     if (_editId) {
       // ── Edit mode ──────────────────────────────────────────────────────
-      // Step 1: Update non-image fields via JSON PUT
-      await api(`/api/broadcasts/${_editId}`, {
-        method: 'PUT',
-        body: { label, text, subjectId, recurrence },
-      });
+      const putBody = { label, text, subjectId, recurrence };
+      if (!hasFile && externalUrl) putBody.imageUrl = externalUrl;
+      await api(`/api/broadcasts/${_editId}`, { method: 'PUT', body: putBody });
 
-      // Step 2: Upload new image if selected
+      // Upload new file if selected (overrides URL)
       if (hasFile) {
         const fd = new FormData();
         fd.append('image', fileInput.files[0]);
@@ -220,7 +244,11 @@ async function saveBroadcast() {
       fd.append('text',       text);
       fd.append('subjectId',  subjectId);
       fd.append('recurrence', JSON.stringify(recurrence));
-      if (hasFile) fd.append('image', fileInput.files[0]);
+      if (hasFile) {
+        fd.append('image', fileInput.files[0]);
+      } else if (externalUrl) {
+        fd.append('imageUrl', externalUrl);
+      }
 
       const res = await fetch('/api/broadcasts', {
         method: 'POST',
