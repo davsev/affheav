@@ -2399,10 +2399,14 @@ async function renderAnalyticsSummary() {
     if (topFilter) topFilter.innerHTML = nicheOptions;
     const timingFilter = document.getElementById('analytics-timing-niche-filter');
     if (timingFilter) timingFilter.innerHTML = nicheOptions;
+    const roasSubjectFilter = document.getElementById('roas-form-subject');
+    if (roasSubjectFilter) roasSubjectFilter.innerHTML = '<option value="">בחר נישה</option>' +
+      niches.map(n => `<option value="${escHtml(n.id)}">${escHtml(n.name)}</option>`).join('');
 
-    // Load top products, reach data, and timing heatmap on initial render
+    // Load top products, reach data, timing heatmap, and ROAS on initial render
     loadTopProducts();
     loadTimingHeatmap();
+    loadRoas();
     loadReachSummary().then(() => {
       const card = document.getElementById('analytics-reach-card');
       if (card) card.style.display = '';
@@ -2798,5 +2802,154 @@ async function loadReachSummary() {
     }).join('');
   } catch (err) {
     grid.innerHTML = `<div style="padding:20px;color:#f87171;grid-column:1/-1;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+// ── Analytics: ROAS ───────────────────────────────────────────────────────────
+
+document.getElementById('btn-roas-add-toggle').addEventListener('click', () => {
+  const form = document.getElementById('roas-add-form');
+  form.style.display = form.style.display === 'none' ? '' : 'none';
+});
+
+document.getElementById('btn-roas-save').addEventListener('click', async () => {
+  const btn      = document.getElementById('btn-roas-save');
+  const status   = document.getElementById('roas-form-status');
+  const subjectId = document.getElementById('roas-form-subject').value;
+  const platform  = document.getElementById('roas-form-platform').value;
+  const spendUsd  = document.getElementById('roas-form-spend').value;
+  const periodStart = document.getElementById('roas-form-start').value;
+  const periodEnd   = document.getElementById('roas-form-end').value;
+  const notes       = document.getElementById('roas-form-notes').value;
+
+  if (!subjectId || !spendUsd || !periodStart || !periodEnd) {
+    status.style.color = '#f87171';
+    status.textContent = 'יש למלא נישה, סכום ותאריכים';
+    return;
+  }
+
+  btn.disabled = true;
+  status.textContent = 'שומר...';
+  status.style.color = 'var(--on-surface-var)';
+
+  try {
+    await api('/api/analytics/spend', {
+      method: 'POST',
+      body: { subjectId, platform, spendUsd, periodStart, periodEnd, notes },
+    });
+    status.style.color = '#16a34a';
+    status.textContent = '✓ נשמר';
+    document.getElementById('roas-form-spend').value = '';
+    document.getElementById('roas-form-notes').value = '';
+    await loadRoas();
+  } catch (err) {
+    status.style.color = '#f87171';
+    status.textContent = `✗ ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+async function loadRoas() {
+  const grid    = document.getElementById('analytics-roas-grid');
+  const records = document.getElementById('analytics-roas-records');
+  if (!grid) return;
+
+  try {
+    const data   = await api('/api/analytics/roas');
+    const niches = (data.niches || []).filter(n => parseFloat(n.total_spend) > 0 || parseFloat(n.total_commission) > 0);
+    const recs   = data.records || [];
+
+    if (!niches.length) {
+      grid.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);grid-column:1/-1;">אין הוצאות פרסום מוגדרות. לחץ "הוסף הוצאה" להזנה ידנית.</div>';
+    } else {
+      grid.innerHTML = niches.map(n => {
+        const spend      = parseFloat(n.total_spend || 0);
+        const commission = parseFloat(n.total_commission || 0);
+        const roas       = n.roas != null ? parseFloat(n.roas) : null;
+        const color      = n.color || '#702ae1';
+
+        let roasColor = '#f59e0b';
+        if (roas != null) roasColor = roas >= 1 ? '#16a34a' : '#ef4444';
+
+        return `<div class="dashboard-subject-card" style="border-top:3px solid ${escHtml(color)};">
+          <div style="font-size:15px;font-weight:800;margin-bottom:12px;">${escHtml(n.name)}</div>
+          <div class="dashboard-subject-kpi" style="grid-template-columns:1fr 1fr;gap:8px;">
+            <div class="dashboard-kpi-item">
+              <div class="dashboard-kpi-label">הוצאה ($)</div>
+              <div class="dashboard-kpi-val" style="color:#ef4444;">$${spend.toFixed(2)}</div>
+            </div>
+            <div class="dashboard-kpi-item">
+              <div class="dashboard-kpi-label">עמלה ($)</div>
+              <div class="dashboard-kpi-val" style="color:#16a34a;">$${commission.toFixed(2)}</div>
+            </div>
+          </div>
+          <div style="margin-top:12px;text-align:center;">
+            <div style="font-size:11px;color:var(--on-surface-var);margin-bottom:2px;">ROAS</div>
+            <div style="font-size:28px;font-weight:900;color:${roasColor};">
+              ${roas != null ? roas.toFixed(2) + 'x' : '—'}
+            </div>
+            ${roas != null ? `<div style="font-size:10px;color:var(--on-surface-var);">${roas >= 1 ? 'רווחי ✓' : 'הפסד ✗'}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    if (!recs.length) {
+      records.innerHTML = '';
+      return;
+    }
+
+    records.innerHTML = `
+      <div style="margin-top:16px;">
+        <div style="font-size:13px;font-weight:700;color:var(--on-surface);margin-bottom:8px;">רשומות הוצאות</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>נישה</th>
+                <th>פלטפורמה</th>
+                <th>סכום</th>
+                <th>מתאריך</th>
+                <th>עד תאריך</th>
+                <th>הערות</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${recs.map(r => `<tr>
+                <td>
+                  <span style="display:inline-flex;align-items:center;gap:5px;">
+                    <span style="width:8px;height:8px;border-radius:50%;background:${escHtml(r.subject_color||'#702ae1')};flex-shrink:0;"></span>
+                    ${escHtml(r.subject_name)}
+                  </span>
+                </td>
+                <td style="font-size:12px;">${escHtml(r.platform)}</td>
+                <td style="color:#ef4444;font-weight:700;">$${parseFloat(r.spend_usd).toFixed(2)}</td>
+                <td style="font-size:12px;">${fmtDate(r.period_start)}</td>
+                <td style="font-size:12px;">${fmtDate(r.period_end)}</td>
+                <td style="font-size:12px;color:var(--on-surface-var);">${escHtml(r.notes || '—')}</td>
+                <td>
+                  <button class="icon-btn" title="מחק" onclick="deleteSpend('${escHtml(r.id)}')">
+                    <span class="material-symbols-outlined" style="font-size:16px;color:#f87171;">delete</span>
+                  </button>
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  } catch (err) {
+    grid.innerHTML = `<div style="padding:20px;color:#f87171;grid-column:1/-1;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+async function deleteSpend(id) {
+  if (!confirm('למחוק רשומה זו?')) return;
+  try {
+    await api(`/api/analytics/spend/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await loadRoas();
+  } catch (err) {
+    alert(`שגיאה: ${err.message}`);
   }
 }

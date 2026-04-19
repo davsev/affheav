@@ -398,4 +398,79 @@ router.get('/timing', async (req, res) => {
   }
 });
 
+// POST /api/analytics/spend
+// Body: { subjectId, platform, spendUsd, periodStart, periodEnd, notes? }
+router.post('/spend', async (req, res) => {
+  try {
+    const { subjectId, platform, spendUsd, periodStart, periodEnd, notes } = req.body;
+    if (!subjectId || !platform || !spendUsd || !periodStart || !periodEnd) {
+      return res.status(400).json({ success: false, error: 'חסרים שדות חובה' });
+    }
+
+    const { rows } = await query(
+      `INSERT INTO ad_spend (user_id, subject_id, platform, spend_usd, period_start, period_end, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       RETURNING id`,
+      [req.user.id, subjectId, platform, parseFloat(spendUsd), periodStart, periodEnd, notes || null]
+    );
+    res.json({ success: true, id: rows[0].id });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE /api/analytics/spend/:id
+router.delete('/spend/:id', async (req, res) => {
+  try {
+    await query(
+      `DELETE FROM ad_spend WHERE id = $1 AND user_id = $2`,
+      [req.params.id, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/analytics/roas
+// Per-niche: total spend, total commission, ROAS ratio, spend records list
+router.get('/roas', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT
+         s.id,
+         s.name,
+         s.color,
+         COALESCE(SUM(a.spend_usd), 0)                           AS total_spend,
+         COALESCE(SUM(cs.commission_usd), 0)                     AS total_commission,
+         CASE WHEN SUM(a.spend_usd) > 0
+           THEN ROUND(SUM(cs.commission_usd) / SUM(a.spend_usd), 2)
+           ELSE NULL END                                          AS roas
+       FROM subjects s
+       LEFT JOIN ad_spend a            ON a.subject_id = s.id AND a.user_id = $1
+       LEFT JOIN commission_snapshots cs ON cs.subject_id = s.id AND cs.user_id = $1
+       WHERE s.user_id = $1
+       GROUP BY s.id, s.name, s.color
+       ORDER BY total_spend DESC, s.name`,
+      [req.user.id]
+    );
+
+    // Also return raw spend records so the UI can list/delete them
+    const { rows: spendRows } = await query(
+      `SELECT a.id, a.subject_id, a.platform, a.spend_usd,
+              a.period_start, a.period_end, a.notes, a.created_at,
+              s.name AS subject_name, s.color AS subject_color
+       FROM ad_spend a
+       JOIN subjects s ON s.id = a.subject_id
+       WHERE a.user_id = $1
+       ORDER BY a.period_start DESC`,
+      [req.user.id]
+    );
+
+    res.json({ success: true, niches: rows, records: spendRows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
