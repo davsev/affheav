@@ -663,6 +663,25 @@
         </div>
         <div id="analytics-orders-table"></div>
       </div>
+
+      <!-- Top products by estimated revenue -->
+      <div class="card" id="analytics-top-products-card" style="margin-top:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="card-title" style="margin:0;">מוצרים מובילים לפי הכנסה משוערת</div>
+            <span style="font-size:11px;background:rgba(245,158,11,0.12);color:#f59e0b;padding:2px 8px;border-radius:20px;font-weight:600;">הערכה</span>
+          </div>
+          <select id="analytics-top-niche-filter" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;">
+            <option value="">כל הנישות</option>
+          </select>
+        </div>
+        <div style="font-size:11px;color:var(--on-surface-var);margin-bottom:12px;">
+          קליקים × שיעור המרה (מהנישה, או 2% ברירת מחדל) × מחיר מוצר × 8% עמלת AliExpress
+        </div>
+        <div id="analytics-top-products-table">
+          <div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>
+        </div>
+      </div>
     </div>
 
     <!-- ── Logs ──────────────────────────────────────────────────── -->

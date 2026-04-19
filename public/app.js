@@ -2390,12 +2390,16 @@ async function renderAnalyticsSummary() {
 
     grid.innerHTML = niches.map(n => renderNicheCard(n)).join('');
 
-    // Populate niche filter for orders table
+    // Populate niche filters for orders + top-products tables
+    const nicheOptions = '<option value="">כל הנישות</option>' +
+      niches.map(n => `<option value="${escHtml(n.id)}">${escHtml(n.name)}</option>`).join('');
     const filter = document.getElementById('analytics-niche-filter');
-    if (filter) {
-      filter.innerHTML = '<option value="">כל הנישות</option>' +
-        niches.map(n => `<option value="${escHtml(n.id)}">${escHtml(n.name)}</option>`).join('');
-    }
+    if (filter) filter.innerHTML = nicheOptions;
+    const topFilter = document.getElementById('analytics-top-niche-filter');
+    if (topFilter) topFilter.innerHTML = nicheOptions;
+
+    // Load top products on initial render
+    loadTopProducts();
   } catch (err) {
     grid.innerHTML = `<div style="padding:40px;text-align:center;color:#f87171;grid-column:1/-1;">שגיאה: ${escHtml(err.message)}</div>`;
   }
@@ -2543,4 +2547,72 @@ async function loadAnalyticsOrders(subjectId = '') {
 // Niche filter for orders table
 document.getElementById('analytics-niche-filter').addEventListener('change', function () {
   loadAnalyticsOrders(this.value);
+});
+
+// ── Analytics: Top Products ───────────────────────────────────────────────────
+
+async function loadTopProducts(subjectId = '') {
+  const el = document.getElementById('analytics-top-products-table');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const qs   = subjectId ? `?subjectId=${encodeURIComponent(subjectId)}` : '';
+    const data = await api(`/api/analytics/top-products${qs}`);
+    const products = data.products || [];
+
+    if (!products.length) {
+      el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">אין מוצרים עם נתוני מחיר. מחיר נשמר אוטומטית בהוספה דרך חיפוש API.</div>';
+      return;
+    }
+
+    el.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:40px;"></th>
+              <th>מוצר</th>
+              <th>נישה</th>
+              <th>קליקים</th>
+              <th>מחיר</th>
+              <th>המרה</th>
+              <th>הכנסה משוערת</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${products.map((p, i) => {
+              const revenue = p.estimated_revenue != null ? `$${parseFloat(p.estimated_revenue).toFixed(2)}` : '—';
+              const convPct = p.conversion_rate   != null ? `${(parseFloat(p.conversion_rate) * 100).toFixed(1)}%` : '—';
+              const isTop   = i === 0;
+              return `<tr${isTop ? ' style="background:rgba(22,163,74,0.04);"' : ''}>
+                <td style="text-align:center;color:var(--on-surface-var);font-size:12px;font-weight:600;">${i + 1}</td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    ${p.image ? `<img src="${escHtml(p.image)}" style="width:32px;height:32px;object-fit:cover;border-radius:6px;flex-shrink:0;" loading="lazy" />` : '<div style="width:32px;height:32px;background:rgba(112,42,225,0.08);border-radius:6px;flex-shrink:0;"></div>'}
+                    <span style="font-size:12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;" title="${escHtml(p.text || '')}">${escHtml(p.text || '—')}</span>
+                  </div>
+                </td>
+                <td>
+                  <span style="display:inline-flex;align-items:center;gap:5px;">
+                    <span style="width:8px;height:8px;border-radius:50%;background:${escHtml(p.subject_color||'#702ae1')};flex-shrink:0;"></span>
+                    <span style="font-size:12px;">${escHtml(p.subject_name || '—')}</span>
+                  </span>
+                </td>
+                <td style="font-weight:600;color:#702ae1;">${(p.clicks||0).toLocaleString()}</td>
+                <td>$${parseFloat(p.sale_price||0).toFixed(2)}</td>
+                <td style="font-size:12px;color:var(--on-surface-var);">${convPct}</td>
+                <td style="font-weight:700;color:#16a34a;font-size:14px;">${revenue}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch (err) {
+    el.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+document.getElementById('analytics-top-niche-filter').addEventListener('change', function () {
+  loadTopProducts(this.value);
 });
