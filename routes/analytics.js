@@ -1,5 +1,6 @@
 const express = require('express');
 const router  = express.Router();
+const axios   = require('axios');
 const { query }       = require('../db');
 const { signAndCall } = require('../services/aliexpressApi');
 const workflow        = require('../services/workflow');
@@ -247,6 +248,123 @@ router.get('/top-products', async (req, res) => {
       params
     );
     res.json({ success: true, products: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Fetch reach + impressions for a single Meta post/media via the Graph API Insights endpoint.
+async function fetchMetaInsights(mediaId, accessToken, platform) {
+  const metric = platform === 'instagram' ? 'reach,impressions' : 'post_impressions,post_reach';
+  const { data } = await axios.get(
+    `https://graph.facebook.com/v18.0/${encodeURIComponent(mediaId)}/insights`,
+    { params: { metric, access_token: accessToken, period: 'lifetime' } }
+  );
+  const vals = {};
+  for (const d of (data.data || [])) vals[d.name] = d.values?.[0]?.value ?? 0;
+  return {
+    reach:       vals.reach       ?? vals.post_reach        ?? 0,
+    impressions: vals.impressions ?? vals.post_impressions   ?? 0,
+  };
+}
+
+// POST /api/analytics/sync-reach
+// Fetches reach + impressions for all products that have a Meta post/media ID stored.
+router.post('/sync-reach', async (req, res) => {
+  const userId = req.user.id;
+
+  const { rows: products } = await query(
+    `SELECT p.id, p.fb_post_id, p.ig_media_id, p.subject_id,
+            s.facebook_token, s.instagram_account_id
+     FROM products p
+     LEFT JOIN subjects s ON s.id = p.subject_id
+     WHERE p.user_id = $1
+       AND (p.fb_post_id IS NOT NULL OR p.ig_media_id IS NOT NULL)`,
+    [userId]
+  );
+
+  if (!products.length) {
+    return res.json({ success: true, synced: 0, message: 'אין פוסטים עם מזהה Meta מוגדר' });
+  }
+
+  let synced = 0;
+  const errors = [];
+
+  for (const p of products) {
+    // Facebook
+    if (p.fb_post_id && p.facebook_token) {
+      try {
+        const { reach, impressions } = await fetchMetaInsights(p.fb_post_id, p.facebook_token, 'facebook');
+        await query(
+          `INSERT INTO post_insights (user_id, product_id, platform, reach, impressions)
+           VALUES ($1,$2,'facebook',$3,$4)
+           ON CONFLICT (product_id, platform) DO UPDATE SET
+             reach = EXCLUDED.reach, impressions = EXCLUDED.impressions, fetched_at = NOW()`,
+          [userId, p.id, reach, impressions]
+        );
+        synced++;
+      } catch (err) {
+        errors.push({ productId: p.id, platform: 'facebook', error: err.message });
+      }
+    }
+
+    // Instagram
+    if (p.ig_media_id && p.facebook_token) {
+      try {
+        const { reach, impressions } = await fetchMetaInsights(p.ig_media_id, p.facebook_token, 'instagram');
+        await query(
+          `INSERT INTO post_insights (user_id, product_id, platform, reach, impressions)
+           VALUES ($1,$2,'instagram',$3,$4)
+           ON CONFLICT (product_id, platform) DO UPDATE SET
+             reach = EXCLUDED.reach, impressions = EXCLUDED.impressions, fetched_at = NOW()`,
+          [userId, p.id, reach, impressions]
+        );
+        synced++;
+      } catch (err) {
+        errors.push({ productId: p.id, platform: 'instagram', error: err.message });
+      }
+
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+
+  res.json({ success: true, synced, errors: errors.length ? errors : undefined });
+});
+
+// GET /api/analytics/reach-summary?subjectId=
+// Per-niche reach aggregation: avg reach per post, total impressions, CTR (clicks/reach)
+router.get('/reach-summary', async (req, res) => {
+  try {
+    const { subjectId } = req.query;
+    const params = [req.user.id];
+    let subjectFilter = '';
+    if (subjectId) {
+      params.push(subjectId);
+      subjectFilter = 'AND p.subject_id = $2';
+    }
+
+    const { rows } = await query(
+      `SELECT
+         s.id, s.name, s.color,
+         pi.platform,
+         COUNT(DISTINCT pi.product_id)                   AS posts_tracked,
+         COALESCE(SUM(pi.reach), 0)                      AS total_reach,
+         COALESCE(SUM(pi.impressions), 0)                AS total_impressions,
+         COALESCE(AVG(pi.reach), 0)                      AS avg_reach_per_post,
+         COALESCE(SUM(p.clicks), 0)                      AS total_clicks,
+         CASE WHEN SUM(pi.reach) > 0
+           THEN ROUND(SUM(p.clicks)::numeric / SUM(pi.reach) * 100, 2)
+           ELSE 0 END                                    AS ctr_pct,
+         MAX(pi.fetched_at)                              AS last_synced
+       FROM post_insights pi
+       JOIN products p  ON p.id = pi.product_id AND p.user_id = $1
+       JOIN subjects s  ON s.id = p.subject_id
+       WHERE pi.user_id = $1 ${subjectFilter}
+       GROUP BY s.id, s.name, s.color, pi.platform
+       ORDER BY avg_reach_per_post DESC`,
+      params
+    );
+    res.json({ success: true, reach: rows });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

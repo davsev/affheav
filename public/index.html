@@ -642,6 +642,10 @@
             <span class="material-symbols-outlined" style="font-size:15px;">cloud_sync</span>
             עדכן עמלות
           </button>
+          <button class="btn btn-secondary btn-sm" id="btn-sync-reach">
+            <span class="material-symbols-outlined" style="font-size:15px;">visibility</span>
+            עדכן חשיפה
+          </button>
           <span id="analytics-sync-status" style="font-size:12px;color:var(--on-surface-var);"></span>
         </div>
       </div>
@@ -651,6 +655,18 @@
         <div style="padding:40px;text-align:center;color:var(--on-surface-var);grid-column:1/-1;">
           לחץ "עדכן עמלות" לטעינת נתונים
         </div>
+      </div>
+
+      <!-- Meta organic reach summary -->
+      <div class="card" id="analytics-reach-card" style="display:none;margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <div class="card-title" style="margin:0;">חשיפה אורגנית — Meta</div>
+          <span style="font-size:11px;background:rgba(59,130,246,0.1);color:#3b82f6;padding:2px 8px;border-radius:20px;font-weight:600;">Facebook & Instagram</span>
+        </div>
+        <div style="font-size:11px;color:var(--on-surface-var);margin-bottom:14px;">
+          כמה אנשים ראו את הפוסטים שלך לפי נישה ופלטפורמה
+        </div>
+        <div id="analytics-reach-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;"></div>
       </div>
 
       <!-- Orders table -->
