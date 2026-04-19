@@ -252,4 +252,32 @@ router.get('/top-products', async (req, res) => {
   }
 });
 
+// GET /api/analytics/timing?subjectId=
+// Per-hour/day aggregation of avg clicks for sent products (Asia/Jerusalem timezone).
+router.get('/timing', async (req, res) => {
+  try {
+    const { subjectId } = req.query;
+    const params = [req.user.id, subjectId || null];
+
+    const { rows } = await query(
+      `SELECT
+         EXTRACT(DOW  FROM sent_at AT TIME ZONE 'Asia/Jerusalem')::int AS dow,
+         EXTRACT(HOUR FROM sent_at AT TIME ZONE 'Asia/Jerusalem')::int AS hour,
+         COUNT(*)                        AS sends,
+         COALESCE(SUM(clicks),  0)       AS total_clicks,
+         COALESCE(AVG(clicks),  0)       AS avg_clicks
+       FROM products
+       WHERE user_id = $1
+         AND sent_at IS NOT NULL
+         AND ($2::uuid IS NULL OR subject_id = $2)
+       GROUP BY dow, hour
+       ORDER BY avg_clicks DESC`,
+      params
+    );
+    res.json({ success: true, slots: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;

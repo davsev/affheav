@@ -2397,9 +2397,12 @@ async function renderAnalyticsSummary() {
     if (filter) filter.innerHTML = nicheOptions;
     const topFilter = document.getElementById('analytics-top-niche-filter');
     if (topFilter) topFilter.innerHTML = nicheOptions;
+    const timingFilter = document.getElementById('analytics-timing-niche-filter');
+    if (timingFilter) timingFilter.innerHTML = nicheOptions;
 
-    // Load top products on initial render
+    // Load top products and timing heatmap on initial render
     loadTopProducts();
+    loadTimingHeatmap();
   } catch (err) {
     grid.innerHTML = `<div style="padding:40px;text-align:center;color:#f87171;grid-column:1/-1;">שגיאה: ${escHtml(err.message)}</div>`;
   }
@@ -2615,4 +2618,105 @@ async function loadTopProducts(subjectId = '') {
 
 document.getElementById('analytics-top-niche-filter').addEventListener('change', function () {
   loadTopProducts(this.value);
+});
+
+// ── Analytics: Timing Heatmap ─────────────────────────────────────────────────
+
+const DOW_LABELS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+
+async function loadTimingHeatmap(subjectId = '') {
+  const el = document.getElementById('analytics-timing-content');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const qs   = subjectId ? `?subjectId=${encodeURIComponent(subjectId)}` : '';
+    const data = await api(`/api/analytics/timing${qs}`);
+    const slots = data.slots || [];
+
+    if (!slots.length) {
+      el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">אין נתונים — שלח לפחות פוסט אחד כדי לראות תזמונים.</div>';
+      return;
+    }
+
+    // Build lookup: dow → hour → avg_clicks
+    const map = {};
+    let maxAvg = 0;
+    for (const s of slots) {
+      const dow  = parseInt(s.dow,  10);
+      const hour = parseInt(s.hour, 10);
+      const avg  = parseFloat(s.avg_clicks);
+      if (!map[dow]) map[dow] = {};
+      map[dow][hour] = { avg, sends: parseInt(s.sends, 10) };
+      if (avg > maxAvg) maxAvg = avg;
+    }
+
+    // Top 5 slots for badges
+    const top5 = slots.slice(0, 5).map(s => `${s.dow}_${s.hour}`);
+
+    // Build header row (hours 0–23)
+    const hours = Array.from({ length: 24 }, (_, i) => i);
+
+    let html = `
+      <div style="overflow-x:auto;">
+        <table style="border-collapse:collapse;font-size:11px;min-width:700px;width:100%;">
+          <thead>
+            <tr>
+              <th style="padding:4px 8px;text-align:right;font-weight:600;color:var(--on-surface-var);white-space:nowrap;position:sticky;right:0;background:var(--surface);">יום \\ שעה</th>
+              ${hours.map(h => `<th style="padding:4px 3px;text-align:center;font-weight:500;color:var(--on-surface-var);min-width:26px;">${h}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>`;
+
+    for (let dow = 0; dow < 7; dow++) {
+      html += `<tr>
+        <td style="padding:4px 8px;font-weight:600;color:var(--on-surface-var);white-space:nowrap;position:sticky;right:0;background:var(--surface);">${DOW_LABELS[dow]}</td>`;
+
+      for (const hour of hours) {
+        const cell   = map[dow]?.[hour];
+        const avg    = cell?.avg  ?? 0;
+        const sends  = cell?.sends ?? 0;
+        const isTop  = top5.includes(`${dow}_${hour}`);
+        const intensity = maxAvg > 0 ? avg / maxAvg : 0;
+        // Color: purple at full intensity, transparent at zero
+        const alpha  = (0.08 + intensity * 0.82).toFixed(2);
+        const bg     = avg > 0 ? `rgba(112,42,225,${alpha})` : 'transparent';
+        const color  = intensity > 0.5 ? '#fff' : 'var(--on-surface-var)';
+        const border = isTop ? '2px solid #16a34a' : '1px solid transparent';
+        const title  = avg > 0 ? `${DOW_LABELS[dow]} ${hour}:00 — ממוצע ${avg.toFixed(1)} קליקים (${sends} שליחות)` : '';
+
+        html += `<td style="padding:3px 2px;text-align:center;" title="${escHtml(title)}">
+          <div style="width:24px;height:24px;border-radius:4px;margin:0 auto;background:${bg};border:${border};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:${color};cursor:${avg > 0 ? 'default' : 'default'};">
+            ${avg > 0 ? (avg >= 10 ? Math.round(avg) : avg.toFixed(1)) : ''}
+          </div>
+        </td>`;
+      }
+      html += '</tr>';
+    }
+
+    html += `</tbody></table></div>`;
+
+    // Top 5 summary pills
+    if (top5.length) {
+      html += `<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:11px;color:var(--on-surface-var);font-weight:600;">5 זמנים מובילים:</span>`;
+      for (const s of slots.slice(0, 5)) {
+        const dow  = parseInt(s.dow, 10);
+        const hour = parseInt(s.hour, 10);
+        const avg  = parseFloat(s.avg_clicks).toFixed(1);
+        html += `<span style="font-size:11px;background:rgba(22,163,74,0.1);color:#16a34a;padding:3px 10px;border-radius:20px;font-weight:600;">
+          ${DOW_LABELS[dow]} ${hour}:00 · ${avg} קליקים
+        </span>`;
+      }
+      html += '</div>';
+    }
+
+    el.innerHTML = html;
+  } catch (err) {
+    el.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+document.getElementById('analytics-timing-niche-filter').addEventListener('change', function () {
+  loadTimingHeatmap(this.value);
 });
