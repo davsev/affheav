@@ -187,6 +187,26 @@ async function migrate() {
   await query(`CREATE INDEX IF NOT EXISTS commission_snapshots_subject ON commission_snapshots(subject_id)`);
   await query(`CREATE INDEX IF NOT EXISTS commission_snapshots_user    ON commission_snapshots(user_id)`);
 
+  // ── Post IDs on products (for Meta Insights) ─────────────────────────────
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS fb_post_id  TEXT`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS ig_media_id TEXT`);
+
+  // ── Post Insights (Meta organic reach per post) ───────────────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_insights (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      product_id   UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      platform     TEXT NOT NULL,
+      reach        INTEGER,
+      impressions  INTEGER,
+      fetched_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(product_id, platform)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS post_insights_product ON post_insights(product_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS post_insights_user    ON post_insights(user_id)`);
+
   console.log('✓ Database schema up to date');
 }
 

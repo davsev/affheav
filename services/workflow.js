@@ -64,7 +64,7 @@ async function getNextUnsent({ userId, subject } = {}) {
 }
 
 // Mark product as sent in Postgres
-async function markSent(productId, { sentAt, facebookAt, instagramAt } = {}) {
+async function markSent(productId, { sentAt, facebookAt, instagramAt, fbPostId, igMediaId } = {}) {
   const updates = [];
   const values  = [];
   let i = 1;
@@ -79,6 +79,14 @@ async function markSent(productId, { sentAt, facebookAt, instagramAt } = {}) {
   if (instagramAt !== null) {
     updates.push(`instagram_at = $${i++}`);
     values.push(instagramAt ? new Date(instagramAt) : null);
+  }
+  if (fbPostId) {
+    updates.push(`fb_post_id = $${i++}`);
+    values.push(fbPostId);
+  }
+  if (igMediaId) {
+    updates.push(`ig_media_id = $${i++}`);
+    values.push(igMediaId);
   }
   if (!updates.length) return;
   updates.push(`send_count = send_count + 1`);
@@ -293,10 +301,12 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
     const waSuccess = Array.isArray(results.whatsapp)
       ? results.whatsapp.some(r => r.success)
       : !!results.whatsapp?.success;
-    const sentAt      = !sendWA ? null : (waSuccess               ? new Date().toISOString() : null);
-    const facebookAt  = !sendFB ? null : (results.facebook?.success ? new Date().toISOString() : null);
+    const sentAt      = !sendWA ? null : (waSuccess                ? new Date().toISOString() : null);
+    const facebookAt  = !sendFB ? null : (results.facebook?.success  ? new Date().toISOString() : null);
     const instagramAt = !sendIG ? null : (results.instagram?.success ? new Date().toISOString() : null);
-    await markSent(product.id, { sentAt, facebookAt, instagramAt });
+    const fbPostId    = results.facebook?.data?.post_id || results.facebook?.data?.id || null;
+    const igMediaId   = results.instagram?.data?.id || null;
+    await markSent(product.id, { sentAt, facebookAt, instagramAt, fbPostId, igMediaId });
     log('✓ DB updated');
   } catch (err) {
     log(`✗ Failed to update Google Sheet: ${err.message}`, 'error');

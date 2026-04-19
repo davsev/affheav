@@ -2400,9 +2400,13 @@ async function renderAnalyticsSummary() {
     const timingFilter = document.getElementById('analytics-timing-niche-filter');
     if (timingFilter) timingFilter.innerHTML = nicheOptions;
 
-    // Load top products and timing heatmap on initial render
+    // Load top products, reach data, and timing heatmap on initial render
     loadTopProducts();
     loadTimingHeatmap();
+    loadReachSummary().then(() => {
+      const card = document.getElementById('analytics-reach-card');
+      if (card) card.style.display = '';
+    }).catch(() => {});
   } catch (err) {
     grid.innerHTML = `<div style="padding:40px;text-align:center;color:#f87171;grid-column:1/-1;">שגיאה: ${escHtml(err.message)}</div>`;
   }
@@ -2720,3 +2724,79 @@ async function loadTimingHeatmap(subjectId = '') {
 document.getElementById('analytics-timing-niche-filter').addEventListener('change', function () {
   loadTimingHeatmap(this.value);
 });
+
+// ── Analytics: Meta Organic Reach ─────────────────────────────────────────────
+
+document.getElementById('btn-sync-reach').addEventListener('click', async () => {
+  const btn    = document.getElementById('btn-sync-reach');
+  const status = document.getElementById('analytics-sync-status');
+
+  btn.disabled = true;
+  status.textContent = 'מסנכרן חשיפה...';
+  status.style.color = 'var(--on-surface-var)';
+
+  try {
+    const data = await api('/api/analytics/sync-reach', { method: 'POST' });
+    status.style.color = '#16a34a';
+    status.textContent = `✓ סונכרנו ${data.synced} פוסטים`;
+    await loadReachSummary();
+    document.getElementById('analytics-reach-card').style.display = '';
+  } catch (err) {
+    status.style.color = '#f87171';
+    status.textContent = `✗ שגיאה: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+async function loadReachSummary() {
+  const grid = document.getElementById('analytics-reach-grid');
+  if (!grid) return;
+  grid.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);grid-column:1/-1;">טוען...</div>';
+
+  try {
+    const data = await api('/api/analytics/reach-summary');
+    const rows = data.reach || [];
+
+    if (!rows.length) {
+      grid.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);grid-column:1/-1;">אין נתוני חשיפה. לחץ "עדכן חשיפה" לאחר שליחת פוסטים.</div>';
+      return;
+    }
+
+    // Group by niche, then platform
+    const byNiche = {};
+    for (const r of rows) {
+      if (!byNiche[r.id]) byNiche[r.id] = { name: r.name, color: r.color, platforms: [] };
+      byNiche[r.id].platforms.push(r);
+    }
+
+    grid.innerHTML = Object.values(byNiche).map(n => {
+      const fb  = n.platforms.find(p => p.platform === 'facebook');
+      const ig  = n.platforms.find(p => p.platform === 'instagram');
+      const totalReach = (parseInt(fb?.total_reach||0,10)) + (parseInt(ig?.total_reach||0,10));
+      const avgReach   = Math.round(((fb ? parseFloat(fb.avg_reach_per_post) : 0) + (ig ? parseFloat(ig.avg_reach_per_post) : 0)) / ((fb?1:0)+(ig?1:0)) || 0);
+      const ctr        = fb?.ctr_pct || ig?.ctr_pct || 0;
+
+      return `<div class="dashboard-subject-card" style="border-top:3px solid ${escHtml(n.color||'#702ae1')};">
+        <div style="font-size:15px;font-weight:800;margin-bottom:12px;">${escHtml(n.name)}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+          <div class="dashboard-kpi-item">
+            <div class="dashboard-kpi-label">סה״כ חשיפה</div>
+            <div class="dashboard-kpi-val" style="color:#3b82f6;">${totalReach.toLocaleString()}</div>
+          </div>
+          <div class="dashboard-kpi-item">
+            <div class="dashboard-kpi-label">חשיפה ממוצעת</div>
+            <div class="dashboard-kpi-val">${avgReach.toLocaleString()}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;">
+          ${fb ? `<div style="background:rgba(59,130,246,0.1);color:#3b82f6;padding:3px 8px;border-radius:20px;">FB: ${parseInt(fb.total_reach,10).toLocaleString()} חשיפה · ${fb.posts_tracked} פוסטים</div>` : ''}
+          ${ig ? `<div style="background:rgba(168,85,247,0.1);color:#a855f7;padding:3px 8px;border-radius:20px;">IG: ${parseInt(ig.total_reach,10).toLocaleString()} חשיפה · ${ig.posts_tracked} פוסטים</div>` : ''}
+        </div>
+        ${parseFloat(ctr) > 0 ? `<div style="margin-top:8px;font-size:11px;color:var(--on-surface-var);">CTR: <strong style="color:var(--on-surface);">${parseFloat(ctr).toFixed(2)}%</strong> (קליקים / חשיפה)</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch (err) {
+    grid.innerHTML = `<div style="padding:20px;color:#f87171;grid-column:1/-1;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
