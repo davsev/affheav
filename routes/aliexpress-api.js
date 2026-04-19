@@ -106,15 +106,18 @@ router.post('/add', async (req, res) => {
       [req.user.id]
     );
     const shortLink = await shortenUrl(product.promotion_link);
+    const salePrice      = parseFloat(product.app_sale_price) || null;
+    const commissionRate = salePrice ? 0.08 : null; // AliExpress standard 8%
     await query(
       `INSERT INTO products
-         (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, whatsapp_group_id, sort_order)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+         (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, whatsapp_group_id, sort_order, sale_price, commission_rate)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [req.user.id, subject || null, product.promotion_link, shortLink,
        product.product_main_image_url || '', product.product_title,
-       join_link, wa_group, resolvedGroupId, maxRow[0].next_order]
+       join_link, wa_group, resolvedGroupId, maxRow[0].next_order,
+       salePrice, commissionRate]
     );
-    workflow.log(`✓ Product added to DB`);
+    workflow.log(`✓ Product added to DB${salePrice ? ` (price: $${salePrice})` : ''}`);
     res.json({ success: true });
   } catch (err) {
     workflow.log(`✗ Failed to add product: ${err.message}`, 'error');

@@ -21,8 +21,10 @@ function rowToProduct(r, idx) {
     clicks:     r.clicks      ?? null,
     subject:    r.subject_id  || '',
     sort_order: r.sort_order,
-    skip_ai:    r.skip_ai     || false,
-    send_count: r.send_count  || 0,
+    skip_ai:         r.skip_ai        || false,
+    send_count:      r.send_count     || 0,
+    sale_price:      r.sale_price     != null ? parseFloat(r.sale_price) : null,
+    commission_rate: r.commission_rate != null ? parseFloat(r.commission_rate) : null,
   };
 }
 

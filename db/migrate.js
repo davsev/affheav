@@ -107,6 +107,8 @@ async function migrate() {
   await query(`CREATE INDEX IF NOT EXISTS products_wa_group_id ON products(whatsapp_group_id)`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS skip_ai BOOLEAN NOT NULL DEFAULT false`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS send_count INTEGER NOT NULL DEFAULT 0`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS sale_price      NUMERIC(10,2)`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS commission_rate NUMERIC(5,4)`);
 
   // ── Schedules ─────────────────────────────────────────────────────────────
   await query(`

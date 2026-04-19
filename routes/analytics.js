@@ -191,4 +191,65 @@ router.get('/orders', async (req, res) => {
   }
 });
 
+// GET /api/analytics/top-products?subjectId=
+// Products ranked by estimated revenue: clicks × conversion_rate × sale_price × commission_rate
+// Falls back to 2% conversion when the niche has no real orders yet.
+router.get('/top-products', async (req, res) => {
+  try {
+    const { subjectId } = req.query;
+    const params = [req.user.id];
+    let subjectFilter = '';
+    if (subjectId) {
+      params.push(subjectId);
+      subjectFilter = 'AND p.subject_id = $2';
+    }
+
+    const { rows } = await query(
+      `WITH niche_conv AS (
+         SELECT
+           cs.subject_id,
+           CASE WHEN SUM(p2.clicks) > 0
+             THEN COUNT(DISTINCT cs.order_id)::numeric / NULLIF(SUM(p2.clicks), 0)
+             ELSE 0.02 END AS conversion_rate
+         FROM commission_snapshots cs
+         JOIN products p2 ON p2.subject_id = cs.subject_id AND p2.user_id = cs.user_id
+         WHERE cs.user_id = $1
+         GROUP BY cs.subject_id
+       )
+       SELECT
+         p.id,
+         p.text,
+         p.short_link,
+         p.image,
+         p.clicks,
+         p.sale_price,
+         p.commission_rate,
+         p.sent_at,
+         s.name  AS subject_name,
+         s.color AS subject_color,
+         COALESCE(nc.conversion_rate, 0.02) AS conversion_rate,
+         CASE WHEN p.sale_price IS NOT NULL AND p.clicks > 0
+           THEN ROUND(
+             p.clicks
+             * COALESCE(nc.conversion_rate, 0.02)
+             * p.sale_price
+             * COALESCE(p.commission_rate, 0.08),
+           2)
+           ELSE NULL END AS estimated_revenue
+       FROM products p
+       LEFT JOIN subjects s       ON s.id = p.subject_id
+       LEFT JOIN niche_conv nc    ON nc.subject_id = p.subject_id
+       WHERE p.user_id = $1
+         AND p.sale_price IS NOT NULL
+         ${subjectFilter}
+       ORDER BY estimated_revenue DESC NULLS LAST
+       LIMIT 50`,
+      params
+    );
+    res.json({ success: true, products: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
