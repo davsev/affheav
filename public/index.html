@@ -713,6 +713,69 @@
         <div id="analytics-timing-content">
           <div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>
         </div>
+      <!-- ROAS — ad spend vs commission -->
+      <div class="card" style="margin-top:20px;" id="analytics-roas-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="card-title" style="margin:0;">ROAS — החזר על הוצאות פרסום</div>
+            <span style="font-size:11px;background:rgba(239,68,68,0.1);color:#ef4444;padding:2px 8px;border-radius:20px;font-weight:600;">ידני</span>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="btn-roas-add-toggle">
+            <span class="material-symbols-outlined" style="font-size:15px;">add</span>
+            הוסף הוצאה
+          </button>
+        </div>
+
+        <!-- Add spend form (hidden by default) -->
+        <div id="roas-add-form" style="display:none;background:var(--surface-1);border-radius:10px;padding:16px;margin-bottom:16px;">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:10px;">
+            <div>
+              <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">נישה</label>
+              <select id="roas-form-subject" class="form-input" style="font-size:13px;padding:6px 10px;">
+                <option value="">בחר נישה</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">פלטפורמה</label>
+              <select id="roas-form-platform" class="form-input" style="font-size:13px;padding:6px 10px;">
+                <option value="facebook">Facebook</option>
+                <option value="instagram">Instagram</option>
+                <option value="google">Google</option>
+                <option value="tiktok">TikTok</option>
+                <option value="other">אחר</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">סכום ($)</label>
+              <input type="number" id="roas-form-spend" class="form-input" min="0" step="0.01" placeholder="0.00" style="font-size:13px;padding:6px 10px;" />
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">מתאריך</label>
+              <input type="date" id="roas-form-start" class="form-input" style="font-size:13px;padding:6px 10px;" />
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">עד תאריך</label>
+              <input type="date" id="roas-form-end" class="form-input" style="font-size:13px;padding:6px 10px;" />
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">הערות (אופציונלי)</label>
+              <input type="text" id="roas-form-notes" class="form-input" placeholder="קמפיין, מוצר..." style="font-size:13px;padding:6px 10px;" />
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button class="btn btn-primary btn-sm" id="btn-roas-save">שמור</button>
+            <span id="roas-form-status" style="font-size:12px;"></span>
+          </div>
+        </div>
+
+        <!-- ROAS niche cards -->
+        <div id="analytics-roas-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:20px;">
+          <div style="padding:20px;text-align:center;color:var(--on-surface-var);grid-column:1/-1;">טוען...</div>
+        </div>
+
+        <!-- Spend records table -->
+        <div id="analytics-roas-records"></div>
+      </div>
       </div>
     </div>
 

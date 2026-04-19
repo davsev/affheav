@@ -207,6 +207,23 @@ async function migrate() {
   await query(`CREATE INDEX IF NOT EXISTS post_insights_product ON post_insights(product_id)`);
   await query(`CREATE INDEX IF NOT EXISTS post_insights_user    ON post_insights(user_id)`);
 
+  // ── Ad Spend (manual ROAS tracking) ──────────────────────────────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS ad_spend (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      subject_id   UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+      platform     TEXT NOT NULL,
+      spend_usd    NUMERIC(10,2) NOT NULL,
+      period_start DATE NOT NULL,
+      period_end   DATE NOT NULL,
+      notes        TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS ad_spend_user    ON ad_spend(user_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS ad_spend_subject ON ad_spend(subject_id)`);
+
   console.log('✓ Database schema up to date');
 }
 
