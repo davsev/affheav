@@ -2377,95 +2377,100 @@ document.getElementById('btn-migrate-subjects')?.addEventListener('click', async
 async function renderAnalyticsSummary() {
   const grid = document.getElementById('analytics-niches-grid');
   if (!grid) return;
-  grid.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);grid-column:1/-1;">טוען נתוני עמלות...</div>';
+  grid.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);">טוען נתוני עמלות...</div>';
 
   try {
-    const data = await api('/api/analytics/summary');
+    const data   = await api('/api/analytics/summary');
     const niches = data.niches || [];
 
     if (!niches.length) {
-      grid.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);grid-column:1/-1;">אין נישות מוגדרות</div>';
+      grid.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);">אין נישות מוגדרות</div>';
       return;
     }
 
-    grid.innerHTML = niches.map(n => renderNicheCard(n)).join('');
+    grid.innerHTML = niches.map(n => renderNicheRow(n)).join('');
 
-    // Populate niche filters for orders + top-products tables
+    // KPI strip totals
+    const totalCommission  = niches.reduce((s, n) => s + parseFloat(n.total_commission || 0), 0);
+    const confirmedTotal   = niches.reduce((s, n) => s + parseFloat(n.confirmed_commission || 0), 0);
+    const totalOrders      = niches.reduce((s, n) => s + parseInt(n.total_orders || 0, 10), 0);
+    const totalClicks      = niches.reduce((s, n) => s + parseInt(n.total_clicks || 0, 10), 0);
+    const strip = document.getElementById('analytics-kpi-strip');
+    if (strip) {
+      strip.innerHTML = [
+        { label: 'עמלה כוללת',   value: `$${totalCommission.toFixed(2)}`, color: '#16a34a', icon: 'paid' },
+        { label: 'עמלה מאושרת', value: `$${confirmedTotal.toFixed(2)}`,  color: '#059669', icon: 'verified' },
+        { label: 'הזמנות',       value: totalOrders.toLocaleString(),      color: 'var(--on-surface)', icon: 'shopping_bag' },
+        { label: 'קליקים',       value: totalClicks.toLocaleString(),      color: '#702ae1', icon: 'ads_click' },
+      ].map(k => `
+        <div class="card an-kpi-card">
+          <span class="material-symbols-outlined an-kpi-icon" style="color:${k.color};">${k.icon}</span>
+          <div>
+            <div class="an-kpi-val" style="color:${k.color};">${k.value}</div>
+            <div class="an-kpi-label">${k.label}</div>
+          </div>
+        </div>`).join('');
+    }
+
+    // Populate niche filters
     const nicheOptions = '<option value="">כל הנישות</option>' +
       niches.map(n => `<option value="${escHtml(n.id)}">${escHtml(n.name)}</option>`).join('');
-    const filter = document.getElementById('analytics-niche-filter');
-    if (filter) filter.innerHTML = nicheOptions;
-    const topFilter = document.getElementById('analytics-top-niche-filter');
-    if (topFilter) topFilter.innerHTML = nicheOptions;
-    const timingFilter = document.getElementById('analytics-timing-niche-filter');
-    if (timingFilter) timingFilter.innerHTML = nicheOptions;
-    const roasSubjectFilter = document.getElementById('roas-form-subject');
-    if (roasSubjectFilter) roasSubjectFilter.innerHTML = '<option value="">בחר נישה</option>' +
+    ['analytics-niche-filter','analytics-top-niche-filter','analytics-timing-niche-filter'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = nicheOptions;
+    });
+    const roasSel = document.getElementById('roas-form-subject');
+    if (roasSel) roasSel.innerHTML = '<option value="">בחר נישה</option>' +
       niches.map(n => `<option value="${escHtml(n.id)}">${escHtml(n.name)}</option>`).join('');
 
-    // Load top products, reach data, timing heatmap, and ROAS on initial render
     loadTopProducts();
     loadTimingHeatmap();
     loadRoas();
-    loadReachSummary().then(() => {
-      const card = document.getElementById('analytics-reach-card');
-      if (card) card.style.display = '';
-    }).catch(() => {});
+    loadReachSummary().catch(() => {});
   } catch (err) {
-    grid.innerHTML = `<div style="padding:40px;text-align:center;color:#f87171;grid-column:1/-1;">שגיאה: ${escHtml(err.message)}</div>`;
+    grid.innerHTML = `<div style="padding:40px;text-align:center;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
   }
 }
 
-function renderNicheCard(n) {
-  const commission      = parseFloat(n.total_commission || 0);
-  const confirmed       = parseFloat(n.confirmed_commission || 0);
-  const orderValue      = parseFloat(n.total_order_value || 0);
-  const orders          = parseInt(n.total_orders || 0, 10);
-  const clicks          = parseInt(n.total_clicks || 0, 10);
-  const hasTrackingId   = !!n.tracking_id;
-  const lastSynced      = n.last_synced ? fmtDate(n.last_synced) : null;
-  const color           = n.color || '#702ae1';
-
-  const noDataMsg = !hasTrackingId
-    ? `<div style="color:#f59e0b;font-size:11px;margin-top:8px;display:flex;align-items:center;gap:4px;"><span class="material-symbols-outlined" style="font-size:13px;">warning</span>חסר Tracking ID בהגדרות הנישה</div>`
-    : (orders === 0 && !n.last_synced
-        ? `<div style="color:var(--on-surface-var);font-size:11px;margin-top:8px;">לחץ "עדכן עמלות" כדי לטעון נתונים</div>`
-        : '');
+function renderNicheRow(n) {
+  const commission = parseFloat(n.total_commission || 0);
+  const confirmed  = parseFloat(n.confirmed_commission || 0);
+  const orderValue = parseFloat(n.total_order_value || 0);
+  const orders     = parseInt(n.total_orders || 0, 10);
+  const clicks     = parseInt(n.total_clicks || 0, 10);
+  const color      = n.color || '#702ae1';
+  const convPct    = clicks > 0 && orders > 0 ? ((orders / clicks) * 100).toFixed(2) + '%' : '—';
+  const statusDot  = n.tracking_id
+    ? `<span style="font-size:10px;color:#16a34a;white-space:nowrap;">● מחובר</span>`
+    : `<span style="font-size:10px;color:#f59e0b;white-space:nowrap;">● חסר Tracking ID</span>`;
 
   return `
-    <div class="dashboard-subject-card" style="border-top:3px solid ${escHtml(color)};">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <div style="font-size:16px;font-weight:800;color:var(--on-surface);">${escHtml(n.name)}</div>
-        ${hasTrackingId ? `<span style="font-size:10px;background:rgba(22,163,74,0.1);color:#16a34a;padding:2px 8px;border-radius:20px;font-weight:600;">מחובר</span>` : `<span style="font-size:10px;background:rgba(245,158,11,0.1);color:#f59e0b;padding:2px 8px;border-radius:20px;font-weight:600;">לא מחובר</span>`}
-      </div>
-      <div class="dashboard-subject-kpi" style="grid-template-columns:1fr 1fr;gap:10px;">
-        <div class="dashboard-kpi-item">
-          <div class="dashboard-kpi-label">עמלה כוללת</div>
-          <div class="dashboard-kpi-val" style="color:#16a34a;font-size:20px;">$${commission.toFixed(2)}</div>
-        </div>
-        <div class="dashboard-kpi-item">
-          <div class="dashboard-kpi-label">עמלה מאושרת</div>
-          <div class="dashboard-kpi-val" style="color:#059669;font-size:20px;">$${confirmed.toFixed(2)}</div>
-        </div>
-        <div class="dashboard-kpi-item">
-          <div class="dashboard-kpi-label">ערך הזמנות</div>
-          <div class="dashboard-kpi-val">$${orderValue.toFixed(2)}</div>
-        </div>
-        <div class="dashboard-kpi-item">
-          <div class="dashboard-kpi-label">הזמנות</div>
-          <div class="dashboard-kpi-val">${orders}</div>
-        </div>
-        <div class="dashboard-kpi-item">
-          <div class="dashboard-kpi-label">קליקים (spoo.me)</div>
-          <div class="dashboard-kpi-val" style="color:#702ae1;">${clicks.toLocaleString()}</div>
-        </div>
-        <div class="dashboard-kpi-item">
-          <div class="dashboard-kpi-label">שיעור המרה</div>
-          <div class="dashboard-kpi-val">${clicks > 0 && orders > 0 ? ((orders / clicks) * 100).toFixed(2) + '%' : '—'}</div>
+    <div class="an-niche-row">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:3px;height:34px;border-radius:2px;background:${escHtml(color)};flex-shrink:0;"></div>
+        <div>
+          <div style="font-weight:700;font-size:14px;color:var(--on-surface);">${escHtml(n.name)}</div>
+          ${statusDot}
         </div>
       </div>
-      ${noDataMsg}
-      ${lastSynced ? `<div style="font-size:10px;color:var(--on-surface-var);margin-top:8px;">עודכן: ${lastSynced}</div>` : ''}
+      <div class="an-col-c">
+        <div style="font-size:19px;font-weight:900;color:#16a34a;">$${commission.toFixed(2)}</div>
+      </div>
+      <div class="an-col-c">
+        <div style="font-size:15px;font-weight:700;color:#059669;">$${confirmed.toFixed(2)}</div>
+      </div>
+      <div class="an-col-c">
+        <div style="font-size:17px;font-weight:700;color:var(--on-surface);">${orders}</div>
+      </div>
+      <div class="an-col-c">
+        <div style="font-size:13px;color:var(--on-surface-var);">$${orderValue.toFixed(2)}</div>
+      </div>
+      <div class="an-col-c">
+        <div style="font-size:15px;font-weight:700;color:#702ae1;">${clicks.toLocaleString()}</div>
+      </div>
+      <div class="an-col-c">
+        <div style="font-size:14px;font-weight:600;color:var(--on-surface);">${convPct}</div>
+      </div>
     </div>`;
 }
 
@@ -2492,13 +2497,23 @@ document.getElementById('btn-sync-commissions').addEventListener('click', async 
     // Refresh summary cards and orders
     await renderAnalyticsSummary();
     await loadAnalyticsOrders();
-    document.getElementById('analytics-orders-card').style.display = '';
   } catch (err) {
     status.style.color = '#f87171';
     status.textContent = `✗ שגיאה: ${err.message}`;
   } finally {
     btn.disabled = false;
   }
+});
+
+// Section tab switching
+document.querySelectorAll('.an-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.an-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('[id^="an-section-"]').forEach(s => s.style.display = 'none');
+    btn.classList.add('active');
+    const sec = document.getElementById(`an-section-${btn.dataset.section}`);
+    if (sec) sec.style.display = '';
+  });
 });
 
 async function loadAnalyticsOrders(subjectId = '') {

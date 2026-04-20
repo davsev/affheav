@@ -1128,3 +1128,56 @@ tr[draggable].drag-over td { border-top: 2px solid var(--primary); background: r
   max-height: 62vh;
   overflow-y: auto;
 }
+
+/* ── Analytics section tabs ────────────────────────────────────────────────── */
+.an-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  color: var(--on-surface-var);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.an-tab:hover { color: var(--on-surface); background: rgba(255,255,255,0.04); }
+.an-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+/* ── Analytics KPI strip ───────────────────────────────────────────────────── */
+.an-kpi-card { display: flex; align-items: center; gap: 14px; padding: 18px 20px; }
+.an-kpi-icon { font-size: 30px; opacity: 0.85; flex-shrink: 0; }
+.an-kpi-val  { font-size: 26px; font-weight: 900; line-height: 1; }
+.an-kpi-label { font-size: 11px; color: var(--on-surface-var); margin-top: 3px; }
+
+/* ── Analytics niche table ─────────────────────────────────────────────────── */
+.an-niche-thead,
+.an-niche-row {
+  display: grid;
+  grid-template-columns: 1fr 115px 105px 65px 90px 80px 80px;
+  align-items: center;
+}
+.an-niche-thead {
+  padding: 8px 20px;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--on-surface-var);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.an-niche-row {
+  padding: 13px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.12s;
+}
+.an-niche-row:last-child { border-bottom: none; }
+.an-niche-row:hover { background: rgba(255,255,255,0.025); }
+.an-col-c { text-align: center; }
