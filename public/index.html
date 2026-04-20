@@ -616,167 +616,196 @@
 
     <!-- ── Analytics (Profitability) ───────────────────────────── -->
     <div class="tab-panel" id="tab-analytics">
-      <div style="margin-bottom:28px;">
-        <div class="page-eyebrow">נתונים פיננסיים</div>
-        <h1 class="page-title">ניתוח <span class="highlight">רווחיות</span></h1>
-        <p class="page-sub">עמלות AliExpress בפועל לפי נישה</p>
-      </div>
 
-      <!-- Disclaimer -->
-      <div style="background:rgba(112,42,225,0.07);border:1px solid rgba(112,42,225,0.2);border-radius:12px;padding:12px 16px;font-size:12px;color:var(--on-surface-var);margin-bottom:20px;line-height:1.6;">
-        <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;color:var(--primary);">info</span>
-        נתוני עמלות מתקבלים ישירות מ-API של AliExpress לפי tracking ID של כל נישה.
-        כדי לראות נתונים, ודא שה-tracking ID מוגדר בהגדרות הנישה.
-      </div>
-
-      <!-- Sync controls -->
-      <div class="card" style="margin-bottom:20px;">
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <label style="font-size:12px;color:var(--on-surface-var);">מתאריך</label>
-            <input type="date" id="analytics-start-date" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;" />
-            <label style="font-size:12px;color:var(--on-surface-var);">עד</label>
-            <input type="date" id="analytics-end-date" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;" />
-          </div>
+      <!-- Toolbar -->
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+        <div>
+          <div class="page-eyebrow">נתונים פיננסיים</div>
+          <h1 class="page-title" style="margin:4px 0 0;">לוח <span class="highlight">רווחיות</span></h1>
+        </div>
+        <div class="card" style="padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1;max-width:680px;">
+          <span style="font-size:12px;color:var(--on-surface-var);white-space:nowrap;font-weight:600;">טווח:</span>
+          <input type="date" id="analytics-start-date" class="form-input" style="width:auto;font-size:13px;padding:5px 9px;" />
+          <span style="color:var(--on-surface-var);">—</span>
+          <input type="date" id="analytics-end-date" class="form-input" style="width:auto;font-size:13px;padding:5px 9px;" />
+          <div style="height:20px;width:1px;background:rgba(255,255,255,0.1);"></div>
           <button class="btn btn-primary btn-sm" id="btn-sync-commissions">
-            <span class="material-symbols-outlined" style="font-size:15px;">cloud_sync</span>
-            עדכן עמלות
+            <span class="material-symbols-outlined" style="font-size:15px;">cloud_sync</span>עדכן עמלות
           </button>
-          <button class="btn btn-secondary btn-sm" id="btn-sync-reach">
-            <span class="material-symbols-outlined" style="font-size:15px;">visibility</span>
-            עדכן חשיפה
+          <button class="btn btn-ghost btn-sm" id="btn-sync-reach">
+            <span class="material-symbols-outlined" style="font-size:15px;">visibility</span>עדכן חשיפה
           </button>
-          <span id="analytics-sync-status" style="font-size:12px;color:var(--on-surface-var);"></span>
+          <span id="analytics-sync-status" style="font-size:12px;"></span>
         </div>
       </div>
 
-      <!-- Per-niche summary cards -->
-      <div id="analytics-niches-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:24px;">
-        <div style="padding:40px;text-align:center;color:var(--on-surface-var);grid-column:1/-1;">
-          לחץ "עדכן עמלות" לטעינת נתונים
+      <!-- Global KPI strip -->
+      <div id="analytics-kpi-strip" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;">
+        <!-- populated by JS -->
+      </div>
+
+      <!-- Niche performance table -->
+      <div class="card" style="margin-bottom:24px;padding:0;overflow:hidden;">
+        <div style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;">
+          <span class="material-symbols-outlined" style="font-size:18px;color:var(--primary);">bar_chart</span>
+          <span style="font-size:14px;font-weight:700;color:var(--on-surface);">ביצועים לפי נישה</span>
+        </div>
+        <div class="an-niche-thead">
+          <div>נישה</div>
+          <div class="an-col-c">עמלה כוללת</div>
+          <div class="an-col-c">מאושרת</div>
+          <div class="an-col-c">הזמנות</div>
+          <div class="an-col-c">ערך הזמנות</div>
+          <div class="an-col-c">קליקים</div>
+          <div class="an-col-c">המרה</div>
+        </div>
+        <div id="analytics-niches-grid">
+          <div style="padding:40px;text-align:center;color:var(--on-surface-var);">לחץ "עדכן עמלות" לטעינת נתונים</div>
         </div>
       </div>
 
-      <!-- Meta organic reach summary -->
-      <div class="card" id="analytics-reach-card" style="display:none;margin-bottom:20px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-          <div class="card-title" style="margin:0;">חשיפה אורגנית — Meta</div>
-          <span style="font-size:11px;background:rgba(59,130,246,0.1);color:#3b82f6;padding:2px 8px;border-radius:20px;font-weight:600;">Facebook & Instagram</span>
-        </div>
-        <div style="font-size:11px;color:var(--on-surface-var);margin-bottom:14px;">
-          כמה אנשים ראו את הפוסטים שלך לפי נישה ופלטפורמה
-        </div>
-        <div id="analytics-reach-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;"></div>
+      <!-- Section navigation tabs -->
+      <div style="display:flex;gap:0;border-bottom:2px solid rgba(255,255,255,0.06);overflow-x:auto;margin-bottom:0;">
+        <button class="an-tab active" data-section="orders">
+          <span class="material-symbols-outlined" style="font-size:15px;">receipt_long</span>הזמנות
+        </button>
+        <button class="an-tab" data-section="products">
+          <span class="material-symbols-outlined" style="font-size:15px;">trophy</span>מוצרים מובילים
+        </button>
+        <button class="an-tab" data-section="timing">
+          <span class="material-symbols-outlined" style="font-size:15px;">schedule</span>תזמון
+        </button>
+        <button class="an-tab" data-section="reach">
+          <span class="material-symbols-outlined" style="font-size:15px;">visibility</span>חשיפה
+        </button>
+        <button class="an-tab" data-section="roas">
+          <span class="material-symbols-outlined" style="font-size:15px;">payments</span>ROAS
+        </button>
       </div>
 
-      <!-- Orders table -->
-      <div class="card" id="analytics-orders-card" style="display:none;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-          <div class="card-title" style="margin:0;">פירוט הזמנות</div>
-          <select id="analytics-niche-filter" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;">
-            <option value="">כל הנישות</option>
-          </select>
-        </div>
-        <div id="analytics-orders-table"></div>
-      </div>
-
-      <!-- Top products by estimated revenue -->
-      <div class="card" id="analytics-top-products-card" style="margin-top:20px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <div class="card-title" style="margin:0;">מוצרים מובילים לפי הכנסה משוערת</div>
-            <span style="font-size:11px;background:rgba(245,158,11,0.12);color:#f59e0b;padding:2px 8px;border-radius:20px;font-weight:600;">הערכה</span>
+      <!-- Orders section -->
+      <div id="an-section-orders" style="margin-bottom:24px;">
+        <div class="card" id="analytics-orders-card" style="border-radius:0 0 16px 16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+            <div class="card-title" style="margin:0;">פירוט הזמנות</div>
+            <select id="analytics-niche-filter" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;">
+              <option value="">כל הנישות</option>
+            </select>
           </div>
-          <select id="analytics-top-niche-filter" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;">
-            <option value="">כל הנישות</option>
-          </select>
-        </div>
-        <div style="font-size:11px;color:var(--on-surface-var);margin-bottom:12px;">
-          קליקים × שיעור המרה (מהנישה, או 2% ברירת מחדל) × מחיר מוצר × 8% עמלת AliExpress
-        </div>
-        <div id="analytics-top-products-table">
-          <div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>
-        </div>
-      </div>
-
-      <!-- Timing heatmap -->
-      <div class="card" style="margin-top:20px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <div class="card-title" style="margin:0;">תזמון אופטימלי</div>
-            <span style="font-size:11px;background:rgba(59,130,246,0.1);color:#3b82f6;padding:2px 8px;border-radius:20px;font-weight:600;">ממוצע קליקים לפי שעה ויום</span>
-          </div>
-          <select id="analytics-timing-niche-filter" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;">
-            <option value="">כל הנישות</option>
-          </select>
-        </div>
-        <div id="analytics-timing-content">
-          <div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>
-        </div>
-      <!-- ROAS — ad spend vs commission -->
-      <div class="card" style="margin-top:20px;" id="analytics-roas-card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <div class="card-title" style="margin:0;">ROAS — החזר על הוצאות פרסום</div>
-            <span style="font-size:11px;background:rgba(239,68,68,0.1);color:#ef4444;padding:2px 8px;border-radius:20px;font-weight:600;">ידני</span>
-          </div>
-          <button class="btn btn-ghost btn-sm" id="btn-roas-add-toggle">
-            <span class="material-symbols-outlined" style="font-size:15px;">add</span>
-            הוסף הוצאה
-          </button>
-        </div>
-
-        <!-- Add spend form (hidden by default) -->
-        <div id="roas-add-form" style="display:none;background:var(--surface-1);border-radius:10px;padding:16px;margin-bottom:16px;">
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:10px;">
-            <div>
-              <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">נישה</label>
-              <select id="roas-form-subject" class="form-input" style="font-size:13px;padding:6px 10px;">
-                <option value="">בחר נישה</option>
-              </select>
-            </div>
-            <div>
-              <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">פלטפורמה</label>
-              <select id="roas-form-platform" class="form-input" style="font-size:13px;padding:6px 10px;">
-                <option value="facebook">Facebook</option>
-                <option value="instagram">Instagram</option>
-                <option value="google">Google</option>
-                <option value="tiktok">TikTok</option>
-                <option value="other">אחר</option>
-              </select>
-            </div>
-            <div>
-              <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">סכום ($)</label>
-              <input type="number" id="roas-form-spend" class="form-input" min="0" step="0.01" placeholder="0.00" style="font-size:13px;padding:6px 10px;" />
-            </div>
-            <div>
-              <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">מתאריך</label>
-              <input type="date" id="roas-form-start" class="form-input" style="font-size:13px;padding:6px 10px;" />
-            </div>
-            <div>
-              <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">עד תאריך</label>
-              <input type="date" id="roas-form-end" class="form-input" style="font-size:13px;padding:6px 10px;" />
-            </div>
-            <div>
-              <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">הערות (אופציונלי)</label>
-              <input type="text" id="roas-form-notes" class="form-input" placeholder="קמפיין, מוצר..." style="font-size:13px;padding:6px 10px;" />
-            </div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <button class="btn btn-primary btn-sm" id="btn-roas-save">שמור</button>
-            <span id="roas-form-status" style="font-size:12px;"></span>
+          <div id="analytics-orders-table">
+            <div style="padding:20px;text-align:center;color:var(--on-surface-var);">לחץ "עדכן עמלות" לטעינת נתונים</div>
           </div>
         </div>
+      </div>
 
-        <!-- ROAS niche cards -->
-        <div id="analytics-roas-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:20px;">
-          <div style="padding:20px;text-align:center;color:var(--on-surface-var);grid-column:1/-1;">טוען...</div>
+      <!-- Top products section -->
+      <div id="an-section-products" style="display:none;margin-bottom:24px;">
+        <div class="card" id="analytics-top-products-card" style="border-radius:0 0 16px 16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="card-title" style="margin:0;">מוצרים מובילים לפי הכנסה משוערת</div>
+              <span style="font-size:11px;background:rgba(245,158,11,0.12);color:#f59e0b;padding:2px 8px;border-radius:20px;font-weight:600;">הערכה</span>
+            </div>
+            <select id="analytics-top-niche-filter" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;">
+              <option value="">כל הנישות</option>
+            </select>
+          </div>
+          <div style="font-size:11px;color:var(--on-surface-var);margin-bottom:12px;">
+            קליקים × שיעור המרה (מהנישה, 2% ברירת מחדל) × מחיר מוצר × 8% עמלת AliExpress
+          </div>
+          <div id="analytics-top-products-table">
+            <div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>
+          </div>
         </div>
+      </div>
 
-        <!-- Spend records table -->
-        <div id="analytics-roas-records"></div>
+      <!-- Timing section -->
+      <div id="an-section-timing" style="display:none;margin-bottom:24px;">
+        <div class="card" style="border-radius:0 0 16px 16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="card-title" style="margin:0;">תזמון אופטימלי</div>
+              <span style="font-size:11px;background:rgba(59,130,246,0.1);color:#3b82f6;padding:2px 8px;border-radius:20px;font-weight:600;">ממוצע קליקים לפי שעה ויום</span>
+            </div>
+            <select id="analytics-timing-niche-filter" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;">
+              <option value="">כל הנישות</option>
+            </select>
+          </div>
+          <div id="analytics-timing-content">
+            <div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>
+          </div>
+        </div>
       </div>
+
+      <!-- Reach section -->
+      <div id="an-section-reach" style="display:none;margin-bottom:24px;">
+        <div class="card" id="analytics-reach-card" style="border-radius:0 0 16px 16px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+            <div class="card-title" style="margin:0;">חשיפה אורגנית — Meta</div>
+            <span style="font-size:11px;background:rgba(59,130,246,0.1);color:#3b82f6;padding:2px 8px;border-radius:20px;font-weight:600;">Facebook & Instagram</span>
+          </div>
+          <div style="font-size:11px;color:var(--on-surface-var);margin-bottom:14px;">כמה אנשים ראו את הפוסטים שלך לפי נישה ופלטפורמה</div>
+          <div id="analytics-reach-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;"></div>
+        </div>
       </div>
+
+      <!-- ROAS section -->
+      <div id="an-section-roas" style="display:none;margin-bottom:24px;">
+        <div class="card" id="analytics-roas-card" style="border-radius:0 0 16px 16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="card-title" style="margin:0;">ROAS — החזר על הוצאות פרסום</div>
+              <span style="font-size:11px;background:rgba(239,68,68,0.1);color:#ef4444;padding:2px 8px;border-radius:20px;font-weight:600;">ידני</span>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="btn-roas-add-toggle">
+              <span class="material-symbols-outlined" style="font-size:15px;">add</span>הוסף הוצאה
+            </button>
+          </div>
+          <div id="roas-add-form" style="display:none;background:var(--surface-1);border-radius:10px;padding:16px;margin-bottom:16px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:10px;">
+              <div>
+                <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">נישה</label>
+                <select id="roas-form-subject" class="form-input" style="font-size:13px;padding:6px 10px;"><option value="">בחר נישה</option></select>
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">פלטפורמה</label>
+                <select id="roas-form-platform" class="form-input" style="font-size:13px;padding:6px 10px;">
+                  <option value="facebook">Facebook</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="google">Google</option>
+                  <option value="tiktok">TikTok</option>
+                  <option value="other">אחר</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">סכום ($)</label>
+                <input type="number" id="roas-form-spend" class="form-input" min="0" step="0.01" placeholder="0.00" style="font-size:13px;padding:6px 10px;" />
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">מתאריך</label>
+                <input type="date" id="roas-form-start" class="form-input" style="font-size:13px;padding:6px 10px;" />
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">עד תאריך</label>
+                <input type="date" id="roas-form-end" class="form-input" style="font-size:13px;padding:6px 10px;" />
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--on-surface-var);display:block;margin-bottom:4px;">הערות (אופציונלי)</label>
+                <input type="text" id="roas-form-notes" class="form-input" placeholder="קמפיין, מוצר..." style="font-size:13px;padding:6px 10px;" />
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button class="btn btn-primary btn-sm" id="btn-roas-save">שמור</button>
+              <span id="roas-form-status" style="font-size:12px;"></span>
+            </div>
+          </div>
+          <div id="analytics-roas-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:20px;">
+            <div style="padding:20px;text-align:center;color:var(--on-surface-var);grid-column:1/-1;">טוען...</div>
+          </div>
+          <div id="analytics-roas-records"></div>
+        </div>
+      </div>
+
     </div>
 
     <!-- ── Logs ──────────────────────────────────────────────────── -->
