@@ -2446,7 +2446,7 @@ function renderNicheRow(n) {
 
   return `
     <div class="an-niche-row">
-      <div style="display:flex;align-items:center;gap:10px;">
+      <div class="an-niche-name-cell" style="display:flex;align-items:center;gap:10px;">
         <div style="width:3px;height:34px;border-radius:2px;background:${escHtml(color)};flex-shrink:0;"></div>
         <div>
           <div style="font-weight:700;font-size:14px;color:var(--on-surface);">${escHtml(n.name)}</div>
@@ -2454,21 +2454,27 @@ function renderNicheRow(n) {
         </div>
       </div>
       <div class="an-col-c">
+        <div class="an-niche-label">עמלה</div>
         <div style="font-size:19px;font-weight:900;color:#16a34a;">$${commission.toFixed(2)}</div>
       </div>
       <div class="an-col-c">
+        <div class="an-niche-label">מאושרת</div>
         <div style="font-size:15px;font-weight:700;color:#059669;">$${confirmed.toFixed(2)}</div>
       </div>
       <div class="an-col-c">
+        <div class="an-niche-label">הזמנות</div>
         <div style="font-size:17px;font-weight:700;color:var(--on-surface);">${orders}</div>
       </div>
       <div class="an-col-c">
+        <div class="an-niche-label">ערך</div>
         <div style="font-size:13px;color:var(--on-surface-var);">$${orderValue.toFixed(2)}</div>
       </div>
       <div class="an-col-c">
+        <div class="an-niche-label">קליקים</div>
         <div style="font-size:15px;font-weight:700;color:#702ae1;">${clicks.toLocaleString()}</div>
       </div>
       <div class="an-col-c">
+        <div class="an-niche-label">המרה</div>
         <div style="font-size:14px;font-weight:600;color:var(--on-surface);">${convPct}</div>
       </div>
     </div>`;

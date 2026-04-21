@@ -1181,3 +1181,77 @@ tr[draggable].drag-over td { border-top: 2px solid var(--primary); background: r
 .an-niche-row:last-child { border-bottom: none; }
 .an-niche-row:hover { background: rgba(255,255,255,0.025); }
 .an-col-c { text-align: center; }
+
+/* Label inside niche stat cells — hidden on desktop, shown on mobile */
+.an-niche-label {
+  display: none;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--on-surface-var);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+/* KPI grid — desktop default, overridden on mobile */
+.an-kpi-grid {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* ── Analytics: mobile layout (≤680 px) ───────────────────────────────────── */
+@media (max-width: 680px) {
+
+  /* Toolbar: let it stack naturally via flex-wrap; tighten gap */
+  #tab-analytics > div:first-child { gap: 10px; margin-bottom: 14px; }
+
+  /* Controls card: full-width, tighter padding */
+  #tab-analytics > div:first-child .card {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  /* Hide the decorative divider between date range and buttons */
+  .an-ctrl-sep { display: none; }
+
+  /* KPI strip: 2×2 */
+  .an-kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .an-kpi-card { padding: 12px 14px; gap: 10px; }
+  .an-kpi-icon { font-size: 22px; }
+  .an-kpi-val  { font-size: 20px; }
+
+  /* Niche table: card mode */
+  .an-niche-thead { display: none !important; }
+  .an-niche-row {
+    grid-template-columns: 1fr 1fr 1fr !important;
+    row-gap: 10px;
+    padding: 14px 16px;
+  }
+  .an-niche-name-cell { grid-column: 1 / -1; }
+  .an-niche-label { display: block; }
+  .an-col-c {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 2px;
+  }
+
+  /* Section tabs: compact, icon hidden to save space */
+  .an-tab { padding: 9px 11px; font-size: 12px; gap: 3px; }
+  .an-tab .material-symbols-outlined { font-size: 14px; }
+
+  /* Reach + ROAS grids: single column */
+  #analytics-reach-grid { grid-template-columns: 1fr !important; }
+  #analytics-roas-grid  { grid-template-columns: 1fr !important; }
+
+  /* ROAS form: single column */
+  #roas-add-form > div:first-child {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Bottom safe-area breathing room */
+  #tab-analytics { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+}
