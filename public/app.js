@@ -2452,7 +2452,7 @@ function renderNicheRow(n) {
     : `<span style="font-size:10px;color:#f59e0b;white-space:nowrap;">● חסר Tracking ID</span>`;
 
   return `
-    <div class="an-niche-row">
+    <div class="an-niche-row" data-subject-id="${escHtml(n.id)}">
       <div class="an-niche-name-cell" style="display:flex;align-items:center;gap:10px;">
         <div style="width:3px;height:34px;border-radius:2px;background:${escHtml(color)};flex-shrink:0;"></div>
         <div>
@@ -2899,6 +2899,93 @@ document.getElementById('btn-sync-reach').addEventListener('click', async () => 
   } finally {
     btn.disabled = false;
   }
+});
+
+// Manual sync modal
+document.getElementById('btn-manual-sync').addEventListener('click', () => {
+  const niches = Array.from(document.querySelectorAll('#analytics-niches-grid .an-niche-row'))
+    .map(row => ({
+      id:   row.dataset.subjectId,
+      name: row.querySelector('[style*="font-weight:700"]')?.textContent?.trim(),
+    }))
+    .filter(n => n.id);
+
+  // Build options from already-loaded niches or fallback to empty
+  const opts = niches.length
+    ? niches.map(n => `<option value="${escHtml(n.id)}">${escHtml(n.name)}</option>`).join('')
+    : '<option value="">טען קודם את הנישות (לחץ עדכן עמלות)</option>';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  modal.innerHTML = `
+    <div class="card" style="width:100%;max-width:460px;padding:24px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <span style="font-weight:700;font-size:16px;">סנכרן Tracking ID ידנית</span>
+        <button id="modal-close" class="btn btn-ghost btn-sm">✕</button>
+      </div>
+      <div style="font-size:13px;color:var(--on-surface-var);margin-bottom:16px;">
+        שמושי ל-Tracking ID ישן שלא משויך לנישה ספציפית — הזמנות ישויכו לנישה שתבחר.
+      </div>
+      <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Tracking ID</label>
+      <input id="manual-tracking-id" class="form-input" style="width:100%;margin-bottom:14px;" placeholder="לדוגמה: affheav123" />
+      <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">שייך לנישה</label>
+      <select id="manual-subject-id" class="form-input" style="width:100%;margin-bottom:14px;">${opts}</select>
+      <div style="display:flex;gap:10px;margin-bottom:14px;">
+        <div style="flex:1;">
+          <label style="font-size:12px;color:var(--on-surface-var);display:block;margin-bottom:4px;">מתאריך</label>
+          <input type="date" id="manual-start-date" class="form-input" style="width:100%;font-size:13px;" />
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:12px;color:var(--on-surface-var);display:block;margin-bottom:4px;">עד תאריך</label>
+          <input type="date" id="manual-end-date" class="form-input" style="width:100%;font-size:13px;" />
+        </div>
+      </div>
+      <div id="manual-sync-result" style="font-size:13px;min-height:20px;margin-bottom:14px;"></div>
+      <button id="manual-sync-go" class="btn btn-primary" style="width:100%;">
+        <span class="material-symbols-outlined" style="font-size:15px;">cloud_sync</span>סנכרן
+      </button>
+    </div>`;
+  document.body.appendChild(modal);
+
+  // Pre-fill dates from main toolbar
+  const mainStart = document.getElementById('analytics-start-date').value;
+  const mainEnd   = document.getElementById('analytics-end-date').value;
+  if (mainStart) document.getElementById('manual-start-date').value = mainStart;
+  if (mainEnd)   document.getElementById('manual-end-date').value   = mainEnd;
+
+  document.getElementById('modal-close').onclick = () => modal.remove();
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  document.getElementById('manual-sync-go').addEventListener('click', async () => {
+    const trackingId = document.getElementById('manual-tracking-id').value.trim();
+    const subjectId  = document.getElementById('manual-subject-id').value;
+    const startDate  = document.getElementById('manual-start-date').value;
+    const endDate    = document.getElementById('manual-end-date').value;
+    const result     = document.getElementById('manual-sync-result');
+    const btn        = document.getElementById('manual-sync-go');
+
+    if (!trackingId) { result.style.color = '#f87171'; result.textContent = 'יש להזין Tracking ID'; return; }
+    if (!subjectId)  { result.style.color = '#f87171'; result.textContent = 'יש לבחור נישה'; return; }
+
+    btn.disabled = true;
+    result.style.color = 'var(--on-surface-var)';
+    result.textContent = 'מסנכרן...';
+
+    try {
+      const data = await api('/api/analytics/sync-commissions-manual', {
+        method: 'POST',
+        body: { trackingId, subjectId, startDate: startDate || undefined, endDate: endDate || undefined },
+      });
+      result.style.color = '#16a34a';
+      result.textContent = `✓ סונכרנו ${data.synced} הזמנות ל-${data.subjectName}`;
+      await renderAnalyticsSummary();
+    } catch (err) {
+      result.style.color = '#f87171';
+      result.textContent = `✗ שגיאה: ${err.message}`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
 });
 
 async function loadReachSummary() {

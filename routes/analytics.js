@@ -155,6 +155,102 @@ router.post('/sync-commissions', async (req, res) => {
   }
 });
 
+// POST /api/analytics/sync-commissions-manual
+// Body: { trackingId, subjectId, startDate?, endDate? }
+// Syncs orders from any tracking ID and attributes them to the chosen niche.
+router.post('/sync-commissions-manual', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { trackingId, subjectId, startDate, endDate } = req.body;
+
+    if (!trackingId || !subjectId) {
+      return res.status(400).json({ success: false, error: 'נדרש trackingId ו-subjectId' });
+    }
+
+    // Verify the subject belongs to this user
+    const { rows: subjects } = await query(
+      `SELECT id, name FROM subjects WHERE id = $1 AND user_id = $2`,
+      [subjectId, userId]
+    );
+    if (!subjects.length) return res.status(404).json({ success: false, error: 'נישה לא נמצאה' });
+
+    const now      = new Date();
+    const defStart = new Date(now);
+    defStart.setDate(defStart.getDate() - 30);
+    const startD = startDate ? new Date(startDate) : defStart;
+    const endD   = endDate   ? new Date(endDate)   : now;
+    const fmt = d => d.toISOString().replace('T', ' ').slice(0, 19);
+
+    const ORDER_STATUSES = ['Payment Completed', 'Buyer Confirmed Receipt', 'Settled'];
+    let synced = 0;
+
+    for (const status of ORDER_STATUSES) {
+      let pageNo = 1;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { orders, hasMore } = await fetchOrderPage(
+          trackingId.trim(), fmt(startD), fmt(endD), pageNo, status
+        );
+
+        for (const order of orders) {
+          const subOrderId    = String(order.sub_order_id || order.order_id || '');
+          const parentOrderId = String(order.order_id || subOrderId);
+          if (!subOrderId) continue;
+
+          const orderAmount   = order.paid_amount != null         ? order.paid_amount / 100 : null;
+          const commissionUsd = order.estimated_paid_commission != null
+            ? order.estimated_paid_commission / 100 : null;
+          const commissionPct = order.commission_rate
+            ? parseFloat(order.commission_rate) / 100 : null;
+          const orderStatus        = order.order_status || null;
+          const orderTime          = order.paid_time || order.created_time || null;
+          const aliexpressProductId = order.product_id ? String(order.product_id) : null;
+          const productTitle       = order.product_title || null;
+          const productImage       = order.product_main_image_url || null;
+          const isHotProduct       = order.is_hot_product === 'Y';
+          const isNewBuyer         = order.is_new_buyer === 'Y';
+          const categoryId         = order.category_id ? String(order.category_id) : null;
+
+          await query(
+            `INSERT INTO commission_snapshots
+               (user_id, subject_id, tracking_id, order_id, sub_order_id,
+                order_amount, commission_rate, commission_usd,
+                order_status, payment_status, order_time,
+                aliexpress_product_id, product_title, product_image,
+                is_hot_product, is_new_buyer, category_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+             ON CONFLICT (user_id, order_id) DO UPDATE SET
+               subject_id            = EXCLUDED.subject_id,
+               commission_usd        = EXCLUDED.commission_usd,
+               order_amount          = EXCLUDED.order_amount,
+               order_status          = EXCLUDED.order_status,
+               aliexpress_product_id = EXCLUDED.aliexpress_product_id,
+               product_title         = EXCLUDED.product_title,
+               product_image         = EXCLUDED.product_image,
+               is_hot_product        = EXCLUDED.is_hot_product,
+               is_new_buyer          = EXCLUDED.is_new_buyer,
+               fetched_at            = NOW()`,
+            [userId, subjectId, trackingId.trim(), subOrderId, parentOrderId,
+             orderAmount, commissionPct, commissionUsd,
+             orderStatus, orderStatus, orderTime ? new Date(orderTime) : null,
+             aliexpressProductId, productTitle, productImage,
+             isHotProduct, isNewBuyer, categoryId]
+          );
+          synced++;
+        }
+
+        if (!hasMore) break;
+        pageNo++;
+        await new Promise(r => setTimeout(r, 400));
+      }
+    }
+
+    res.json({ success: true, synced, subjectName: subjects[0].name });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/analytics/summary
 // Returns per-niche commission aggregation joined with click data
 router.get('/summary', async (req, res) => {
