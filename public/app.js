@@ -2604,14 +2604,18 @@ async function loadTopProducts(subjectId = '') {
               <th>קליקים</th>
               <th>מחיר</th>
               <th>המרה</th>
+              <th>עמלה %</th>
               <th>הכנסה משוערת</th>
             </tr>
           </thead>
           <tbody>
             ${products.map((p, i) => {
-              const revenue = p.estimated_revenue != null ? `$${parseFloat(p.estimated_revenue).toFixed(2)}` : '—';
-              const convPct = p.conversion_rate   != null ? `${(parseFloat(p.conversion_rate) * 100).toFixed(1)}%` : '—';
-              const isTop   = i === 0;
+              const revenue   = p.estimated_revenue != null ? `$${parseFloat(p.estimated_revenue).toFixed(2)}` : '—';
+              const convPct   = p.conversion_rate   != null ? `${(parseFloat(p.conversion_rate) * 100).toFixed(1)}%` : '—';
+              const effComm   = p.effective_commission_rate != null ? parseFloat(p.effective_commission_rate) : null;
+              const commLabel = effComm != null ? `${(effComm * 100).toFixed(1)}%` : '—';
+              const commColor = effComm != null && effComm > 0.08 ? '#16a34a' : 'var(--on-surface-var)';
+              const isTop     = i === 0;
               return `<tr${isTop ? ' style="background:rgba(22,163,74,0.04);"' : ''}>
                 <td style="text-align:center;color:var(--on-surface-var);font-size:12px;font-weight:600;">${i + 1}</td>
                 <td>
@@ -2629,6 +2633,7 @@ async function loadTopProducts(subjectId = '') {
                 <td style="font-weight:600;color:#702ae1;">${(p.clicks||0).toLocaleString()}</td>
                 <td>$${parseFloat(p.sale_price||0).toFixed(2)}</td>
                 <td style="font-size:12px;color:var(--on-surface-var);">${convPct}</td>
+                <td style="font-size:12px;font-weight:600;color:${commColor};">${commLabel}</td>
                 <td style="font-weight:700;color:#16a34a;font-size:14px;">${revenue}</td>
               </tr>`;
             }).join('')}
@@ -2834,6 +2839,27 @@ document.getElementById('analytics-timing-niche-filter').addEventListener('chang
 });
 
 // ── Analytics: Meta Organic Reach ─────────────────────────────────────────────
+
+document.getElementById('btn-analytics-sync-clicks').addEventListener('click', async () => {
+  const btn    = document.getElementById('btn-analytics-sync-clicks');
+  const status = document.getElementById('analytics-sync-status');
+
+  btn.disabled = true;
+  status.textContent = 'מסנכרן קליקים...';
+  status.style.color = 'var(--on-surface-var)';
+
+  try {
+    const data = await api('/api/products/sync-clicks', { method: 'POST' });
+    status.style.color = '#16a34a';
+    status.textContent = `✓ עודכנו ${data.synced} קישורים`;
+    await renderAnalyticsSummary();
+  } catch (err) {
+    status.style.color = '#f87171';
+    status.textContent = `✗ שגיאה: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 document.getElementById('btn-sync-reach').addEventListener('click', async () => {
   const btn    = document.getElementById('btn-sync-reach');

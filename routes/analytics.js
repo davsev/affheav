@@ -217,7 +217,8 @@ router.get('/orders', async (req, res) => {
 
 // GET /api/analytics/top-products?subjectId=
 // Products ranked by estimated revenue: clicks × conversion_rate × sale_price × commission_rate
-// Falls back to 2% conversion when the niche has no real orders yet.
+// Uses real commission_rate from AliExpress orders when available; falls back to product-level
+// then 8%. Falls back to 2% conversion when the niche has no real orders yet.
 router.get('/top-products', async (req, res) => {
   try {
     const { subjectId } = req.query;
@@ -234,7 +235,8 @@ router.get('/top-products', async (req, res) => {
            cs.subject_id,
            CASE WHEN SUM(p2.clicks) > 0
              THEN COUNT(DISTINCT cs.order_id)::numeric / NULLIF(SUM(p2.clicks), 0)
-             ELSE 0.02 END AS conversion_rate
+             ELSE 0.02 END AS conversion_rate,
+           AVG(NULLIF(cs.commission_rate, 0)) AS avg_commission_rate
          FROM commission_snapshots cs
          JOIN products p2 ON p2.subject_id = cs.subject_id AND p2.user_id = cs.user_id
          WHERE cs.user_id = $1
@@ -252,12 +254,13 @@ router.get('/top-products', async (req, res) => {
          s.name  AS subject_name,
          s.color AS subject_color,
          COALESCE(nc.conversion_rate, 0.02) AS conversion_rate,
+         COALESCE(nc.avg_commission_rate, p.commission_rate, 0.08) AS effective_commission_rate,
          CASE WHEN p.sale_price IS NOT NULL AND p.clicks > 0
            THEN ROUND(
              p.clicks
              * COALESCE(nc.conversion_rate, 0.02)
              * p.sale_price
-             * COALESCE(p.commission_rate, 0.08),
+             * COALESCE(nc.avg_commission_rate, p.commission_rate, 0.08),
            2)
            ELSE NULL END AS estimated_revenue
        FROM products p
