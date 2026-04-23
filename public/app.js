@@ -2415,7 +2415,7 @@ async function renderAnalyticsSummary() {
     // Populate niche filters
     const nicheOptions = '<option value="">כל הנישות</option>' +
       niches.map(n => `<option value="${escHtml(n.id)}">${escHtml(n.name)}</option>`).join('');
-    ['analytics-niche-filter','analytics-top-niche-filter','analytics-timing-niche-filter'].forEach(id => {
+    ['analytics-niche-filter','analytics-top-niche-filter','analytics-real-orders-niche-filter','analytics-timing-niche-filter'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.innerHTML = nicheOptions;
     });
@@ -2424,6 +2424,7 @@ async function renderAnalyticsSummary() {
       niches.map(n => `<option value="${escHtml(n.id)}">${escHtml(n.name)}</option>`).join('');
 
     loadTopProducts();
+    loadRealProductOrders();
     loadTimingHeatmap();
     loadRoas();
     loadReachSummary().catch(() => {});
@@ -2641,6 +2642,94 @@ async function loadTopProducts(subjectId = '') {
 
 document.getElementById('analytics-top-niche-filter').addEventListener('change', function () {
   loadTopProducts(this.value);
+});
+
+// ── Analytics: Real Product Orders (from order_items) ────────────────────────
+
+async function loadRealProductOrders(subjectId = '') {
+  const el = document.getElementById('analytics-real-orders-table');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const qs   = subjectId ? `?subjectId=${encodeURIComponent(subjectId)}` : '';
+    const data = await api(`/api/analytics/product-orders${qs}`);
+    const products = data.products || [];
+
+    if (!products.length) {
+      const msg = data.totalItems === 0
+        ? `<div style="padding:32px;text-align:center;">
+             <div style="font-size:36px;margin-bottom:12px;">📦</div>
+             <div style="font-weight:700;margin-bottom:8px;">אין נתוני הזמנות ברמת מוצר</div>
+             <div style="font-size:12px;color:var(--on-surface-var);max-width:380px;margin:0 auto;">
+               ה-API של AliExpress לא מחזיר פרטי מוצר בתוך ההזמנות עבור חשבונך.
+               לחץ "עדכן עמלות" כדי לנסות שוב — אם עדיין ריק, ממשק ה-API שלך לא כולל פירוט מוצרים.
+             </div>
+             <a href="/api/analytics/probe-raw-orders" target="_blank" style="display:inline-block;margin-top:16px;font-size:12px;color:#3b82f6;text-decoration:underline;">בדוק תגובת API גולמית ←</a>
+           </div>`
+        : '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">אין מוצרים תואמים לסינון זה.</div>';
+      el.innerHTML = msg;
+      return;
+    }
+
+    const rows = products.map((p, i) => {
+      const color   = p.subject_color || '#888';
+      const title   = escHtml(p.product_title || p.product_id || '—');
+      const niche   = escHtml(p.subject_name || '—');
+      const comm    = parseFloat(p.total_commission) || 0;
+      const value   = parseFloat(p.total_order_value) || 0;
+      const orders  = parseInt(p.order_count, 10) || 0;
+      const items   = parseInt(p.total_items, 10) || 0;
+      const rank    = i + 1;
+      const rankColor = rank === 1 ? '#f59e0b' : rank === 2 ? '#94a3b8' : rank === 3 ? '#b45309' : 'var(--on-surface-var)';
+
+      return `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+          <td style="padding:10px 8px;font-weight:700;font-size:13px;color:${rankColor};text-align:center;">${rank}</td>
+          <td style="padding:10px 8px;">
+            <div style="font-size:13px;font-weight:600;line-height:1.4;max-width:340px;">${title}</div>
+            <div style="font-size:11px;color:var(--on-surface-var);margin-top:2px;direction:ltr;font-family:monospace;">${escHtml(p.product_id)}</div>
+          </td>
+          <td style="padding:10px 8px;">
+            <span style="display:inline-flex;align-items:center;gap:5px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;"></span>
+              <span style="font-size:12px;">${niche}</span>
+            </span>
+          </td>
+          <td style="padding:10px 8px;text-align:center;font-weight:700;font-size:15px;">${orders}</td>
+          <td style="padding:10px 8px;text-align:center;font-size:13px;color:var(--on-surface-var);">${items}</td>
+          <td style="padding:10px 8px;text-align:center;font-size:12px;color:var(--on-surface-var);">$${value.toFixed(2)}</td>
+          <td style="padding:10px 8px;text-align:center;font-size:17px;font-weight:900;color:#16a34a;">$${comm.toFixed(2)}</td>
+        </tr>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="border-bottom:2px solid rgba(255,255,255,0.08);">
+              <th style="padding:8px;text-align:center;font-weight:600;color:var(--on-surface-var);width:36px;">#</th>
+              <th style="padding:8px;text-align:right;font-weight:600;color:var(--on-surface-var);">מוצר</th>
+              <th style="padding:8px;text-align:right;font-weight:600;color:var(--on-surface-var);">נישה</th>
+              <th style="padding:8px;text-align:center;font-weight:600;color:var(--on-surface-var);">הזמנות</th>
+              <th style="padding:8px;text-align:center;font-weight:600;color:var(--on-surface-var);">יחידות</th>
+              <th style="padding:8px;text-align:center;font-weight:600;color:var(--on-surface-var);">שווי הזמנות</th>
+              <th style="padding:8px;text-align:center;font-weight:600;color:var(--on-surface-var);">עמלה בפועל</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div style="margin-top:10px;font-size:11px;color:var(--on-surface-var);text-align:left;">
+        <a href="/api/analytics/probe-raw-orders" target="_blank" style="color:#3b82f6;text-decoration:none;">בדוק תגובת API גולמית ←</a>
+      </div>`;
+  } catch (err) {
+    el.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+document.getElementById('analytics-real-orders-niche-filter').addEventListener('change', function () {
+  loadRealProductOrders(this.value);
 });
 
 // ── Analytics: Timing Heatmap ─────────────────────────────────────────────────

@@ -102,6 +102,29 @@ router.post('/sync-commissions', async (req, res) => {
                orderTime ? new Date(orderTime) : null]
             );
             synced++;
+
+            // Save per-product line items when the API includes them
+            const items = order.order_items?.order_item || [];
+            for (const item of items) {
+              const pid       = String(item.product_id || '');
+              const ptitle    = item.product_title || item.product_name || null;
+              const icount    = parseInt(item.item_count ?? item.quantity ?? 0, 10) || null;
+              const iamount   = parseFloat(item.order_amount) || null;
+              const icommRate = item.commission_rate ? parseFloat(item.commission_rate) / 100 : null;
+              const icommUsd  = parseFloat(item.estimated_commission ?? item.commission ?? 0) || null;
+              if (!pid) continue;
+              await query(
+                `INSERT INTO order_items
+                   (user_id, subject_id, order_id, product_id, product_title,
+                    item_count, order_amount, commission_rate, commission_usd)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                 ON CONFLICT (user_id, order_id, product_id) DO UPDATE SET
+                   product_title  = EXCLUDED.product_title,
+                   commission_usd = EXCLUDED.commission_usd,
+                   fetched_at     = NOW()`,
+                [userId, subjectId, orderId, pid, ptitle, icount, iamount, icommRate, icommUsd]
+              );
+            }
           }
 
           if (!hasMore) break;
@@ -468,6 +491,101 @@ router.get('/roas', async (req, res) => {
     );
 
     res.json({ success: true, niches: rows, records: spendRows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/analytics/product-orders?subjectId=
+// Products ranked by real order count + commission from order_items table.
+// Only populated when the AliExpress API returns per-item line data.
+router.get('/product-orders', async (req, res) => {
+  try {
+    const { subjectId } = req.query;
+    const params = [req.user.id];
+    let subjectFilter = '';
+    if (subjectId) {
+      params.push(subjectId);
+      subjectFilter = 'AND oi.subject_id = $2';
+    }
+
+    const { rows } = await query(
+      `SELECT
+         oi.product_id,
+         MAX(oi.product_title)                                AS product_title,
+         s.id   AS subject_id,
+         s.name AS subject_name,
+         s.color AS subject_color,
+         COUNT(DISTINCT oi.order_id)                          AS order_count,
+         COALESCE(SUM(oi.item_count), 0)                      AS total_items,
+         COALESCE(SUM(oi.order_amount), 0)                    AS total_order_value,
+         COALESCE(SUM(oi.commission_usd), 0)                  AS total_commission,
+         MAX(oi.fetched_at)                                   AS last_seen
+       FROM order_items oi
+       JOIN subjects s ON s.id = oi.subject_id
+       WHERE oi.user_id = $1 ${subjectFilter}
+       GROUP BY oi.product_id, s.id, s.name, s.color
+       ORDER BY total_commission DESC, order_count DESC
+       LIMIT 50`,
+      params
+    );
+
+    // Also return a count so the UI can show "no data yet" guidance
+    const { rows: meta } = await query(
+      `SELECT COUNT(*) AS total FROM order_items WHERE user_id = $1`,
+      [req.user.id]
+    );
+
+    res.json({ success: true, products: rows, totalItems: parseInt(meta[0]?.total || 0, 10) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/analytics/probe-raw-orders
+// Returns the raw AliExpress API response for the first page of the most recent 7 days.
+// Use this to verify whether your API account returns order_items line-item data.
+router.get('/probe-raw-orders', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { rows: subjects } = await query(
+      `SELECT id, name, aliexpress_tracking_id FROM subjects
+       WHERE user_id = $1 AND aliexpress_tracking_id IS NOT NULL AND aliexpress_tracking_id != ''
+       LIMIT 1`,
+      [userId]
+    );
+    if (!subjects.length) {
+      return res.json({ success: false, error: 'אין נישה עם tracking ID מוגדר' });
+    }
+
+    const { aliexpress_tracking_id: trackingId, name: subjectName } = subjects[0];
+    const now      = new Date();
+    const weekAgo  = new Date(now);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const fmt = d => d.toISOString().replace('T', ' ').slice(0, 19);
+
+    const apiRes = await signAndCall({
+      method:      'aliexpress.affiliate.order.list',
+      start_time:  fmt(weekAgo),
+      end_time:    fmt(now),
+      tracking_id: trackingId,
+      page_no:     '1',
+      page_size:   '5',
+    });
+
+    const root   = apiRes.data?.aliexpress_affiliate_order_list_response?.resp_result;
+    const orders = root?.result?.orders?.order || [];
+    const sample = orders[0] || null;
+
+    res.json({
+      success:          true,
+      subject:          subjectName,
+      tracking_id:      trackingId,
+      order_count:      orders.length,
+      has_order_items:  sample ? Array.isArray(sample.order_items?.order_item) : false,
+      sample_order:     sample,
+      raw_response:     apiRes.data,
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

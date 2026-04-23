@@ -672,6 +672,9 @@
         <button class="an-tab" data-section="products">
           <span class="material-symbols-outlined" style="font-size:15px;">trophy</span>מוצרים מובילים
         </button>
+        <button class="an-tab" data-section="real-orders">
+          <span class="material-symbols-outlined" style="font-size:15px;">verified</span>הזמנות אמיתיות
+        </button>
         <button class="an-tab" data-section="timing">
           <span class="material-symbols-outlined" style="font-size:15px;">schedule</span>תזמון
         </button>
@@ -714,6 +717,27 @@
             קליקים × שיעור המרה (מהנישה, 2% ברירת מחדל) × מחיר מוצר × 8% עמלת AliExpress
           </div>
           <div id="analytics-top-products-table">
+            <div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Real product orders section -->
+      <div id="an-section-real-orders" style="display:none;margin-bottom:24px;">
+        <div class="card" id="analytics-real-orders-card" style="border-radius:0 0 16px 16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="card-title" style="margin:0;">מוצרים שהוזמנו — עמלות אמיתיות</div>
+              <span style="font-size:11px;background:rgba(22,163,74,0.12);color:#16a34a;padding:2px 8px;border-radius:20px;font-weight:600;">נתונים אמיתיים</span>
+            </div>
+            <select id="analytics-real-orders-niche-filter" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;">
+              <option value="">כל הנישות</option>
+            </select>
+          </div>
+          <div style="font-size:11px;color:var(--on-surface-var);margin-bottom:12px;">
+            דוח מוצרים לפי מספר הזמנות ועמלה מצטברת בפועל — נדרש סנכרון עמלות עם AliExpress
+          </div>
+          <div id="analytics-real-orders-table">
             <div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>
           </div>
         </div>
