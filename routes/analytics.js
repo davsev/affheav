@@ -164,23 +164,38 @@ router.get('/summary', async (req, res) => {
          s.id,
          s.name,
          s.color,
-         s.aliexpress_tracking_id                                  AS tracking_id,
-         COUNT(DISTINCT p.id)                                       AS total_products,
-         COUNT(DISTINCT CASE WHEN p.sent_at IS NOT NULL THEN p.id END) AS sent_count,
-         COALESCE(SUM(p.clicks), 0)                                AS total_clicks,
-         COUNT(DISTINCT cs.order_id)                               AS total_orders,
-         COALESCE(SUM(cs.order_amount), 0)                         AS total_order_value,
-         COALESCE(SUM(cs.commission_usd), 0)                       AS total_commission,
-         COALESCE(SUM(
-           CASE WHEN cs.payment_status = 'confirmed' OR cs.order_status = 'finished'
-           THEN cs.commission_usd ELSE 0 END
-         ), 0)                                                      AS confirmed_commission,
-         MAX(cs.fetched_at)                                         AS last_synced
+         s.aliexpress_tracking_id                            AS tracking_id,
+         COALESCE(p_agg.total_products, 0)                   AS total_products,
+         COALESCE(p_agg.sent_count, 0)                       AS sent_count,
+         COALESCE(p_agg.total_clicks, 0)                     AS total_clicks,
+         COALESCE(cs_agg.total_orders, 0)                    AS total_orders,
+         COALESCE(cs_agg.total_order_value, 0)               AS total_order_value,
+         COALESCE(cs_agg.total_commission, 0)                AS total_commission,
+         COALESCE(cs_agg.confirmed_commission, 0)            AS confirmed_commission,
+         cs_agg.last_synced
        FROM subjects s
-       LEFT JOIN products p             ON p.subject_id = s.id AND p.user_id = $1
-       LEFT JOIN commission_snapshots cs ON cs.subject_id = s.id AND cs.user_id = $1
+       LEFT JOIN (
+         SELECT subject_id,
+           COUNT(DISTINCT id)                                        AS total_products,
+           COUNT(DISTINCT CASE WHEN sent_at IS NOT NULL THEN id END) AS sent_count,
+           COALESCE(SUM(clicks), 0)                                  AS total_clicks
+         FROM products
+         WHERE user_id = $1
+         GROUP BY subject_id
+       ) p_agg ON p_agg.subject_id = s.id
+       LEFT JOIN (
+         SELECT subject_id,
+           COUNT(DISTINCT order_id)                                   AS total_orders,
+           COALESCE(SUM(order_amount), 0)                             AS total_order_value,
+           COALESCE(SUM(commission_usd), 0)                           AS total_commission,
+           COALESCE(SUM(CASE WHEN order_status = 'finished'
+             THEN commission_usd ELSE 0 END), 0)                      AS confirmed_commission,
+           MAX(fetched_at)                                             AS last_synced
+         FROM commission_snapshots
+         WHERE user_id = $1
+         GROUP BY subject_id
+       ) cs_agg ON cs_agg.subject_id = s.id
        WHERE s.user_id = $1
-       GROUP BY s.id, s.name, s.color, s.aliexpress_tracking_id
        ORDER BY total_commission DESC, total_clicks DESC`,
       [req.user.id]
     );
@@ -237,19 +252,32 @@ router.get('/top-products', async (req, res) => {
     }
 
     const { rows } = await query(
-      `WITH niche_perf AS (
+      `WITH cs_agg AS (
+         SELECT subject_id,
+           COALESCE(SUM(commission_usd), 0)   AS niche_commission,
+           AVG(NULLIF(commission_rate, 0))     AS avg_commission_rate
+         FROM commission_snapshots
+         WHERE user_id = $1
+         GROUP BY subject_id
+       ),
+       p_agg AS (
+         SELECT subject_id,
+           COALESCE(SUM(clicks), 0) AS niche_clicks
+         FROM products
+         WHERE user_id = $1
+         GROUP BY subject_id
+       ),
+       niche_perf AS (
          SELECT
-           cs.subject_id,
-           COALESCE(SUM(cs.commission_usd), 0)           AS niche_commission,
-           AVG(NULLIF(cs.commission_rate, 0))             AS avg_commission_rate,
-           COALESCE(SUM(p2.clicks), 0)                   AS niche_clicks,
-           CASE WHEN SUM(p2.clicks) > 0
-             THEN SUM(cs.commission_usd) / NULLIF(SUM(p2.clicks), 0)
-             ELSE NULL END                                AS commission_per_click
-         FROM commission_snapshots cs
-         JOIN products p2 ON p2.subject_id = cs.subject_id AND p2.user_id = cs.user_id
-         WHERE cs.user_id = $1
-         GROUP BY cs.subject_id
+           cs_agg.subject_id,
+           cs_agg.niche_commission,
+           cs_agg.avg_commission_rate,
+           COALESCE(p_agg.niche_clicks, 0)    AS niche_clicks,
+           CASE WHEN COALESCE(p_agg.niche_clicks, 0) > 0
+             THEN cs_agg.niche_commission / p_agg.niche_clicks
+             ELSE NULL END                     AS commission_per_click
+         FROM cs_agg
+         LEFT JOIN p_agg ON p_agg.subject_id = cs_agg.subject_id
        )
        SELECT
          p.id,
@@ -268,7 +296,7 @@ router.get('/top-products', async (req, res) => {
          np.avg_commission_rate,
          CASE WHEN np.commission_per_click IS NOT NULL AND p.clicks > 0
            THEN ROUND(p.clicks * np.commission_per_click, 4)
-           ELSE NULL END                                  AS attributed_commission
+           ELSE NULL END                       AS attributed_commission
        FROM products p
        LEFT JOIN subjects s      ON s.id = p.subject_id
        LEFT JOIN niche_perf np   ON np.subject_id = p.subject_id
@@ -291,16 +319,27 @@ router.get('/top-products', async (req, res) => {
 router.get('/suggested-products', async (req, res) => {
   try {
     const { rows } = await query(
-      `WITH niche_perf AS (
-         SELECT
-           cs.subject_id,
-           CASE WHEN SUM(p2.clicks) > 0
-             THEN SUM(cs.commission_usd) / NULLIF(SUM(p2.clicks), 0)
+      `WITH cs_agg AS (
+         SELECT subject_id,
+           COALESCE(SUM(commission_usd), 0) AS niche_commission
+         FROM commission_snapshots
+         WHERE user_id = $1
+         GROUP BY subject_id
+       ),
+       p_agg AS (
+         SELECT subject_id,
+           COALESCE(SUM(clicks), 0) AS niche_clicks
+         FROM products
+         WHERE user_id = $1
+         GROUP BY subject_id
+       ),
+       niche_perf AS (
+         SELECT cs_agg.subject_id,
+           CASE WHEN COALESCE(p_agg.niche_clicks, 0) > 0
+             THEN cs_agg.niche_commission / p_agg.niche_clicks
              ELSE NULL END AS commission_per_click
-         FROM commission_snapshots cs
-         JOIN products p2 ON p2.subject_id = cs.subject_id AND p2.user_id = cs.user_id
-         WHERE cs.user_id = $1
-         GROUP BY cs.subject_id
+         FROM cs_agg
+         LEFT JOIN p_agg ON p_agg.subject_id = cs_agg.subject_id
        )
        SELECT
          p.id,
@@ -523,16 +562,23 @@ router.get('/roas', async (req, res) => {
          s.id,
          s.name,
          s.color,
-         COALESCE(SUM(a.spend_usd), 0)                           AS total_spend,
-         COALESCE(SUM(cs.commission_usd), 0)                     AS total_commission,
-         CASE WHEN SUM(a.spend_usd) > 0
-           THEN ROUND(SUM(cs.commission_usd) / SUM(a.spend_usd), 2)
-           ELSE NULL END                                          AS roas
+         COALESCE(a_agg.total_spend, 0)       AS total_spend,
+         COALESCE(cs_agg.total_commission, 0) AS total_commission,
+         CASE WHEN COALESCE(a_agg.total_spend, 0) > 0
+           THEN ROUND(cs_agg.total_commission / a_agg.total_spend, 2)
+           ELSE NULL END                       AS roas
        FROM subjects s
-       LEFT JOIN ad_spend a            ON a.subject_id = s.id AND a.user_id = $1
-       LEFT JOIN commission_snapshots cs ON cs.subject_id = s.id AND cs.user_id = $1
+       LEFT JOIN (
+         SELECT subject_id, SUM(spend_usd) AS total_spend
+         FROM ad_spend WHERE user_id = $1
+         GROUP BY subject_id
+       ) a_agg ON a_agg.subject_id = s.id
+       LEFT JOIN (
+         SELECT subject_id, COALESCE(SUM(commission_usd), 0) AS total_commission
+         FROM commission_snapshots WHERE user_id = $1
+         GROUP BY subject_id
+       ) cs_agg ON cs_agg.subject_id = s.id
        WHERE s.user_id = $1
-       GROUP BY s.id, s.name, s.color
        ORDER BY total_spend DESC, s.name`,
       [req.user.id]
     );
