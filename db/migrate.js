@@ -245,6 +245,17 @@ async function migrate() {
   await query(`CREATE INDEX IF NOT EXISTS order_items_subject ON order_items(subject_id)`);
   await query(`CREATE INDEX IF NOT EXISTS order_items_product ON order_items(product_id)`);
 
+  // ── Enrich commission_snapshots with product-level fields from AliExpress ────
+  // sub_order_id is the per-product unique key (parent order_id may cover multiple products)
+  await query(`ALTER TABLE commission_snapshots ADD COLUMN IF NOT EXISTS sub_order_id TEXT`);
+  await query(`ALTER TABLE commission_snapshots ADD COLUMN IF NOT EXISTS aliexpress_product_id TEXT`);
+  await query(`ALTER TABLE commission_snapshots ADD COLUMN IF NOT EXISTS product_title TEXT`);
+  await query(`ALTER TABLE commission_snapshots ADD COLUMN IF NOT EXISTS product_image TEXT`);
+  await query(`ALTER TABLE commission_snapshots ADD COLUMN IF NOT EXISTS is_hot_product BOOLEAN`);
+  await query(`ALTER TABLE commission_snapshots ADD COLUMN IF NOT EXISTS is_new_buyer BOOLEAN`);
+  await query(`ALTER TABLE commission_snapshots ADD COLUMN IF NOT EXISTS category_id TEXT`);
+  await query(`CREATE INDEX IF NOT EXISTS commission_snapshots_product ON commission_snapshots(aliexpress_product_id)`);
+
   console.log('✓ Database schema up to date');
 }
 

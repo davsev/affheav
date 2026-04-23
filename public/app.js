@@ -2429,6 +2429,7 @@ async function renderAnalyticsSummary() {
     loadRoas();
     loadReachSummary().catch(() => {});
     loadInsights();
+    loadSalesDashboard();
   } catch (err) {
     grid.innerHTML = `<div style="padding:40px;text-align:center;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
   }
@@ -3409,3 +3410,266 @@ async function loadSuggestedProducts(container) {
     // suggestions are additive — fail silently
   }
 }
+
+// ── Analytics: Sales Dashboard ────────────────────────────────────────────────
+
+async function sendProductById(productId) {
+  if (!productId) return;
+  if (!confirm('לשלוח את המוצר הזה עכשיו לכל הקבוצות של הנישה?')) return;
+  try {
+    const res = await api('/api/send', { method: 'POST', body: JSON.stringify({ productId }), headers: { 'Content-Type': 'application/json' } });
+    alert(res.message || 'המוצר נשלח בהצלחה ✓');
+    loadSalesDashboard();
+  } catch (err) {
+    alert('שגיאה בשליחה: ' + err.message);
+  }
+}
+
+async function loadSalesDashboard() {
+  const el = document.getElementById('analytics-sales-content');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const [profData, mktData] = await Promise.all([
+      api('/api/analytics/product-profitability'),
+      api('/api/analytics/marketing-insights'),
+    ]);
+
+    const products  = profData.products  || [];
+    const buckets   = mktData.priceBuckets  || [];
+    const hot       = mktData.hotVsRegular   || [];
+    const buyers    = mktData.buyerTypes     || [];
+    const momentum  = mktData.momentum       || {};
+
+    if (!products.length) {
+      el.innerHTML = `<div class="card" style="padding:40px;text-align:center;">
+        <div style="font-size:36px;margin-bottom:12px;">📦</div>
+        <div style="font-weight:700;margin-bottom:8px;">אין עדיין נתוני מכירות</div>
+        <div style="font-size:13px;color:var(--on-surface-var);">לחץ "עדכן עמלות" כדי למשוך הזמנות מ-AliExpress</div>
+      </div>`;
+      return;
+    }
+
+    let html = '';
+
+    // ── Momentum strip ────────────────────────────────────────────────────────
+    const last7    = parseInt(momentum.last_7  || 0, 10);
+    const prev7    = parseInt(momentum.prev_7  || 0, 10);
+    const commL7   = parseFloat(momentum.comm_last_7 || 0);
+    const commP7   = parseFloat(momentum.comm_prev_7 || 0);
+    const momPct   = prev7 > 0 ? ((last7 - prev7) / prev7 * 100).toFixed(0) : null;
+    const momColor = momPct != null ? (parseFloat(momPct) >= 0 ? '#16a34a' : '#ef4444') : '#702ae1';
+    const momArrow = momPct != null ? (parseFloat(momPct) >= 0 ? '↑' : '↓') : '';
+
+    html += `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px;">
+        <div class="card an-kpi-card" style="flex-direction:column;align-items:flex-start;gap:6px;padding:16px;">
+          <span style="font-size:11px;color:var(--on-surface-var);">7 ימים אחרונים</span>
+          <div style="font-size:28px;font-weight:900;color:#702ae1;">${last7}</div>
+          <div style="font-size:12px;color:var(--on-surface-var);">הזמנות</div>
+          ${momPct != null ? `<div style="font-size:13px;font-weight:700;color:${momColor};">${momArrow} ${Math.abs(momPct)}% vs שבוע קודם</div>` : ''}
+        </div>
+        <div class="card an-kpi-card" style="flex-direction:column;align-items:flex-start;gap:6px;padding:16px;">
+          <span style="font-size:11px;color:var(--on-surface-var);">עמלה 7 ימים</span>
+          <div style="font-size:28px;font-weight:900;color:#16a34a;">$${commL7.toFixed(2)}</div>
+          <div style="font-size:12px;color:var(--on-surface-var);">vs $${commP7.toFixed(2)} שבוע קודם</div>
+        </div>
+        <div class="card an-kpi-card" style="flex-direction:column;align-items:flex-start;gap:6px;padding:16px;">
+          <span style="font-size:11px;color:var(--on-surface-var);">מוצרים שמכרו</span>
+          <div style="font-size:28px;font-weight:900;color:#702ae1;">${products.length}</div>
+          <div style="font-size:12px;color:var(--on-surface-var);">פריטים ייחודיים</div>
+        </div>
+        <div class="card an-kpi-card" style="flex-direction:column;align-items:flex-start;gap:6px;padding:16px;">
+          <span style="font-size:11px;color:var(--on-surface-var);">מוצרים מקושרים</span>
+          <div style="font-size:28px;font-weight:900;color:#702ae1;">${products.filter(p => p.local_product_id).length}</div>
+          <div style="font-size:12px;color:var(--on-surface-var);">נמצאו בקטלוג שלך</div>
+        </div>
+      </div>`;
+
+    // ── Product profitability table ───────────────────────────────────────────
+    const prodRows = products.map((p, i) => {
+      const comm     = parseFloat(p.total_commission || 0);
+      const rev      = parseFloat(p.total_revenue    || 0);
+      const orders   = parseInt(p.total_orders       || 0, 10);
+      const newB     = parseInt(p.new_buyers          || 0, 10);
+      const color    = p.subject_color || '#702ae1';
+      const isHot    = p.is_hot;
+      const hasLocal = !!p.local_product_id;
+      const daysStale = p.local_sent_at
+        ? Math.floor((Date.now() - new Date(p.local_sent_at)) / 86400000)
+        : null;
+      const rankColor = i === 0 ? '#f59e0b' : i === 1 ? '#94a3b8' : i === 2 ? '#b45309' : 'var(--on-surface-var)';
+
+      const actionBtn = hasLocal && daysStale != null && daysStale > 7
+        ? `<button class="btn btn-primary btn-sm" style="font-size:11px;padding:4px 10px;white-space:nowrap;"
+             onclick="sendProductById('${escHtml(p.local_product_id)}')">
+             <span class="material-symbols-outlined" style="font-size:13px;">send</span>שלח שוב
+           </button>`
+        : hasLocal ? `<span style="font-size:11px;color:#16a34a;">✓ נשלח לאחרונה</span>`
+          : `<span style="font-size:11px;color:var(--on-surface-var);">לא בקטלוג</span>`;
+
+      return `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+          <td style="padding:12px 8px;text-align:center;font-weight:700;color:${rankColor};">${i + 1}</td>
+          <td style="padding:12px 8px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              ${p.product_image ? `<img src="${escHtml(p.product_image)}" style="width:48px;height:48px;object-fit:cover;border-radius:8px;flex-shrink:0;" loading="lazy" />` : `<div style="width:48px;height:48px;border-radius:8px;background:rgba(112,42,225,0.08);flex-shrink:0;"></div>`}
+              <div style="min-width:0;">
+                <div style="font-size:12px;font-weight:600;line-height:1.4;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(p.product_title || '')}">${escHtml(p.product_title || p.local_text || '—')}</div>
+                <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
+                  ${isHot ? '<span style="font-size:10px;background:rgba(239,68,68,0.1);color:#ef4444;padding:1px 6px;border-radius:10px;">🔥 מוצר חם</span>' : ''}
+                  ${hasLocal ? '<span style="font-size:10px;background:rgba(22,163,74,0.1);color:#16a34a;padding:1px 6px;border-radius:10px;">✓ בקטלוג</span>' : '<span style="font-size:10px;background:rgba(255,255,255,0.06);color:var(--on-surface-var);padding:1px 6px;border-radius:10px;">לא בקטלוג</span>'}
+                  ${newB > 0 ? `<span style="font-size:10px;background:rgba(59,130,246,0.1);color:#3b82f6;padding:1px 6px;border-radius:10px;">${newB} קונים חדשים</span>` : ''}
+                </div>
+              </div>
+            </div>
+          </td>
+          <td style="padding:12px 8px;">
+            <span style="display:inline-flex;align-items:center;gap:5px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:${color};"></span>
+              <span style="font-size:12px;">${escHtml(p.subject_name || '—')}</span>
+            </span>
+          </td>
+          <td style="padding:12px 8px;text-align:center;font-weight:700;font-size:18px;">${orders}</td>
+          <td style="padding:12px 8px;text-align:center;font-size:13px;">$${rev.toFixed(2)}</td>
+          <td style="padding:12px 8px;text-align:center;font-weight:900;font-size:18px;color:#16a34a;">$${comm.toFixed(2)}</td>
+          <td style="padding:12px 8px;text-align:center;">${actionBtn}</td>
+        </tr>`;
+    }).join('');
+
+    html += `
+      <div class="card" style="padding:0;overflow:hidden;margin-bottom:24px;">
+        <div style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;">
+          <span class="material-symbols-outlined" style="font-size:18px;color:#702ae1;">storefront</span>
+          <span style="font-weight:700;font-size:15px;">מוצרים שמכרו בפועל</span>
+          <span style="font-size:11px;background:rgba(22,163,74,0.12);color:#16a34a;padding:2px 8px;border-radius:20px;">נתונים אמיתיים מ-AliExpress</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="border-bottom:2px solid rgba(255,255,255,0.08);">
+                <th style="padding:10px 8px;width:36px;"></th>
+                <th style="padding:10px 8px;text-align:right;font-weight:600;color:var(--on-surface-var);">מוצר</th>
+                <th style="padding:10px 8px;text-align:right;font-weight:600;color:var(--on-surface-var);">נישה</th>
+                <th style="padding:10px 8px;text-align:center;font-weight:600;color:var(--on-surface-var);">הזמנות</th>
+                <th style="padding:10px 8px;text-align:center;font-weight:600;color:var(--on-surface-var);">מחזור</th>
+                <th style="padding:10px 8px;text-align:center;font-weight:600;color:var(--on-surface-var);">עמלה</th>
+                <th style="padding:10px 8px;text-align:center;font-weight:600;color:var(--on-surface-var);">פעולה</th>
+              </tr>
+            </thead>
+            <tbody>${prodRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+
+    // ── Marketing analysis grid ───────────────────────────────────────────────
+    // Price buckets
+    const maxBucketComm = Math.max(...buckets.map(b => parseFloat(b.total_commission || 0)), 0.01);
+    const bucketBars = buckets.map(b => {
+      const comm  = parseFloat(b.total_commission || 0);
+      const cnt   = parseInt(b.order_count || 0, 10);
+      const width = Math.round(comm / maxBucketComm * 100);
+      return `
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+            <span style="font-weight:600;">${escHtml(b.bucket)}</span>
+            <span style="color:var(--on-surface-var);">${cnt} הזמנות · <span style="color:#16a34a;font-weight:700;">$${comm.toFixed(2)}</span></span>
+          </div>
+          <div style="height:8px;border-radius:4px;background:rgba(255,255,255,0.06);overflow:hidden;">
+            <div style="height:100%;width:${width}%;background:linear-gradient(90deg,#702ae1,#16a34a);border-radius:4px;"></div>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Hot vs regular
+    const hotRow  = hot.find(r => r.is_hot)  || {};
+    const regRow  = hot.find(r => !r.is_hot) || {};
+    const hotOrd  = parseInt(hotRow.order_count || 0, 10);
+    const regOrd  = parseInt(regRow.order_count || 0, 10);
+    const totalOrd = hotOrd + regOrd || 1;
+
+    // New vs returning buyers
+    const newRow  = buyers.find(r => r.is_new)  || {};
+    const retRow  = buyers.find(r => !r.is_new) || {};
+    const newCnt  = parseInt(newRow.order_count || 0, 10);
+    const retCnt  = parseInt(retRow.order_count || 0, 10);
+    const totalB  = newCnt + retCnt || 1;
+
+    html += `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+            <span class="material-symbols-outlined" style="font-size:18px;color:#702ae1;">price_change</span>
+            <span style="font-weight:700;">טווח מחירים מנצח</span>
+          </div>
+          ${bucketBars || '<div style="color:var(--on-surface-var);font-size:13px;">אין נתונים</div>'}
+          <div style="font-size:11px;color:var(--on-surface-var);margin-top:8px;">
+            בחר מוצרים בטווח המחיר שמייצר הכי הרבה עמלה
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+            <span class="material-symbols-outlined" style="font-size:18px;color:#ef4444;">local_fire_department</span>
+            <span style="font-weight:700;">מוצרים חמים vs רגילים</span>
+          </div>
+          <div style="margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+              <span>🔥 מוצרים חמים</span>
+              <span style="font-weight:700;color:#ef4444;">${hotOrd} הזמנות (${Math.round(hotOrd/totalOrd*100)}%)</span>
+            </div>
+            <div style="height:10px;border-radius:5px;background:rgba(255,255,255,0.06);">
+              <div style="height:100%;width:${Math.round(hotOrd/totalOrd*100)}%;background:#ef4444;border-radius:5px;"></div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+              <span>📦 מוצרים רגילים</span>
+              <span style="font-weight:700;color:#702ae1;">${regOrd} הזמנות (${Math.round(regOrd/totalOrd*100)}%)</span>
+            </div>
+            <div style="height:10px;border-radius:5px;background:rgba(255,255,255,0.06);">
+              <div style="height:100%;width:${Math.round(regOrd/totalOrd*100)}%;background:#702ae1;border-radius:5px;"></div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--on-surface-var);margin-top:12px;">
+            ${hotOrd > regOrd ? '✅ תעדף פרסום מוצרים חמים — הם ממירים טוב יותר' : '💡 המוצרים הרגילים שלך מצליחים — תמשיך לגוון'}
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+            <span class="material-symbols-outlined" style="font-size:18px;color:#3b82f6;">group</span>
+            <span style="font-weight:700;">סוגי קונים</span>
+          </div>
+          <div style="margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+              <span>🆕 קונים חדשים ב-AliExpress</span>
+              <span style="font-weight:700;color:#3b82f6;">${newCnt} (${Math.round(newCnt/totalB*100)}%)</span>
+            </div>
+            <div style="height:10px;border-radius:5px;background:rgba(255,255,255,0.06);">
+              <div style="height:100%;width:${Math.round(newCnt/totalB*100)}%;background:#3b82f6;border-radius:5px;"></div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+              <span>🔄 קונים חוזרים</span>
+              <span style="font-weight:700;color:#16a34a;">${retCnt} (${Math.round(retCnt/totalB*100)}%)</span>
+            </div>
+            <div style="height:10px;border-radius:5px;background:rgba(255,255,255,0.06);">
+              <div style="height:100%;width:${Math.round(retCnt/totalB*100)}%;background:#16a34a;border-radius:5px;"></div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--on-surface-var);margin-top:12px;">
+            ${retCnt > newCnt ? '💪 הלקוחות שלך חוזרים לקנות — הם סומכים על הפלטפורמה' : '🌱 רוב הקונים הם חדשים — הפוטנציאל לצמיחה גבוה'}
+          </div>
+        </div>
+      </div>`;
+
+    el.innerHTML = html;
+  } catch (err) {
+    document.getElementById('analytics-sales-content').innerHTML =
+      `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
