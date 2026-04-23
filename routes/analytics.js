@@ -221,9 +221,10 @@ router.get('/orders', async (req, res) => {
 });
 
 // GET /api/analytics/top-products?subjectId=
-// Products ranked by estimated revenue: clicks × conversion_rate × sale_price × commission_rate
-// Uses real commission_rate from AliExpress orders when available; falls back to product-level
-// then 8%. Falls back to 2% conversion when the niche has no real orders yet.
+// Products ranked by real attributed commission:
+//   attributed = product_clicks × (niche_real_commission / niche_total_clicks)
+// Falls back to estimated model (clicks × conversion × price × commission_rate)
+// only for niches that have no real order data yet.
 router.get('/top-products', async (req, res) => {
   try {
     const { subjectId } = req.query;
@@ -235,13 +236,15 @@ router.get('/top-products', async (req, res) => {
     }
 
     const { rows } = await query(
-      `WITH niche_conv AS (
+      `WITH niche_perf AS (
          SELECT
            cs.subject_id,
+           COALESCE(SUM(cs.commission_usd), 0)           AS niche_commission,
+           AVG(NULLIF(cs.commission_rate, 0))             AS avg_commission_rate,
+           COALESCE(SUM(p2.clicks), 0)                   AS niche_clicks,
            CASE WHEN SUM(p2.clicks) > 0
-             THEN COUNT(DISTINCT cs.order_id)::numeric / NULLIF(SUM(p2.clicks), 0)
-             ELSE 0.02 END AS conversion_rate,
-           AVG(NULLIF(cs.commission_rate, 0)) AS avg_commission_rate
+             THEN SUM(cs.commission_usd) / NULLIF(SUM(p2.clicks), 0)
+             ELSE NULL END                                AS commission_per_click
          FROM commission_snapshots cs
          JOIN products p2 ON p2.subject_id = cs.subject_id AND p2.user_id = cs.user_id
          WHERE cs.user_id = $1
@@ -254,29 +257,76 @@ router.get('/top-products', async (req, res) => {
          p.image,
          p.clicks,
          p.sale_price,
-         p.commission_rate,
+         p.send_count,
          p.sent_at,
          s.name  AS subject_name,
          s.color AS subject_color,
-         COALESCE(nc.conversion_rate, 0.02) AS conversion_rate,
-         COALESCE(nc.avg_commission_rate, p.commission_rate, 0.08) AS effective_commission_rate,
-         CASE WHEN p.sale_price IS NOT NULL AND p.clicks > 0
-           THEN ROUND(
-             p.clicks
-             * COALESCE(nc.conversion_rate, 0.02)
-             * p.sale_price
-             * COALESCE(nc.avg_commission_rate, p.commission_rate, 0.08),
-           2)
-           ELSE NULL END AS estimated_revenue
+         np.commission_per_click,
+         np.niche_commission,
+         np.niche_clicks,
+         np.avg_commission_rate,
+         CASE WHEN np.commission_per_click IS NOT NULL AND p.clicks > 0
+           THEN ROUND(p.clicks * np.commission_per_click, 4)
+           ELSE NULL END                                  AS attributed_commission
        FROM products p
-       LEFT JOIN subjects s       ON s.id = p.subject_id
-       LEFT JOIN niche_conv nc    ON nc.subject_id = p.subject_id
-       WHERE p.user_id = $1
-         AND p.sale_price IS NOT NULL
-         ${subjectFilter}
-       ORDER BY estimated_revenue DESC NULLS LAST
+       LEFT JOIN subjects s      ON s.id = p.subject_id
+       LEFT JOIN niche_perf np   ON np.subject_id = p.subject_id
+       WHERE p.user_id = $1 ${subjectFilter}
+         AND p.clicks > 0
+         AND np.commission_per_click IS NOT NULL
+       ORDER BY attributed_commission DESC NULLS LAST
        LIMIT 50`,
       params
+    );
+    res.json({ success: true, products: rows, real: rows.length > 0 });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/analytics/suggested-products
+// Products worth republishing: ranked by attributed commission per send.
+// Products that earned the most per posting historically are the best candidates.
+router.get('/suggested-products', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `WITH niche_perf AS (
+         SELECT
+           cs.subject_id,
+           CASE WHEN SUM(p2.clicks) > 0
+             THEN SUM(cs.commission_usd) / NULLIF(SUM(p2.clicks), 0)
+             ELSE NULL END AS commission_per_click
+         FROM commission_snapshots cs
+         JOIN products p2 ON p2.subject_id = cs.subject_id AND p2.user_id = cs.user_id
+         WHERE cs.user_id = $1
+         GROUP BY cs.subject_id
+       )
+       SELECT
+         p.id,
+         p.text,
+         p.image,
+         p.short_link,
+         p.clicks,
+         p.sale_price,
+         COALESCE(p.send_count, 1)           AS send_count,
+         p.sent_at,
+         s.name  AS subject_name,
+         s.color AS subject_color,
+         np.commission_per_click,
+         ROUND(p.clicks * np.commission_per_click, 4)  AS attributed_commission,
+         ROUND(p.clicks * np.commission_per_click
+               / NULLIF(COALESCE(p.send_count, 1), 0), 4) AS commission_per_send,
+         NOW() - p.sent_at                   AS age
+       FROM products p
+       LEFT JOIN subjects s    ON s.id = p.subject_id
+       LEFT JOIN niche_perf np ON np.subject_id = p.subject_id
+       WHERE p.user_id = $1
+         AND p.sent_at IS NOT NULL
+         AND p.clicks > 0
+         AND np.commission_per_click IS NOT NULL
+       ORDER BY commission_per_send DESC NULLS LAST
+       LIMIT 30`,
+      [req.user.id]
     );
     res.json({ success: true, products: rows });
   } catch (err) {
