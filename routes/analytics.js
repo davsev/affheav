@@ -5,14 +5,15 @@ const { query }       = require('../db');
 const { signAndCall } = require('../services/aliexpressApi');
 const workflow        = require('../services/workflow');
 
-// Fetch one page of orders from AliExpress for a given tracking_id + date range.
+// Fetch one page of orders from AliExpress for a given tracking_id + date range + status.
 // Returns { orders: [...], hasMore: bool, totalPages: N }
-async function fetchOrderPage(trackingId, startTime, endTime, pageNo) {
+async function fetchOrderPage(trackingId, startTime, endTime, pageNo, status) {
   const res = await signAndCall({
     method:       'aliexpress.affiliate.order.list',
     start_time:   startTime,
     end_time:     endTime,
     tracking_id:  trackingId,
+    status,
     page_no:      String(pageNo),
     page_size:    '50',
   });
@@ -63,74 +64,78 @@ router.post('/sync-commissions', async (req, res) => {
     let totalSynced = 0;
     const results = [];
 
+    // AliExpress requires status to be specified — fetch all three
+    const ORDER_STATUSES = ['Payment Completed', 'Buyer Confirmed Receipt', 'Settled'];
+
     for (const subject of subjects) {
       const { id: subjectId, name: subjectName, aliexpress_tracking_id: trackingId } = subject;
       let synced = 0;
-      let pageNo = 1;
 
       try {
         workflow.log(`Analytics: fetching AliExpress orders for "${subjectName}" (${trackingId})`);
 
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-          const { orders, hasMore } = await fetchOrderPage(trackingId, startTime, endTime, pageNo);
+        for (const status of ORDER_STATUSES) {
+          let pageNo = 1;
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            const { orders, hasMore } = await fetchOrderPage(trackingId, startTime, endTime, pageNo, status);
 
-          for (const order of orders) {
-            const orderId       = String(order.order_id || '');
-            const orderAmount   = parseFloat(order.order_amount)   || null;
-            const commissionPct = parseFloat(order.commission_rate) / 100 || null;
-            // AliExpress may call it estimated_commission or settlement_amount
-            const commissionUsd = parseFloat(order.estimated_commission ?? order.settlement_amount ?? order.commission) || null;
-            const orderStatus   = order.order_status  || null;
-            const paymentStatus = order.payment_status || null;
-            const orderTime     = order.order_time || order.paid_time || null;
+            for (const order of orders) {
+              const orderId       = String(order.order_id || '');
+              const orderAmount   = parseFloat(order.order_amount)   || null;
+              const commissionPct = parseFloat(order.commission_rate) / 100 || null;
+              // AliExpress may call it estimated_commission or settlement_amount
+              const commissionUsd = parseFloat(order.estimated_commission ?? order.settlement_amount ?? order.commission) || null;
+              const orderStatus   = order.order_status  || null;
+              const paymentStatus = order.payment_status || null;
+              const orderTime     = order.order_time || order.paid_time || null;
 
-            if (!orderId) continue;
+              if (!orderId) continue;
 
-            await query(
-              `INSERT INTO commission_snapshots
-                 (user_id, subject_id, tracking_id, order_id, order_amount,
-                  commission_rate, commission_usd, order_status, payment_status, order_time)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-               ON CONFLICT (user_id, order_id) DO UPDATE SET
-                 commission_usd  = EXCLUDED.commission_usd,
-                 order_status    = EXCLUDED.order_status,
-                 payment_status  = EXCLUDED.payment_status,
-                 fetched_at      = NOW()`,
-              [userId, subjectId, trackingId, orderId, orderAmount,
-               commissionPct, commissionUsd, orderStatus, paymentStatus,
-               orderTime ? new Date(orderTime) : null]
-            );
-            synced++;
-
-            // Save per-product line items when the API includes them
-            const items = order.order_items?.order_item || [];
-            for (const item of items) {
-              const pid       = String(item.product_id || '');
-              const ptitle    = item.product_title || item.product_name || null;
-              const icount    = parseInt(item.item_count ?? item.quantity ?? 0, 10) || null;
-              const iamount   = parseFloat(item.order_amount) || null;
-              const icommRate = item.commission_rate ? parseFloat(item.commission_rate) / 100 : null;
-              const icommUsd  = parseFloat(item.estimated_commission ?? item.commission ?? 0) || null;
-              if (!pid) continue;
               await query(
-                `INSERT INTO order_items
-                   (user_id, subject_id, order_id, product_id, product_title,
-                    item_count, order_amount, commission_rate, commission_usd)
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-                 ON CONFLICT (user_id, order_id, product_id) DO UPDATE SET
-                   product_title  = EXCLUDED.product_title,
-                   commission_usd = EXCLUDED.commission_usd,
-                   fetched_at     = NOW()`,
-                [userId, subjectId, orderId, pid, ptitle, icount, iamount, icommRate, icommUsd]
+                `INSERT INTO commission_snapshots
+                   (user_id, subject_id, tracking_id, order_id, order_amount,
+                    commission_rate, commission_usd, order_status, payment_status, order_time)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+                 ON CONFLICT (user_id, order_id) DO UPDATE SET
+                   commission_usd  = EXCLUDED.commission_usd,
+                   order_status    = EXCLUDED.order_status,
+                   payment_status  = EXCLUDED.payment_status,
+                   fetched_at      = NOW()`,
+                [userId, subjectId, trackingId, orderId, orderAmount,
+                 commissionPct, commissionUsd, orderStatus, paymentStatus,
+                 orderTime ? new Date(orderTime) : null]
               );
-            }
-          }
+              synced++;
 
-          if (!hasMore) break;
-          pageNo++;
-          // Polite rate-limiting
-          await new Promise(r => setTimeout(r, 400));
+              // Save per-product line items when the API includes them
+              const items = order.order_items?.order_item || [];
+              for (const item of items) {
+                const pid       = String(item.product_id || '');
+                const ptitle    = item.product_title || item.product_name || null;
+                const icount    = parseInt(item.item_count ?? item.quantity ?? 0, 10) || null;
+                const iamount   = parseFloat(item.order_amount) || null;
+                const icommRate = item.commission_rate ? parseFloat(item.commission_rate) / 100 : null;
+                const icommUsd  = parseFloat(item.estimated_commission ?? item.commission ?? 0) || null;
+                if (!pid) continue;
+                await query(
+                  `INSERT INTO order_items
+                     (user_id, subject_id, order_id, product_id, product_title,
+                      item_count, order_amount, commission_rate, commission_usd)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                   ON CONFLICT (user_id, order_id, product_id) DO UPDATE SET
+                     product_title  = EXCLUDED.product_title,
+                     commission_usd = EXCLUDED.commission_usd,
+                     fetched_at     = NOW()`,
+                  [userId, subjectId, orderId, pid, ptitle, icount, iamount, icommRate, icommUsd]
+                );
+              }
+            }
+
+            if (!hasMore) break;
+            pageNo++;
+            await new Promise(r => setTimeout(r, 400));
+          }
         }
 
         workflow.log(`Analytics: synced ${synced} orders for "${subjectName}"`);
@@ -564,26 +569,36 @@ router.get('/probe-raw-orders', async (req, res) => {
     const { aliexpress_tracking_id: trackingId, name: subjectName } = subjects[0];
     const now      = new Date();
     const weekAgo  = new Date(now);
-    weekAgo.setDate(weekAgo.getDate() - 7);
+    weekAgo.setDate(weekAgo.getDate() - 30);
     const fmt = d => d.toISOString().replace('T', ' ').slice(0, 19);
 
-    const apiRes = await signAndCall({
-      method:      'aliexpress.affiliate.order.list',
-      start_time:  fmt(weekAgo),
-      end_time:    fmt(now),
-      tracking_id: trackingId,
-      page_no:     '1',
-      page_size:   '5',
-    });
+    // Try each status until we find one with orders (or exhaust all)
+    const statuses = ['Payment Completed', 'Buyer Confirmed Receipt', 'Settled'];
+    let apiRes, root, orders = [], usedStatus;
 
-    const root   = apiRes.data?.aliexpress_affiliate_order_list_response?.resp_result;
-    const orders = root?.result?.orders?.order || [];
+    for (const status of statuses) {
+      apiRes = await signAndCall({
+        method:      'aliexpress.affiliate.order.list',
+        start_time:  fmt(weekAgo),
+        end_time:    fmt(now),
+        tracking_id: trackingId,
+        status,
+        page_no:     '1',
+        page_size:   '5',
+      });
+      root   = apiRes.data?.aliexpress_affiliate_order_list_response?.resp_result;
+      orders = root?.result?.orders?.order || [];
+      usedStatus = status;
+      if (orders.length) break;
+    }
+
     const sample = orders[0] || null;
 
     res.json({
       success:          true,
       subject:          subjectName,
       tracking_id:      trackingId,
+      status_used:      usedStatus,
       order_count:      orders.length,
       has_order_items:  sample ? Array.isArray(sample.order_items?.order_item) : false,
       sample_order:     sample,
