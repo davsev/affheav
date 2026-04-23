@@ -2443,8 +2443,12 @@ function renderNicheRow(n) {
   const clicks     = parseInt(n.total_clicks || 0, 10);
   const color      = n.color || '#702ae1';
   const convPct    = clicks > 0 && orders > 0 ? ((orders / clicks) * 100).toFixed(2) + '%' : '—';
+  const hasNoOrders = n.tracking_id && orders === 0;
+  const probeLink   = hasNoOrders
+    ? ` · <a href="/api/analytics/probe-raw-orders?subjectId=${encodeURIComponent(n.id)}" target="_blank" style="color:#3b82f6;font-size:10px;text-decoration:underline;">בדוק API ←</a>`
+    : '';
   const statusDot  = n.tracking_id
-    ? `<span style="font-size:10px;color:#16a34a;white-space:nowrap;">● מחובר</span>`
+    ? `<span style="font-size:10px;color:#16a34a;white-space:nowrap;">● מחובר${probeLink}</span>`
     : `<span style="font-size:10px;color:#f59e0b;white-space:nowrap;">● חסר Tracking ID</span>`;
 
   return `
@@ -2501,7 +2505,10 @@ document.getElementById('btn-sync-commissions').addEventListener('click', async 
     });
 
     status.style.color = '#16a34a';
-    status.textContent = `✓ סונכרנו ${data.synced} הזמנות`;
+    const perNiche = (data.subjects || []).map(s =>
+      s.error ? `${s.subjectName}: ✗ ${s.error}` : `${s.subjectName}: ${s.synced} הזמנות`
+    ).join(' | ');
+    status.textContent = `✓ סה"כ ${data.synced} הזמנות${perNiche ? ' — ' + perNiche : ''}`;
 
     // Refresh summary cards and orders
     await renderAnalyticsSummary();

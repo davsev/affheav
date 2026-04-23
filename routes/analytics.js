@@ -653,11 +653,19 @@ router.get('/product-orders', async (req, res) => {
 router.get('/probe-raw-orders', async (req, res) => {
   try {
     const userId = req.user.id;
+    const { subjectId } = req.query;
+    const params = [userId];
+    let subjectFilter = '';
+    if (subjectId) {
+      params.push(subjectId);
+      subjectFilter = 'AND id = $2';
+    }
     const { rows: subjects } = await query(
       `SELECT id, name, aliexpress_tracking_id FROM subjects
        WHERE user_id = $1 AND aliexpress_tracking_id IS NOT NULL AND aliexpress_tracking_id != ''
-       LIMIT 1`,
-      [userId]
+       ${subjectFilter}
+       ORDER BY name LIMIT 1`,
+      params
     );
     if (!subjects.length) {
       return res.json({ success: false, error: 'אין נישה עם tracking ID מוגדר' });
@@ -666,7 +674,7 @@ router.get('/probe-raw-orders', async (req, res) => {
     const { aliexpress_tracking_id: trackingId, name: subjectName } = subjects[0];
     const now      = new Date();
     const weekAgo  = new Date(now);
-    weekAgo.setDate(weekAgo.getDate() - 30);
+    weekAgo.setDate(weekAgo.getDate() - 90);
     const fmt = d => d.toISOString().replace('T', ' ').slice(0, 19);
 
     // Try each status until we find one with orders (or exhaust all)
