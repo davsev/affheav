@@ -2583,7 +2583,7 @@ document.getElementById('analytics-niche-filter').addEventListener('change', fun
   loadAnalyticsOrders(this.value);
 });
 
-// ── Analytics: Top Products ───────────────────────────────────────────────────
+// ── Analytics: Top Products (real attribution) ───────────────────────────────
 
 async function loadTopProducts(subjectId = '') {
   const el = document.getElementById('analytics-top-products-table');
@@ -2591,61 +2591,64 @@ async function loadTopProducts(subjectId = '') {
   el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
 
   try {
-    const qs   = subjectId ? `?subjectId=${encodeURIComponent(subjectId)}` : '';
-    const data = await api(`/api/analytics/top-products${qs}`);
+    const qs      = subjectId ? `?subjectId=${encodeURIComponent(subjectId)}` : '';
+    const data    = await api(`/api/analytics/top-products${qs}`);
     const products = data.products || [];
 
     if (!products.length) {
-      el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">אין מוצרים עם נתוני מחיר. מחיר נשמר אוטומטית בהוספה דרך חיפוש API.</div>';
+      el.innerHTML = `<div style="padding:32px;text-align:center;">
+        <div style="font-size:13px;color:var(--on-surface-var);">אין נתוני עמלות אמיתיות לנישות אלו — לחץ "עדכן עמלות" כדי למשוך נתוני הזמנות מ-AliExpress.</div>
+      </div>`;
       return;
     }
 
+    const rows = products.map((p, i) => {
+      const attributed = p.attributed_commission != null ? parseFloat(p.attributed_commission) : null;
+      const rpc        = p.commission_per_click  != null ? parseFloat(p.commission_per_click)  : null;
+      const color      = p.subject_color || '#702ae1';
+      const rankColor  = i === 0 ? '#f59e0b' : i === 1 ? '#94a3b8' : i === 2 ? '#b45309' : 'var(--on-surface-var)';
+
+      return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+        <td style="padding:10px 8px;text-align:center;font-weight:700;font-size:13px;color:${rankColor};">${i + 1}</td>
+        <td style="padding:10px 8px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${p.image ? `<img src="${escHtml(p.image)}" style="width:36px;height:36px;object-fit:cover;border-radius:8px;flex-shrink:0;" loading="lazy" />` : `<div style="width:36px;height:36px;border-radius:8px;background:rgba(112,42,225,0.08);flex-shrink:0;"></div>`}
+            <div>
+              <div style="font-size:12px;font-weight:600;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(p.text || '')}">${escHtml(p.text || '—')}</div>
+              ${p.short_link ? `<a href="${escHtml(p.short_link)}" target="_blank" style="font-size:10px;color:var(--on-surface-var);direction:ltr;font-family:monospace;">${escHtml(p.short_link)}</a>` : ''}
+            </div>
+          </div>
+        </td>
+        <td style="padding:10px 8px;">
+          <span style="display:inline-flex;align-items:center;gap:5px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;"></span>
+            <span style="font-size:12px;">${escHtml(p.subject_name || '—')}</span>
+          </span>
+        </td>
+        <td style="padding:10px 8px;font-weight:700;color:#702ae1;text-align:center;">${(p.clicks || 0).toLocaleString()}</td>
+        <td style="padding:10px 8px;text-align:center;font-size:12px;color:var(--on-surface-var);">${rpc != null ? `$${rpc.toFixed(5)}` : '—'}</td>
+        <td style="padding:10px 8px;text-align:center;font-weight:900;font-size:16px;color:#16a34a;">${attributed != null ? `$${attributed.toFixed(2)}` : '—'}</td>
+      </tr>`;
+    }).join('');
+
     el.innerHTML = `
-      <div class="table-wrap">
-        <table>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
           <thead>
-            <tr>
-              <th style="width:40px;"></th>
-              <th>מוצר</th>
-              <th>נישה</th>
-              <th>קליקים</th>
-              <th>מחיר</th>
-              <th>המרה</th>
-              <th>עמלה %</th>
-              <th>הכנסה משוערת</th>
+            <tr style="border-bottom:2px solid rgba(255,255,255,0.08);">
+              <th style="padding:8px;width:36px;"></th>
+              <th style="padding:8px;text-align:right;font-weight:600;color:var(--on-surface-var);">מוצר</th>
+              <th style="padding:8px;text-align:right;font-weight:600;color:var(--on-surface-var);">נישה</th>
+              <th style="padding:8px;text-align:center;font-weight:600;color:var(--on-surface-var);">קליקים</th>
+              <th style="padding:8px;text-align:center;font-weight:600;color:var(--on-surface-var);">$/קליק (נישה)</th>
+              <th style="padding:8px;text-align:center;font-weight:600;color:var(--on-surface-var);">עמלה מיוחסת</th>
             </tr>
           </thead>
-          <tbody>
-            ${products.map((p, i) => {
-              const revenue   = p.estimated_revenue != null ? `$${parseFloat(p.estimated_revenue).toFixed(2)}` : '—';
-              const convPct   = p.conversion_rate   != null ? `${(parseFloat(p.conversion_rate) * 100).toFixed(1)}%` : '—';
-              const effComm   = p.effective_commission_rate != null ? parseFloat(p.effective_commission_rate) : null;
-              const commLabel = effComm != null ? `${(effComm * 100).toFixed(1)}%` : '—';
-              const commColor = effComm != null && effComm > 0.08 ? '#16a34a' : 'var(--on-surface-var)';
-              const isTop     = i === 0;
-              return `<tr${isTop ? ' style="background:rgba(22,163,74,0.04);"' : ''}>
-                <td style="text-align:center;color:var(--on-surface-var);font-size:12px;font-weight:600;">${i + 1}</td>
-                <td>
-                  <div style="display:flex;align-items:center;gap:8px;">
-                    ${p.image ? `<img src="${escHtml(p.image)}" style="width:32px;height:32px;object-fit:cover;border-radius:6px;flex-shrink:0;" loading="lazy" />` : '<div style="width:32px;height:32px;background:rgba(112,42,225,0.08);border-radius:6px;flex-shrink:0;"></div>'}
-                    <span style="font-size:12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;" title="${escHtml(p.text || '')}">${escHtml(p.text || '—')}</span>
-                  </div>
-                </td>
-                <td>
-                  <span style="display:inline-flex;align-items:center;gap:5px;">
-                    <span style="width:8px;height:8px;border-radius:50%;background:${escHtml(p.subject_color||'#702ae1')};flex-shrink:0;"></span>
-                    <span style="font-size:12px;">${escHtml(p.subject_name || '—')}</span>
-                  </span>
-                </td>
-                <td style="font-weight:600;color:#702ae1;">${(p.clicks||0).toLocaleString()}</td>
-                <td>$${parseFloat(p.sale_price||0).toFixed(2)}</td>
-                <td style="font-size:12px;color:var(--on-surface-var);">${convPct}</td>
-                <td style="font-size:12px;font-weight:600;color:${commColor};">${commLabel}</td>
-                <td style="font-weight:700;color:#16a34a;font-size:14px;">${revenue}</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
+          <tbody>${rows}</tbody>
         </table>
+      </div>
+      <div style="margin-top:10px;font-size:11px;color:var(--on-surface-var);padding:0 4px;">
+        עמלה מיוחסת = קליקי מוצר × (עמלת נישה ÷ קליקי נישה) — ללא הנחות, מבוסס על נתוני AliExpress בפועל
       </div>`;
   } catch (err) {
     el.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
@@ -3334,8 +3337,75 @@ async function loadInsights() {
     }
 
     el.innerHTML = html;
+
+    // Append suggested products after main content
+    loadSuggestedProducts(el);
   } catch (err) {
     document.getElementById('analytics-insights-content').innerHTML =
       `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+async function loadSuggestedProducts(container) {
+  try {
+    const data     = await api('/api/analytics/suggested-products');
+    const products = data.products || [];
+    if (!products.length) return;
+
+    const rows = products.map((p, i) => {
+      const comm    = parseFloat(p.attributed_commission || 0);
+      const cps     = parseFloat(p.commission_per_send   || 0);
+      const sends   = parseInt(p.send_count || 1, 10);
+      const color   = p.subject_color || '#702ae1';
+
+      // Compute days since last sent
+      let daysAgo = '—';
+      if (p.sent_at) {
+        const ms = Date.now() - new Date(p.sent_at).getTime();
+        daysAgo  = Math.floor(ms / 86400000);
+      }
+      const stale    = typeof daysAgo === 'number' && daysAgo > 14;
+      const staleTag = stale
+        ? `<span style="font-size:10px;background:rgba(245,158,11,0.15);color:#f59e0b;padding:1px 6px;border-radius:10px;margin-right:4px;">לא פורסם ${daysAgo} ימים</span>`
+        : `<span style="font-size:10px;color:var(--on-surface-var);">${daysAgo} ימים</span>`;
+
+      return `
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.04);">
+          <div style="font-size:18px;font-weight:900;color:var(--on-surface-var);width:24px;text-align:center;flex-shrink:0;">${i + 1}</div>
+          ${p.image ? `<img src="${escHtml(p.image)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0;" loading="lazy" />` : `<div style="width:44px;height:44px;border-radius:8px;background:rgba(112,42,225,0.08);flex-shrink:0;"></div>`}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(p.text || '')}">${escHtml(p.text || '—')}</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:3px;flex-wrap:wrap;">
+              <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;">
+                <span style="width:7px;height:7px;border-radius:50%;background:${color};"></span>
+                ${escHtml(p.subject_name || '—')}
+              </span>
+              <span style="font-size:11px;color:var(--on-surface-var);">${(p.clicks || 0).toLocaleString()} קליקים · ${sends} שליחות</span>
+              ${staleTag}
+            </div>
+          </div>
+          <div style="text-align:left;flex-shrink:0;">
+            <div style="font-size:18px;font-weight:900;color:#16a34a;">$${cps.toFixed(2)}</div>
+            <div style="font-size:10px;color:var(--on-surface-var);">לשליחה</div>
+          </div>
+        </div>`;
+    }).join('');
+
+    const section = document.createElement('div');
+    section.className = 'card';
+    section.style.marginTop = '24px';
+    section.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <span class="material-symbols-outlined" style="font-size:18px;color:#702ae1;">recommend</span>
+        <span style="font-weight:700;">המלצות לפרסום — מוצרים שכדאי לפרסם שוב</span>
+        <span style="font-size:11px;background:rgba(22,163,74,0.12);color:#16a34a;padding:2px 8px;border-radius:20px;">נתונים אמיתיים</span>
+      </div>
+      <div style="font-size:11px;color:var(--on-surface-var);margin-bottom:14px;">
+        מדורגים לפי עמלה מיוחסת לשליחה — המוצרים שהרוויחו הכי הרבה ביחס למספר הפעמים שפורסמו
+      </div>
+      <div>${rows}</div>`;
+    container.appendChild(section);
+  } catch (_) {
+    // suggestions are additive — fail silently
   }
 }
