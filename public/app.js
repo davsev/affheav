@@ -2506,9 +2506,10 @@ document.getElementById('btn-sync-commissions').addEventListener('click', async 
 
     status.style.color = '#16a34a';
     const perNiche = (data.subjects || []).map(s =>
-      s.error ? `${s.subjectName}: ✗ ${s.error}` : `${s.subjectName}: ${s.synced} הזמנות`
+      s.error ? `${s.subjectName}: ✗ ${s.error}` : `${s.subjectName}: ${s.synced}`
     ).join(' | ');
-    status.textContent = `✓ סה"כ ${data.synced} הזמנות${perNiche ? ' — ' + perNiche : ''}`;
+    const unmatched = data.unmatched > 0 ? ` · ${data.unmatched} לא מזוהים` : '';
+    status.textContent = `✓ ${data.synced} הזמנות — ${perNiche}${unmatched}`;
 
     // Refresh summary cards and orders
     await renderAnalyticsSummary();

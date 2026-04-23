@@ -45,12 +45,11 @@ router.post('/sync-commissions', async (req, res) => {
     const startDate = req.body.startDate ? new Date(req.body.startDate) : defStart;
     const endDate   = req.body.endDate   ? new Date(req.body.endDate)   : now;
 
-    // Format: "yyyy-MM-dd HH:mm:ss"
     const fmt = d => d.toISOString().replace('T', ' ').slice(0, 19);
     const startTime = fmt(startDate);
     const endTime   = fmt(endDate);
 
-    // Get all subjects with an aliexpress_tracking_id for this user
+    // Build tracking_id → subject map for this user
     const { rows: subjects } = await query(
       `SELECT id, name, aliexpress_tracking_id FROM subjects
        WHERE user_id = $1 AND aliexpress_tracking_id IS NOT NULL AND aliexpress_tracking_id != ''`,
@@ -58,97 +57,98 @@ router.post('/sync-commissions', async (req, res) => {
     );
 
     if (!subjects.length) {
-      return res.json({ success: true, synced: 0, skipped: 0, subjects: [], message: 'אין נישות עם tracking ID מוגדר' });
+      return res.json({ success: true, synced: 0, subjects: [], message: 'אין נישות עם tracking ID מוגדר' });
     }
 
-    let totalSynced = 0;
-    const results = [];
+    // The AliExpress API returns ALL account orders regardless of the tracking_id param.
+    // We match each order to a niche by reading order.tracking_id from the response.
+    const trackingMap = {};
+    for (const s of subjects) trackingMap[s.aliexpress_tracking_id] = s;
 
-    // AliExpress requires status to be specified — fetch all three
+    // Use the first subject's tracking_id just to satisfy the required API param
+    const anyTrackingId = subjects[0].aliexpress_tracking_id;
+
     const ORDER_STATUSES = ['Payment Completed', 'Buyer Confirmed Receipt', 'Settled'];
+    let totalSynced = 0;
+    let unmatched   = 0;
+    const perNiche  = {};  // subjectId → { name, synced }
+    for (const s of subjects) perNiche[s.id] = { subjectName: s.name, synced: 0, error: null };
 
-    for (const subject of subjects) {
-      const { id: subjectId, name: subjectName, aliexpress_tracking_id: trackingId } = subject;
-      let synced = 0;
+    try {
+      for (const status of ORDER_STATUSES) {
+        let pageNo = 1;
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { orders, hasMore } = await fetchOrderPage(anyTrackingId, startTime, endTime, pageNo, status);
 
-      try {
-        workflow.log(`Analytics: fetching AliExpress orders for "${subjectName}" (${trackingId})`);
+          for (const order of orders) {
+            const subOrderId    = String(order.sub_order_id || order.order_id || '');
+            const parentOrderId = String(order.order_id || subOrderId);
+            if (!subOrderId) continue;
 
-        for (const status of ORDER_STATUSES) {
-          let pageNo = 1;
-          // eslint-disable-next-line no-constant-condition
-          while (true) {
-            const { orders, hasMore } = await fetchOrderPage(trackingId, startTime, endTime, pageNo, status);
+            // Match to niche by the tracking_id embedded in the order's affiliate link
+            const orderTrackingId = order.tracking_id || '';
+            const subject = trackingMap[orderTrackingId];
+            if (!subject) { unmatched++; continue; }
 
-            for (const order of orders) {
-              // Use sub_order_id as the unique key — it's per-product, so multi-product
-              // parent orders don't clobber each other.
-              const subOrderId    = String(order.sub_order_id || order.order_id || '');
-              const parentOrderId = String(order.order_id || subOrderId);
-              if (!subOrderId) continue;
+            const orderAmount   = order.paid_amount != null ? order.paid_amount / 100 : null;
+            const commissionUsd = order.estimated_paid_commission != null
+              ? order.estimated_paid_commission / 100 : null;
+            const commissionPct = order.commission_rate
+              ? parseFloat(order.commission_rate) / 100 : null;
+            const orderStatus        = order.order_status || null;
+            const orderTime          = order.paid_time || order.created_time || null;
+            const aliexpressProductId = order.product_id ? String(order.product_id) : null;
+            const productTitle       = order.product_title || null;
+            const productImage       = order.product_main_image_url || null;
+            const isHotProduct       = order.is_hot_product === 'Y';
+            const isNewBuyer         = order.is_new_buyer === 'Y';
+            const categoryId         = order.category_id ? String(order.category_id) : null;
 
-              // paid_amount and estimated_paid_commission are in USD cents
-              const orderAmount   = order.paid_amount != null
-                ? order.paid_amount / 100 : null;
-              const commissionUsd = order.estimated_paid_commission != null
-                ? order.estimated_paid_commission / 100 : null;
-              // commission_rate comes as "7.00%" — parseFloat stops at %
-              const commissionPct = order.commission_rate
-                ? parseFloat(order.commission_rate) / 100 : null;
-
-              const orderStatus        = order.order_status || null;
-              const orderTime          = order.paid_time || order.created_time || null;
-              const aliexpressProductId = order.product_id ? String(order.product_id) : null;
-              const productTitle       = order.product_title || null;
-              const productImage       = order.product_main_image_url || null;
-              const isHotProduct       = order.is_hot_product === 'Y';
-              const isNewBuyer         = order.is_new_buyer === 'Y';
-              const categoryId         = order.category_id ? String(order.category_id) : null;
-
-              await query(
-                `INSERT INTO commission_snapshots
-                   (user_id, subject_id, tracking_id, order_id, sub_order_id,
-                    order_amount, commission_rate, commission_usd,
-                    order_status, payment_status, order_time,
-                    aliexpress_product_id, product_title, product_image,
-                    is_hot_product, is_new_buyer, category_id)
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-                 ON CONFLICT (user_id, order_id) DO UPDATE SET
-                   sub_order_id          = EXCLUDED.sub_order_id,
-                   commission_usd        = EXCLUDED.commission_usd,
-                   order_amount          = EXCLUDED.order_amount,
-                   order_status          = EXCLUDED.order_status,
-                   aliexpress_product_id = EXCLUDED.aliexpress_product_id,
-                   product_title         = EXCLUDED.product_title,
-                   product_image         = EXCLUDED.product_image,
-                   is_hot_product        = EXCLUDED.is_hot_product,
-                   is_new_buyer          = EXCLUDED.is_new_buyer,
-                   fetched_at            = NOW()`,
-                [userId, subjectId, trackingId, subOrderId, parentOrderId,
-                 orderAmount, commissionPct, commissionUsd,
-                 orderStatus, orderStatus, orderTime ? new Date(orderTime) : null,
-                 aliexpressProductId, productTitle, productImage,
-                 isHotProduct, isNewBuyer, categoryId]
-              );
-              synced++;
-            }
-
-            if (!hasMore) break;
-            pageNo++;
-            await new Promise(r => setTimeout(r, 400));
+            await query(
+              `INSERT INTO commission_snapshots
+                 (user_id, subject_id, tracking_id, order_id, sub_order_id,
+                  order_amount, commission_rate, commission_usd,
+                  order_status, payment_status, order_time,
+                  aliexpress_product_id, product_title, product_image,
+                  is_hot_product, is_new_buyer, category_id)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+               ON CONFLICT (user_id, order_id) DO UPDATE SET
+                 subject_id            = EXCLUDED.subject_id,
+                 commission_usd        = EXCLUDED.commission_usd,
+                 order_amount          = EXCLUDED.order_amount,
+                 order_status          = EXCLUDED.order_status,
+                 aliexpress_product_id = EXCLUDED.aliexpress_product_id,
+                 product_title         = EXCLUDED.product_title,
+                 product_image         = EXCLUDED.product_image,
+                 is_hot_product        = EXCLUDED.is_hot_product,
+                 is_new_buyer          = EXCLUDED.is_new_buyer,
+                 fetched_at            = NOW()`,
+              [userId, subject.id, orderTrackingId, subOrderId, parentOrderId,
+               orderAmount, commissionPct, commissionUsd,
+               orderStatus, orderStatus, orderTime ? new Date(orderTime) : null,
+               aliexpressProductId, productTitle, productImage,
+               isHotProduct, isNewBuyer, categoryId]
+            );
+            perNiche[subject.id].synced++;
+            totalSynced++;
           }
-        }
 
-        workflow.log(`Analytics: synced ${synced} orders for "${subjectName}"`);
-        results.push({ subjectId, subjectName, synced, error: null });
-        totalSynced += synced;
-      } catch (err) {
-        workflow.log(`Analytics: error fetching orders for "${subjectName}": ${err.message}`, 'warn');
-        results.push({ subjectId, subjectName, synced, error: err.message });
+          if (!hasMore) break;
+          pageNo++;
+          await new Promise(r => setTimeout(r, 400));
+        }
       }
+    } catch (err) {
+      workflow.log(`Analytics sync error: ${err.message}`, 'warn');
     }
 
-    res.json({ success: true, synced: totalSynced, subjects: results });
+    if (unmatched > 0) {
+      workflow.log(`Analytics: ${unmatched} orders had unrecognised tracking IDs (not assigned to any niche)`);
+    }
+
+    const results = Object.values(perNiche);
+    res.json({ success: true, synced: totalSynced, unmatched, subjects: results });
   } catch (err) {
     workflow.log(`Analytics sync error: ${err.message}`, 'error');
     res.status(500).json({ success: false, error: err.message });
