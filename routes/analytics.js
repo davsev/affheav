@@ -81,55 +81,56 @@ router.post('/sync-commissions', async (req, res) => {
             const { orders, hasMore } = await fetchOrderPage(trackingId, startTime, endTime, pageNo, status);
 
             for (const order of orders) {
-              const orderId       = String(order.order_id || '');
-              const orderAmount   = parseFloat(order.order_amount)   || null;
-              const commissionPct = parseFloat(order.commission_rate) / 100 || null;
-              // AliExpress may call it estimated_commission or settlement_amount
-              const commissionUsd = parseFloat(order.estimated_commission ?? order.settlement_amount ?? order.commission) || null;
-              const orderStatus   = order.order_status  || null;
-              const paymentStatus = order.payment_status || null;
-              const orderTime     = order.order_time || order.paid_time || null;
+              // Use sub_order_id as the unique key — it's per-product, so multi-product
+              // parent orders don't clobber each other.
+              const subOrderId    = String(order.sub_order_id || order.order_id || '');
+              const parentOrderId = String(order.order_id || subOrderId);
+              if (!subOrderId) continue;
 
-              if (!orderId) continue;
+              // paid_amount and estimated_paid_commission are in USD cents
+              const orderAmount   = order.paid_amount != null
+                ? order.paid_amount / 100 : null;
+              const commissionUsd = order.estimated_paid_commission != null
+                ? order.estimated_paid_commission / 100 : null;
+              // commission_rate comes as "7.00%" — parseFloat stops at %
+              const commissionPct = order.commission_rate
+                ? parseFloat(order.commission_rate) / 100 : null;
+
+              const orderStatus        = order.order_status || null;
+              const orderTime          = order.paid_time || order.created_time || null;
+              const aliexpressProductId = order.product_id ? String(order.product_id) : null;
+              const productTitle       = order.product_title || null;
+              const productImage       = order.product_main_image_url || null;
+              const isHotProduct       = order.is_hot_product === 'Y';
+              const isNewBuyer         = order.is_new_buyer === 'Y';
+              const categoryId         = order.category_id ? String(order.category_id) : null;
 
               await query(
                 `INSERT INTO commission_snapshots
-                   (user_id, subject_id, tracking_id, order_id, order_amount,
-                    commission_rate, commission_usd, order_status, payment_status, order_time)
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+                   (user_id, subject_id, tracking_id, order_id, sub_order_id,
+                    order_amount, commission_rate, commission_usd,
+                    order_status, payment_status, order_time,
+                    aliexpress_product_id, product_title, product_image,
+                    is_hot_product, is_new_buyer, category_id)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
                  ON CONFLICT (user_id, order_id) DO UPDATE SET
-                   commission_usd  = EXCLUDED.commission_usd,
-                   order_status    = EXCLUDED.order_status,
-                   payment_status  = EXCLUDED.payment_status,
-                   fetched_at      = NOW()`,
-                [userId, subjectId, trackingId, orderId, orderAmount,
-                 commissionPct, commissionUsd, orderStatus, paymentStatus,
-                 orderTime ? new Date(orderTime) : null]
+                   sub_order_id          = EXCLUDED.sub_order_id,
+                   commission_usd        = EXCLUDED.commission_usd,
+                   order_amount          = EXCLUDED.order_amount,
+                   order_status          = EXCLUDED.order_status,
+                   aliexpress_product_id = EXCLUDED.aliexpress_product_id,
+                   product_title         = EXCLUDED.product_title,
+                   product_image         = EXCLUDED.product_image,
+                   is_hot_product        = EXCLUDED.is_hot_product,
+                   is_new_buyer          = EXCLUDED.is_new_buyer,
+                   fetched_at            = NOW()`,
+                [userId, subjectId, trackingId, subOrderId, parentOrderId,
+                 orderAmount, commissionPct, commissionUsd,
+                 orderStatus, orderStatus, orderTime ? new Date(orderTime) : null,
+                 aliexpressProductId, productTitle, productImage,
+                 isHotProduct, isNewBuyer, categoryId]
               );
               synced++;
-
-              // Save per-product line items when the API includes them
-              const items = order.order_items?.order_item || [];
-              for (const item of items) {
-                const pid       = String(item.product_id || '');
-                const ptitle    = item.product_title || item.product_name || null;
-                const icount    = parseInt(item.item_count ?? item.quantity ?? 0, 10) || null;
-                const iamount   = parseFloat(item.order_amount) || null;
-                const icommRate = item.commission_rate ? parseFloat(item.commission_rate) / 100 : null;
-                const icommUsd  = parseFloat(item.estimated_commission ?? item.commission ?? 0) || null;
-                if (!pid) continue;
-                await query(
-                  `INSERT INTO order_items
-                     (user_id, subject_id, order_id, product_id, product_title,
-                      item_count, order_amount, commission_rate, commission_usd)
-                   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-                   ON CONFLICT (user_id, order_id, product_id) DO UPDATE SET
-                     product_title  = EXCLUDED.product_title,
-                     commission_usd = EXCLUDED.commission_usd,
-                     fetched_at     = NOW()`,
-                  [userId, subjectId, orderId, pid, ptitle, icount, iamount, icommRate, icommUsd]
-                );
-              }
             }
 
             if (!hasMore) break;
@@ -729,6 +730,141 @@ router.get('/insights', async (req, res) => {
     }, { real_commission: 0, est_default: 0, total_clicks: 0, real_orders: 0, total_products: 0, sent_products: 0 });
 
     res.json({ success: true, niches: rows, totals });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/analytics/product-profitability
+// Links AliExpress order data to local products via product_id in the URL.
+// Shows which specific products you promoted actually generated sales and commission.
+router.get('/product-profitability', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const { rows } = await query(
+      `SELECT
+         cs.aliexpress_product_id,
+         MAX(cs.product_title)                               AS product_title,
+         MAX(cs.product_image)                               AS product_image,
+         COUNT(*)                                            AS total_orders,
+         COALESCE(SUM(cs.commission_usd), 0)                AS total_commission,
+         COALESCE(AVG(cs.commission_usd), 0)                AS avg_commission,
+         COALESCE(SUM(cs.order_amount), 0)                  AS total_revenue,
+         COALESCE(AVG(cs.order_amount), 0)                  AS avg_order_value,
+         AVG(NULLIF(cs.commission_rate, 0))                  AS commission_rate,
+         BOOL_OR(cs.is_hot_product)                         AS is_hot,
+         COUNT(*) FILTER (WHERE cs.is_new_buyer)            AS new_buyers,
+         MAX(cs.order_time)                                  AS last_order_time,
+         s.id   AS subject_id,
+         s.name AS subject_name,
+         s.color AS subject_color,
+         p.id        AS local_product_id,
+         p.text      AS local_text,
+         p.clicks    AS local_clicks,
+         p.send_count AS local_send_count,
+         p.sent_at   AS local_sent_at,
+         p.short_link AS local_short_link
+       FROM commission_snapshots cs
+       LEFT JOIN subjects s ON s.id = cs.subject_id
+       LEFT JOIN products p ON (
+         cs.aliexpress_product_id IS NOT NULL AND
+         p.long_url LIKE '%' || cs.aliexpress_product_id || '%' AND
+         p.user_id = cs.user_id
+       )
+       WHERE cs.user_id = $1
+         AND cs.aliexpress_product_id IS NOT NULL
+       GROUP BY cs.aliexpress_product_id, s.id, s.name, s.color,
+                p.id, p.text, p.clicks, p.send_count, p.sent_at, p.short_link
+       ORDER BY total_commission DESC`,
+      [userId]
+    );
+    res.json({ success: true, products: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/analytics/marketing-insights
+// Sales & marketing analysis: price sweet spots, hot vs regular products,
+// new vs returning buyers, category performance, momentum (recent orders).
+router.get('/marketing-insights', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Price bucket distribution
+    const { rows: priceBuckets } = await query(
+      `SELECT
+         CASE
+           WHEN order_amount < 5   THEN 'מתחת ל-$5'
+           WHEN order_amount < 15  THEN '$5–$15'
+           WHEN order_amount < 30  THEN '$15–$30'
+           WHEN order_amount < 60  THEN '$30–$60'
+           ELSE 'מעל $60'
+         END                                  AS bucket,
+         CASE
+           WHEN order_amount < 5   THEN 1
+           WHEN order_amount < 15  THEN 2
+           WHEN order_amount < 30  THEN 3
+           WHEN order_amount < 60  THEN 4
+           ELSE 5
+         END                                  AS sort_order,
+         COUNT(*)                             AS order_count,
+         COALESCE(SUM(commission_usd), 0)    AS total_commission,
+         COALESCE(AVG(commission_usd), 0)    AS avg_commission
+       FROM commission_snapshots
+       WHERE user_id = $1 AND order_amount IS NOT NULL
+       GROUP BY bucket, sort_order
+       ORDER BY sort_order`,
+      [userId]
+    );
+
+    // Hot product analysis
+    const { rows: hotVsRegular } = await query(
+      `SELECT
+         COALESCE(is_hot_product, false)      AS is_hot,
+         COUNT(*)                             AS order_count,
+         COALESCE(SUM(commission_usd), 0)    AS total_commission,
+         COALESCE(AVG(order_amount), 0)      AS avg_order_value
+       FROM commission_snapshots
+       WHERE user_id = $1 AND is_hot_product IS NOT NULL
+       GROUP BY is_hot_product`,
+      [userId]
+    );
+
+    // New vs returning buyers
+    const { rows: buyerTypes } = await query(
+      `SELECT
+         COALESCE(is_new_buyer, false)        AS is_new,
+         COUNT(*)                             AS order_count,
+         COALESCE(SUM(commission_usd), 0)    AS total_commission
+       FROM commission_snapshots
+       WHERE user_id = $1 AND is_new_buyer IS NOT NULL
+       GROUP BY is_new_buyer`,
+      [userId]
+    );
+
+    // Momentum: orders in last 7 days vs prior 7 days
+    const { rows: momentum } = await query(
+      `SELECT
+         COUNT(*) FILTER (WHERE order_time >= NOW() - INTERVAL '7 days')  AS last_7,
+         COUNT(*) FILTER (WHERE order_time >= NOW() - INTERVAL '14 days'
+                            AND order_time <  NOW() - INTERVAL '7 days')  AS prev_7,
+         COALESCE(SUM(commission_usd) FILTER (WHERE order_time >= NOW() - INTERVAL '7 days'), 0) AS comm_last_7,
+         COALESCE(SUM(commission_usd) FILTER (WHERE order_time >= NOW() - INTERVAL '14 days'
+                                                AND order_time <  NOW() - INTERVAL '7 days'), 0) AS comm_prev_7
+       FROM commission_snapshots
+       WHERE user_id = $1`,
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      priceBuckets,
+      hotVsRegular,
+      buyerTypes,
+      momentum: momentum[0] || {},
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
