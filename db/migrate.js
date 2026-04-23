@@ -224,6 +224,27 @@ async function migrate() {
   await query(`CREATE INDEX IF NOT EXISTS ad_spend_user    ON ad_spend(user_id)`);
   await query(`CREATE INDEX IF NOT EXISTS ad_spend_subject ON ad_spend(subject_id)`);
 
+  // ── Order Items (AliExpress per-product line items within each order) ─────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS order_items (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      subject_id      UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+      order_id        TEXT NOT NULL,
+      product_id      TEXT NOT NULL,
+      product_title   TEXT,
+      item_count      INTEGER,
+      order_amount    NUMERIC(12,2),
+      commission_rate NUMERIC(5,4),
+      commission_usd  NUMERIC(10,2),
+      fetched_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(user_id, order_id, product_id)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS order_items_user    ON order_items(user_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS order_items_subject ON order_items(subject_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS order_items_product ON order_items(product_id)`);
+
   console.log('✓ Database schema up to date');
 }
 
