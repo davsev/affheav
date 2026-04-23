@@ -2428,6 +2428,7 @@ async function renderAnalyticsSummary() {
     loadTimingHeatmap();
     loadRoas();
     loadReachSummary().catch(() => {});
+    loadInsights();
   } catch (err) {
     grid.innerHTML = `<div style="padding:40px;text-align:center;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
   }
@@ -3087,5 +3088,254 @@ async function deleteSpend(id) {
     await loadRoas();
   } catch (err) {
     alert(`שגיאה: ${err.message}`);
+  }
+}
+
+// ── Analytics: Insights (Profit Analysis) ────────────────────────────────────
+
+async function loadInsights() {
+  const el = document.getElementById('analytics-insights-content');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const data   = await api('/api/analytics/insights');
+    const niches = (data.niches || []).filter(n => parseInt(n.total_clicks, 10) > 0 || parseFloat(n.real_commission) > 0);
+    const totals = data.totals || {};
+
+    const hasRealData = parseFloat(totals.real_commission) > 0;
+
+    // ── Global assumption-vs-reality banner ───────────────────────────────────
+    const avgRealConv  = totals.real_orders > 0 && totals.total_clicks > 0
+      ? (totals.real_orders / totals.total_clicks * 100)
+      : null;
+    const avgRealComm  = hasRealData
+      ? (niches.filter(n => n.real_commission_rate).reduce((s, n) => s + parseFloat(n.real_commission_rate || 0), 0) /
+         Math.max(1, niches.filter(n => n.real_commission_rate).length) * 100)
+      : null;
+    const overallRpc   = totals.total_clicks > 0 && hasRealData
+      ? totals.real_commission / totals.total_clicks
+      : null;
+    const modelAccuracy = totals.est_default > 0 && hasRealData
+      ? (totals.real_commission / totals.est_default * 100)
+      : null;
+
+    function diffBadge(assumed, real, unit = '%', higherIsBetter = true) {
+      if (real == null) return '<span style="color:var(--on-surface-var);font-size:11px;">אין נתונים</span>';
+      const diff    = real - assumed;
+      const pct     = Math.abs(diff / assumed * 100).toFixed(0);
+      const up      = higherIsBetter ? diff > 0 : diff < 0;
+      const color   = up ? '#16a34a' : '#ef4444';
+      const arrow   = diff > 0 ? '↑' : '↓';
+      return `<span style="color:${color};font-weight:700;font-size:13px;">${arrow} ${pct}% ${diff > 0 ? 'מעל ההנחה' : 'מתחת להנחה'}</span>`;
+    }
+
+    const globalCards = [
+      {
+        icon: 'conversion_path', label: 'שיעור המרה ממוצע',
+        assumed: '2.0%', real: avgRealConv != null ? `${avgRealConv.toFixed(2)}%` : null,
+        badge: diffBadge(2, avgRealConv),
+        hint: 'אחוז הקליקים שהפכו להזמנה בפועל',
+      },
+      {
+        icon: 'percent', label: 'עמלת AliExpress ממוצעת',
+        assumed: '8.0%', real: avgRealComm != null ? `${avgRealComm.toFixed(1)}%` : null,
+        badge: diffBadge(8, avgRealComm),
+        hint: 'ממוצע אחוז העמלה מהזמנות שהתקבלו',
+      },
+      {
+        icon: 'ads_click', label: 'הכנסה לקליק',
+        assumed: '—', real: overallRpc != null ? `$${overallRpc.toFixed(4)}` : null,
+        badge: overallRpc != null ? `<span style="color:#16a34a;font-weight:700;">$${(overallRpc * 1000).toFixed(2)} לאלף קליקים</span>` : '',
+        hint: 'כמה $ מרווח בפועל על כל קליק',
+      },
+      {
+        icon: 'target', label: 'דיוק המודל',
+        assumed: '100%', real: modelAccuracy != null ? `${modelAccuracy.toFixed(0)}%` : null,
+        badge: modelAccuracy != null ? diffBadge(100, modelAccuracy, '%', true) : '<span style="color:var(--on-surface-var);font-size:11px;">חסר מחיר מוצר</span>',
+        hint: 'יחס עמלה אמיתית לעמלה משוערת בהנחות ברירת מחדל',
+      },
+    ];
+
+    let html = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:24px;">
+        ${globalCards.map(c => `
+          <div class="card an-kpi-card" style="flex-direction:column;align-items:flex-start;gap:10px;padding:18px 20px;">
+            <div style="display:flex;align-items:center;gap:8px;width:100%;">
+              <span class="material-symbols-outlined" style="font-size:20px;color:#702ae1;">${c.icon}</span>
+              <span style="font-size:12px;color:var(--on-surface-var);font-weight:600;">${c.label}</span>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+              <span style="font-size:11px;color:var(--on-surface-var);">הנחה: <s>${c.assumed}</s></span>
+              ${c.real != null ? `<span style="font-size:22px;font-weight:900;color:var(--on-surface);">${c.real}</span>` : '<span style="font-size:15px;color:var(--on-surface-var);">אין נתונים</span>'}
+            </div>
+            <div>${c.badge}</div>
+            <div style="font-size:11px;color:var(--on-surface-var);border-top:1px solid rgba(255,255,255,0.06);padding-top:8px;width:100%;">${c.hint}</div>
+          </div>`).join('')}
+      </div>`;
+
+    // ── No real data notice ────────────────────────────────────────────────────
+    if (!hasRealData) {
+      html += `
+        <div class="card" style="padding:32px;text-align:center;border:1px dashed rgba(112,42,225,0.3);">
+          <div style="font-size:36px;margin-bottom:12px;">📊</div>
+          <div style="font-weight:700;margin-bottom:8px;">אין עדיין נתוני הזמנות אמיתיות</div>
+          <div style="font-size:13px;color:var(--on-surface-var);">לחץ "עדכן עמלות" כדי למשוך הזמנות מ-AliExpress — לאחר מכן התובנות יתמלאו אוטומטית.</div>
+        </div>`;
+      el.innerHTML = html;
+      return;
+    }
+
+    // ── Per-niche breakdown table ─────────────────────────────────────────────
+    const nicheRows = niches.map(n => {
+      const color      = n.color || '#702ae1';
+      const realConv   = n.real_conversion_rate != null ? parseFloat(n.real_conversion_rate) : null;
+      const realComm   = n.real_commission_rate  != null ? parseFloat(n.real_commission_rate)  : null;
+      const rpc        = n.revenue_per_click      != null ? parseFloat(n.revenue_per_click)      : null;
+      const clicks     = parseInt(n.total_clicks   || 0, 10);
+      const commission = parseFloat(n.real_commission || 0);
+      const orders     = parseInt(n.real_orders || 0, 10);
+
+      const convCell = realConv != null
+        ? `<span style="font-weight:700;">${(realConv * 100).toFixed(2)}%</span>
+           <span style="font-size:10px;color:${realConv > 0.02 ? '#16a34a' : '#ef4444'};margin-right:4px;">${realConv > 0.02 ? '↑' : '↓'} ℅ הנחה 2%</span>`
+        : '<span style="color:var(--on-surface-var);">—</span>';
+
+      const commCell = realComm != null
+        ? `<span style="font-weight:700;color:${realComm > 0.08 ? '#16a34a' : '#ef4444'};">${(realComm * 100).toFixed(1)}%</span>
+           <span style="font-size:10px;color:var(--on-surface-var);">℅ הנחה 8%</span>`
+        : '<span style="color:var(--on-surface-var);">—</span>';
+
+      const rpcCell = rpc != null
+        ? `<span style="font-weight:700;color:#16a34a;">$${rpc.toFixed(4)}</span>
+           <small style="color:var(--on-surface-var);display:block;font-size:10px;">$${(rpc * 1000).toFixed(2)} / 1K קליקים</small>`
+        : '<span style="color:var(--on-surface-var);">—</span>';
+
+      // Projection: clicks * real rpc * 30-day extrapolation hint
+      const projMonthly = rpc != null && clicks > 0
+        ? `<span style="font-size:11px;color:var(--on-surface-var);">+50% קליקים → +$${(clicks * 0.5 * rpc).toFixed(2)}</span>`
+        : '—';
+
+      return `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+          <td style="padding:12px 8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="width:3px;height:36px;border-radius:2px;background:${color};flex-shrink:0;"></div>
+              <div>
+                <div style="font-weight:700;font-size:13px;">${escHtml(n.name)}</div>
+                <div style="font-size:11px;color:var(--on-surface-var);">${orders} הזמנות · ${clicks.toLocaleString()} קליקים</div>
+              </div>
+            </div>
+          </td>
+          <td style="padding:12px 8px;">${convCell}</td>
+          <td style="padding:12px 8px;">${commCell}</td>
+          <td style="padding:12px 8px;">${rpcCell}</td>
+          <td style="padding:12px 8px;font-weight:900;font-size:16px;color:#16a34a;">$${commission.toFixed(2)}</td>
+          <td style="padding:12px 8px;font-size:12px;color:var(--on-surface-var);">${projMonthly}</td>
+        </tr>`;
+    }).join('');
+
+    html += `
+      <div class="card" style="padding:0;overflow:hidden;margin-bottom:24px;">
+        <div style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;">
+          <span class="material-symbols-outlined" style="font-size:18px;color:#702ae1;">leaderboard</span>
+          <span style="font-weight:700;">ביצועי נישות — הנחות מול מציאות</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="border-bottom:2px solid rgba(255,255,255,0.08);">
+                <th style="padding:10px 8px;text-align:right;color:var(--on-surface-var);font-weight:600;">נישה</th>
+                <th style="padding:10px 8px;text-align:right;color:var(--on-surface-var);font-weight:600;">המרה בפועל <small style="font-weight:400;">(הנחה 2%)</small></th>
+                <th style="padding:10px 8px;text-align:right;color:var(--on-surface-var);font-weight:600;">עמלה בפועל <small style="font-weight:400;">(הנחה 8%)</small></th>
+                <th style="padding:10px 8px;text-align:right;color:var(--on-surface-var);font-weight:600;">$/קליק</th>
+                <th style="padding:10px 8px;text-align:right;color:var(--on-surface-var);font-weight:600;">עמלה כוללת</th>
+                <th style="padding:10px 8px;text-align:right;color:var(--on-surface-var);font-weight:600;">פוטנציאל</th>
+              </tr>
+            </thead>
+            <tbody>${nicheRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+
+    // ── Goal calculator ───────────────────────────────────────────────────────
+    if (overallRpc) {
+      const clicksPer1k  = Math.ceil(1000  / overallRpc);
+      const clicksPer5k  = Math.ceil(5000  / overallRpc);
+      const clicksPer10k = Math.ceil(10000 / overallRpc);
+
+      html += `
+        <div class="card" style="margin-bottom:24px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+            <span class="material-symbols-outlined" style="font-size:18px;color:#702ae1;">calculate</span>
+            <span style="font-weight:700;">מחשבון יעד רווח</span>
+            <span style="font-size:11px;background:rgba(22,163,74,0.1);color:#16a34a;padding:2px 8px;border-radius:20px;">מבוסס נתונים אמיתיים</span>
+          </div>
+          <div style="font-size:13px;color:var(--on-surface-var);margin-bottom:16px;">
+            הכנסה לקליק: <strong style="color:var(--on-surface);">$${overallRpc.toFixed(4)}</strong> — כמה קליקים תצטרך כדי להגיע ליעד?
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
+            ${[
+              { target: '$1,000', clicks: clicksPer1k },
+              { target: '$5,000', clicks: clicksPer5k },
+              { target: '$10,000', clicks: clicksPer10k },
+            ].map(g => `
+              <div style="background:var(--surface-1);border-radius:12px;padding:16px;text-align:center;">
+                <div style="font-size:22px;font-weight:900;color:#702ae1;margin-bottom:4px;">${g.target}</div>
+                <div style="font-size:12px;color:var(--on-surface-var);margin-bottom:8px;">יעד חודשי</div>
+                <div style="font-size:28px;font-weight:900;">${g.clicks.toLocaleString()}</div>
+                <div style="font-size:11px;color:var(--on-surface-var);">קליקים נדרשים</div>
+              </div>`).join('')}
+          </div>
+          <div style="font-size:12px;color:var(--on-surface-var);border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;">
+            💡 כדי להגיע ל-$1,000/חודש תצטרך בממוצע <strong>${Math.ceil(clicksPer1k / 30).toLocaleString()} קליקים ביום</strong> —
+            כלומר בערך ${Math.ceil(clicksPer1k / 30 / (totals.sent_products || 1)).toFixed(0)} קליקים לפוסט אם שולחים ${totals.sent_products || '?'} פוסטים פעילים.
+          </div>
+        </div>`;
+    }
+
+    // ── What-if levers ────────────────────────────────────────────────────────
+    const topNiches = niches.filter(n => parseFloat(n.revenue_per_click) > 0).slice(0, 3);
+    if (topNiches.length) {
+      html += `
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+            <span class="material-symbols-outlined" style="font-size:18px;color:#702ae1;">tune</span>
+            <span style="font-weight:700;">מנופי צמיחה — מה אם...</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;">
+            ${topNiches.map(n => {
+              const rpc    = parseFloat(n.revenue_per_click);
+              const clicks = parseInt(n.total_clicks, 10);
+              const color  = n.color || '#702ae1';
+              return `
+                <div style="background:var(--surface-1);border-radius:12px;padding:16px;">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+                    <div style="width:10px;height:10px;border-radius:50%;background:${color};"></div>
+                    <strong style="font-size:13px;">${escHtml(n.name)}</strong>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;">
+                    <div style="display:flex;justify-content:space-between;padding:6px 10px;background:rgba(22,163,74,0.06);border-radius:8px;">
+                      <span style="color:var(--on-surface-var);">+50% קליקים</span>
+                      <span style="color:#16a34a;font-weight:700;">+$${(clicks * 0.5 * rpc).toFixed(2)}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;padding:6px 10px;background:rgba(22,163,74,0.06);border-radius:8px;">
+                      <span style="color:var(--on-surface-var);">+100% קליקים</span>
+                      <span style="color:#16a34a;font-weight:700;">+$${(clicks * rpc).toFixed(2)}</span>
+                    </div>
+                    <div style="font-size:11px;color:var(--on-surface-var);padding-top:4px;">
+                      בסיס: ${clicks.toLocaleString()} קליקים · $${rpc.toFixed(4)}/קליק
+                    </div>
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+    }
+
+    el.innerHTML = html;
+  } catch (err) {
+    document.getElementById('analytics-insights-content').innerHTML =
+      `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
   }
 }

@@ -609,4 +609,79 @@ router.get('/probe-raw-orders', async (req, res) => {
   }
 });
 
+// GET /api/analytics/insights
+// Per-niche comparison of real vs assumed metrics for profit analysis:
+// real conversion rate, real commission rate, revenue-per-click, model accuracy.
+router.get('/insights', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const { rows } = await query(
+      `WITH real_data AS (
+         SELECT
+           cs.subject_id,
+           COUNT(DISTINCT cs.order_id)                        AS real_orders,
+           COALESCE(SUM(cs.commission_usd), 0)               AS real_commission,
+           AVG(NULLIF(cs.commission_rate, 0))                 AS real_commission_rate
+         FROM commission_snapshots cs
+         WHERE cs.user_id = $1
+         GROUP BY cs.subject_id
+       ),
+       product_data AS (
+         SELECT
+           p.subject_id,
+           COALESCE(SUM(p.clicks), 0)                        AS total_clicks,
+           COUNT(*)                                           AS total_products,
+           COUNT(*) FILTER (WHERE p.sent_at IS NOT NULL)     AS sent_products,
+           COUNT(*) FILTER (WHERE p.sale_price IS NOT NULL)  AS priced_products,
+           COALESCE(SUM(
+             CASE WHEN p.sale_price IS NOT NULL
+               THEN p.clicks * 0.02 * p.sale_price * 0.08
+               ELSE 0 END
+           ), 0)                                              AS est_revenue_default
+         FROM products p
+         WHERE p.user_id = $1
+         GROUP BY p.subject_id
+       )
+       SELECT
+         s.id, s.name, s.color,
+         COALESCE(rd.real_orders, 0)                         AS real_orders,
+         COALESCE(rd.real_commission, 0)                     AS real_commission,
+         rd.real_commission_rate,
+         COALESCE(pd.total_clicks, 0)                        AS total_clicks,
+         COALESCE(pd.total_products, 0)                      AS total_products,
+         COALESCE(pd.sent_products, 0)                       AS sent_products,
+         COALESCE(pd.priced_products, 0)                     AS priced_products,
+         COALESCE(pd.est_revenue_default, 0)                 AS est_revenue_default,
+         CASE WHEN COALESCE(pd.total_clicks, 0) > 0 AND COALESCE(rd.real_orders, 0) > 0
+           THEN rd.real_orders::numeric / NULLIF(pd.total_clicks, 0)
+           ELSE NULL END                                      AS real_conversion_rate,
+         CASE WHEN COALESCE(pd.total_clicks, 0) > 0 AND COALESCE(rd.real_commission, 0) > 0
+           THEN rd.real_commission / NULLIF(pd.total_clicks, 0)
+           ELSE NULL END                                      AS revenue_per_click
+       FROM subjects s
+       LEFT JOIN real_data rd     ON rd.subject_id = s.id
+       LEFT JOIN product_data pd  ON pd.subject_id = s.id
+       WHERE s.user_id = $1
+       ORDER BY rd.real_commission DESC NULLS LAST, pd.total_clicks DESC NULLS LAST`,
+      [userId]
+    );
+
+    // Aggregate totals
+    const totals = rows.reduce((acc, n) => {
+      acc.real_commission  += parseFloat(n.real_commission  || 0);
+      acc.est_default      += parseFloat(n.est_revenue_default || 0);
+      acc.total_clicks     += parseInt(n.total_clicks || 0, 10);
+      acc.real_orders      += parseInt(n.real_orders  || 0, 10);
+      acc.total_products   += parseInt(n.total_products || 0, 10);
+      acc.sent_products    += parseInt(n.sent_products || 0, 10);
+      return acc;
+    }, { real_commission: 0, est_default: 0, total_clicks: 0, real_orders: 0, total_products: 0, sent_products: 0 });
+
+    res.json({ success: true, niches: rows, totals });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
