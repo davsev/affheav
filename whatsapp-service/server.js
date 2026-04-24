@@ -12,8 +12,10 @@ const API_KEY = process.env.WHATSAPP_API_KEY;
 let qrCodeBase64 = null;
 let clientState = 'LOADING'; // LOADING | QR_READY | CONNECTED | DISCONNECTED
 
+const DATA_PATH = process.env.DATA_PATH || './wwebjs_auth';
+
 const client = new Client({
-  authStrategy: new LocalAuth({ dataPath: '/data/wwebjs_auth' }),
+  authStrategy: new LocalAuth({ dataPath: DATA_PATH }),
   puppeteer: {
     headless: true,
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
@@ -24,7 +26,6 @@ const client = new Client({
       '--disable-gpu',
       '--no-first-run',
       '--no-zygote',
-      '--single-process',
     ],
   },
 });
