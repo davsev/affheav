@@ -35,10 +35,11 @@ async function sendViaMacroDroid({ text, image, wa_group, webhookUrl }) {
   return { success, raw: data };
 }
 
+// WHATSAPP_PROVIDER=webjs  → use whatsapp-web.js microservice
+// WHATSAPP_PROVIDER=macrodroid (default) → use MacroDroid webhook
 async function send({ text, image, wa_group, webhookUrl, groupId }) {
-  if (process.env.WHATSAPP_SERVICE_URL) {
-    // groupId (whatsapp-web.js format, e.g. "120363...@g.us") takes priority;
-    // fall back to wa_group for backwards compat if groupId not provided
+  const provider = process.env.WHATSAPP_PROVIDER || 'macrodroid';
+  if (provider === 'webjs') {
     const target = groupId || wa_group;
     console.log('[WhatsApp] Sending via whatsapp-web.js service to:', target);
     return sendViaWebJs({ text, image, groupId: target });
