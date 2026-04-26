@@ -11,8 +11,7 @@ RUN npm ci --omit=dev
 
 COPY . .
 
-# /data is mounted as a Railway volume for session persistence
-VOLUME ["/data"]
+# /data is mounted as a Railway volume — configure in Railway dashboard, not here
 
 EXPOSE 3001
 
