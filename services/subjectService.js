@@ -22,6 +22,7 @@ function _row(r) {
     fbEnabled:           r.fb_enabled,
     instagramEnabled:      r.instagram_enabled,
     aliexpressTrackingId:  r.aliexpress_tracking_id || '',
+    waProvider:            r.wa_provider || 'macrodroid',
     createdAt:             r.created_at,
     updatedAt:             r.updated_at,
   };
@@ -97,6 +98,7 @@ async function updateSubject(id, userId, fields) {
     fbEnabled:              'fb_enabled',
     instagramEnabled:       'instagram_enabled',
     aliexpressTrackingId:   'aliexpress_tracking_id',
+    waProvider:             'wa_provider',
   };
 
   const updates = [];

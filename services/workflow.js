@@ -200,6 +200,7 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
             image:      product.image,
             wa_group:   group.waGroup,
             webhookUrl: subjectConfig?.macrodroidUrl || null,
+            provider:   subjectConfig?.waProvider,
           });
           results.whatsapp.push({ group: group.name, ...waResult });
           if (waResult.success) {
@@ -226,6 +227,7 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
           image:      product.image,
           wa_group:   waGroup,
           webhookUrl: subjectConfig?.macrodroidUrl || null,
+          provider:   subjectConfig?.waProvider,
         });
         results.whatsapp = waResult;
         if (waResult.success) {

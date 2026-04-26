@@ -60,6 +60,8 @@ async function migrate() {
     )
   `);
 
+  await query(`ALTER TABLE subjects ADD COLUMN IF NOT EXISTS wa_provider VARCHAR(20) NOT NULL DEFAULT 'macrodroid'`);
+
   // ── WhatsApp Groups (per niche) ───────────────────────────────────────────
   await query(`
     CREATE TABLE IF NOT EXISTS whatsapp_groups (
