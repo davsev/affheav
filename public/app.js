@@ -380,6 +380,29 @@ function hexToRgba(hex, a) {
   return `rgba(${r},${g},${b},${a})`;
 }
 
+function passField(id, isSet, placeholder) {
+  const ph = isSet ? 'השאר ריק לשמור ערך קיים' : placeholder;
+  return `<div class="pass-wrap">
+    <input class="form-input" type="password" id="${id}" value="" placeholder="${ph}" dir="ltr" style="font-size:13px;" />
+    <button type="button" class="pass-eye" onclick="togglePassEye(this)" aria-label="הצג/הסתר">
+      <span class="material-symbols-outlined">visibility</span>
+    </button>
+  </div>`;
+}
+
+function credBadge(isSet) {
+  return isSet
+    ? '<span class="cred-badge cred-set">✓ מוגדר</span>'
+    : '<span class="cred-badge cred-unset">לא מוגדר</span>';
+}
+
+window.togglePassEye = (btn) => {
+  const inp = btn.closest('.pass-wrap').querySelector('input');
+  const icon = btn.querySelector('.material-symbols-outlined');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  icon.textContent = inp.type === 'password' ? 'visibility' : 'visibility_off';
+};
+
 function renderSettingsPage() {
   renderActiveNicheCard();
   renderNicheGrid();
@@ -459,133 +482,154 @@ function renderActiveNicheCard() {
               <div class="channel-toggles-grid" style="margin-bottom:28px;grid-template-columns:1fr 1fr 1fr;">
                 <div class="channel-toggle-card">
                   <div class="channel-toggle-info">
-                    <div class="channel-icon-box" style="background:rgba(37,211,102,0.1);">💬</div>
+                    <div class="channel-icon-box" style="background:rgba(37,211,102,0.12);">
+                      <span class="material-symbols-outlined" style="font-size:20px;color:#16a34a;">forum</span>
+                    </div>
                     <span style="font-weight:700;font-size:13px;">WhatsApp</span>
                   </div>
-                  <div class="ios-toggle ${waEnabled ? 'active' : ''}" id="wa-toggle-${s.id}" onclick="this.classList.toggle('active')"></div>
+                  <div class="ios-toggle ${waEnabled ? 'active' : ''}" id="wa-toggle-${s.id}" onclick="this.classList.toggle('active')" role="switch" aria-checked="${waEnabled}" aria-label="הפעל WhatsApp"></div>
                 </div>
                 <div class="channel-toggle-card">
                   <div class="channel-toggle-info">
-                    <div class="channel-icon-box" style="background:rgba(66,103,178,0.1);">📘</div>
+                    <div class="channel-icon-box" style="background:rgba(66,103,178,0.12);">
+                      <span class="material-symbols-outlined" style="font-size:20px;color:#4267B2;">thumb_up</span>
+                    </div>
                     <span style="font-weight:700;font-size:13px;">Facebook</span>
                   </div>
-                  <div class="ios-toggle ${fbEnabled ? 'active' : ''}" id="fb-toggle-${s.id}" onclick="this.classList.toggle('active')"></div>
+                  <div class="ios-toggle ${fbEnabled ? 'active' : ''}" id="fb-toggle-${s.id}" onclick="this.classList.toggle('active')" role="switch" aria-checked="${fbEnabled}" aria-label="הפעל Facebook"></div>
                 </div>
                 <div class="channel-toggle-card">
                   <div class="channel-toggle-info">
-                    <div class="channel-icon-box" style="background:rgba(193,53,132,0.1);">📸</div>
+                    <div class="channel-icon-box" style="background:rgba(193,53,132,0.12);">
+                      <span class="material-symbols-outlined" style="font-size:20px;color:#C13584;">photo_camera</span>
+                    </div>
                     <span style="font-weight:700;font-size:13px;">Instagram</span>
                   </div>
-                  <div class="ios-toggle ${igEnabled ? 'active' : ''}" id="ig-toggle-${s.id}" onclick="this.classList.toggle('active')"></div>
+                  <div class="ios-toggle ${igEnabled ? 'active' : ''}" id="ig-toggle-${s.id}" onclick="this.classList.toggle('active')" role="switch" aria-checked="${igEnabled}" aria-label="הפעל Instagram"></div>
                 </div>
               </div>
 
-              <div class="niche-field-label">
-                <span class="material-symbols-outlined">groups</span>
-                הגדרות WhatsApp
-              </div>
-              <div class="form-grid" style="margin-bottom:16px;">
-                <div class="form-group form-full">
-                  <label class="form-label">Webhook URL ${s.macrodroidUrl ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#dc2626;font-size:10px;">לא מוגדר</span>'}</label>
-                  <input class="form-input" type="password" id="niche-wa-url-${s.id}" value="" placeholder="${s.macrodroidUrl ? 'השאר ריק לשמור ערך קיים' : 'הזן Webhook URL'}" dir="ltr" style="font-size:13px;" />
-                </div>
-              </div>
-
-              <!-- WA Groups management -->
-              <div style="margin-bottom:24px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                  <div style="font-size:12px;font-weight:600;color:var(--on-surface-var);">קבוצות WhatsApp</div>
-                  <button class="btn btn-ghost btn-sm" onclick="showAddWaGroup('${s.id}')" style="font-size:11px;padding:4px 10px;">
-                    <span class="material-symbols-outlined" style="font-size:13px;">add</span>הוסף קבוצה
-                  </button>
-                </div>
-                <div id="wa-groups-list-${s.id}" style="display:flex;flex-direction:column;gap:6px;">
-                  <div style="font-size:12px;color:var(--on-surface-var);">טוען קבוצות...</div>
-                </div>
-                <!-- Add group inline form -->
-                <div id="add-wa-group-form-${s.id}" style="display:none;margin-top:12px;padding:12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08);">
-                  <div class="form-grid">
-                    <div class="form-group">
-                      <label class="form-label">שם לתצוגה</label>
-                      <input class="form-input" id="new-wa-name-${s.id}" placeholder="קבוצת דיג צפון" style="font-size:13px;" />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">מזהה קבוצה (MacroDroid)</label>
-                      <input class="form-input" id="new-wa-group-id-${s.id}" placeholder="fishing_north" dir="ltr" style="font-size:13px;" />
-                    </div>
-                    <div class="form-group form-full">
-                      <label class="form-label">קישור הצטרפות</label>
-                      <input class="form-input" id="new-wa-join-${s.id}" placeholder="https://chat.whatsapp.com/..." dir="ltr" style="font-size:13px;" />
-                    </div>
+              <!-- WhatsApp accordion -->
+              <details class="niche-cred-section" ${waEnabled ? 'open' : ''}>
+                <summary class="niche-cred-summary">
+                  <span class="material-symbols-outlined" style="color:#16a34a;">forum</span>
+                  <span>הגדרות WhatsApp</span>
+                  ${credBadge(!!s.macrodroidUrl)}
+                  <span class="material-symbols-outlined niche-cred-chevron">expand_more</span>
+                </summary>
+                <div class="niche-cred-body">
+                  <div class="form-group" style="margin-bottom:16px;">
+                    <label class="form-label">Webhook URL (MacroDroid)</label>
+                    ${passField(`niche-wa-url-${s.id}`, !!s.macrodroidUrl, 'הזן Webhook URL')}
                   </div>
-                  <div style="display:flex;gap:8px;margin-top:8px;">
-                    <button class="btn btn-ghost btn-sm" onclick="hideAddWaGroup('${s.id}')">ביטול</button>
-                    <button class="btn btn-primary btn-sm" onclick="saveNewWaGroup('${s.id}')">
-                      <span class="material-symbols-outlined" style="font-size:13px;">save</span>שמור קבוצה
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                    <label class="form-label" style="margin:0;">קבוצות WhatsApp</label>
+                    <button class="btn btn-ghost btn-sm" onclick="showAddWaGroup('${s.id}')" style="font-size:11px;padding:4px 10px;">
+                      <span class="material-symbols-outlined" style="font-size:13px;">add</span>הוסף קבוצה
                     </button>
                   </div>
+                  <div id="wa-groups-list-${s.id}" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;">
+                    <div style="font-size:12px;color:var(--on-surface-var);">טוען קבוצות...</div>
+                  </div>
+                  <div id="add-wa-group-form-${s.id}" style="display:none;margin-top:12px;padding:14px;background:var(--surface-low);border-radius:1rem;border:1px solid var(--outline-var);">
+                    <div class="form-grid">
+                      <div class="form-group">
+                        <label class="form-label">שם לתצוגה</label>
+                        <input class="form-input" id="new-wa-name-${s.id}" placeholder="קבוצת דיג צפון" style="font-size:13px;" />
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">מזהה קבוצה (MacroDroid)</label>
+                        <input class="form-input" id="new-wa-group-id-${s.id}" placeholder="fishing_north" dir="ltr" style="font-size:13px;" />
+                      </div>
+                      <div class="form-group form-full">
+                        <label class="form-label">קישור הצטרפות</label>
+                        <input class="form-input" id="new-wa-join-${s.id}" placeholder="https://chat.whatsapp.com/..." dir="ltr" style="font-size:13px;" />
+                      </div>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                      <button class="btn btn-ghost btn-sm" onclick="hideAddWaGroup('${s.id}')">ביטול</button>
+                      <button class="btn btn-primary btn-sm" onclick="saveNewWaGroup('${s.id}')">
+                        <span class="material-symbols-outlined" style="font-size:13px;">save</span>שמור קבוצה
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </details>
 
-              <div class="niche-field-label" style="justify-content:space-between;">
-                <span style="display:flex;align-items:center;gap:6px;">
-                  <span class="material-symbols-outlined">thumb_up</span>
-                  הגדרות Facebook
-                </span>
-                <div style="display:flex;gap:6px;">
-                  <button class="btn btn-ghost btn-sm" onclick="checkNicheToken('${s.id}')" style="font-size:11px;padding:4px 12px;border-radius:20px;">
-                    <span class="material-symbols-outlined" style="font-size:14px;">manage_search</span>
-                    בדוק טוקן
-                  </button>
-                  <button class="btn btn-ghost btn-sm" onclick="openGenerateTokenModal('${s.id}')" style="font-size:11px;padding:4px 12px;border-radius:20px;background:rgba(112,42,225,0.08);color:#702ae1;">
-                    <span class="material-symbols-outlined" style="font-size:14px;">key</span>
-                    צור טוקן קבוע
-                  </button>
+              <!-- Facebook accordion -->
+              <details class="niche-cred-section" ${fbEnabled ? 'open' : ''}>
+                <summary class="niche-cred-summary">
+                  <span class="material-symbols-outlined" style="color:#4267B2;">thumb_up</span>
+                  <span>הגדרות Facebook</span>
+                  ${credBadge(!!(s.facebookPageId && s.facebookToken))}
+                  <span class="material-symbols-outlined niche-cred-chevron">expand_more</span>
+                </summary>
+                <div class="niche-cred-body">
+                  <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;">
+                    <button class="btn btn-ghost btn-sm" onclick="checkNicheToken('${s.id}')" style="font-size:11px;padding:4px 12px;border-radius:20px;">
+                      <span class="material-symbols-outlined" style="font-size:14px;">manage_search</span>בדוק טוקן
+                    </button>
+                    <button class="btn btn-ghost btn-sm" onclick="openGenerateTokenModal('${s.id}')" style="font-size:11px;padding:4px 12px;border-radius:20px;background:rgba(112,42,225,0.08);color:#702ae1;">
+                      <span class="material-symbols-outlined" style="font-size:14px;">key</span>צור טוקן קבוע
+                    </button>
+                  </div>
+                  <div id="niche-token-info-${s.id}" style="margin-bottom:12px;font-size:12px;color:var(--on-surface-var);min-height:0;"></div>
+                  <div class="form-grid">
+                    <div class="form-group">
+                      <label class="form-label">Page ID</label>
+                      <input class="form-input" id="niche-fb-page-${s.id}" value="${escHtml(s.facebookPageId||'')}" dir="ltr" style="font-size:13px;" />
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Access Token ${credBadge(!!s.facebookToken)}</label>
+                      ${passField(`niche-fb-token-${s.id}`, !!s.facebookToken, 'הזן Access Token')}
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">App ID ${credBadge(!!s.facebookAppId)}</label>
+                      ${passField(`niche-fb-app-id-${s.id}`, !!s.facebookAppId, 'הזן App ID')}
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">App Secret ${credBadge(!!s.facebookAppSecret)}</label>
+                      ${passField(`niche-fb-app-secret-${s.id}`, !!s.facebookAppSecret, 'הזן App Secret')}
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div id="niche-token-info-${s.id}" style="margin-bottom:12px;font-size:12px;color:var(--on-surface-var);min-height:0;"></div>
-              <div class="form-grid" style="margin-bottom:24px;">
-                <div class="form-group">
-                  <label class="form-label">Page ID</label>
-                  <input class="form-input" id="niche-fb-page-${s.id}" value="${escHtml(s.facebookPageId||'')}" dir="ltr" style="font-size:13px;" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Access Token ${s.facebookToken ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#dc2626;font-size:10px;">לא מוגדר</span>'}</label>
-                  <input class="form-input" type="password" id="niche-fb-token-${s.id}" value="" placeholder="${s.facebookToken ? 'השאר ריק לשמור ערך קיים' : 'הזן Access Token'}" dir="ltr" style="font-size:13px;" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">App ID ${s.facebookAppId ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#dc2626;font-size:10px;">לא מוגדר</span>'}</label>
-                  <input class="form-input" type="password" id="niche-fb-app-id-${s.id}" value="" placeholder="${s.facebookAppId ? 'השאר ריק לשמור ערך קיים' : 'הזן App ID'}" dir="ltr" style="font-size:13px;" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">App Secret ${s.facebookAppSecret ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#dc2626;font-size:10px;">לא מוגדר</span>'}</label>
-                  <input class="form-input" type="password" id="niche-fb-app-secret-${s.id}" value="" placeholder="${s.facebookAppSecret ? 'השאר ריק לשמור ערך קיים' : 'הזן App Secret'}" dir="ltr" style="font-size:13px;" />
-                </div>
-              </div>
+              </details>
 
-              <div class="niche-field-label">
-                <span class="material-symbols-outlined">photo_camera</span>
-                הגדרות Instagram
-              </div>
-              <div class="form-grid" style="margin-bottom:24px;">
-                <div class="form-group form-full" style="grid-column:1/-1;">
-                  <label class="form-label">Instagram Business Account ID ${s.instagramAccountId ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#dc2626;font-size:10px;">לא מוגדר</span>'}</label>
-                  <input class="form-input" type="password" id="niche-ig-account-${s.id}" value="" placeholder="${s.instagramAccountId ? 'השאר ריק לשמור ערך קיים' : '17841400000000000'}" dir="ltr" style="font-size:13px;" />
-                  <div style="font-size:10px;color:var(--on-surface-var);margin-top:4px;">נמצא ב-Meta Graph API Explorer: GET /me/accounts → Instagram Business Account ID. משתמש באותו Access Token של Facebook.</div>
+              <!-- Instagram accordion -->
+              <details class="niche-cred-section" ${igEnabled ? 'open' : ''}>
+                <summary class="niche-cred-summary">
+                  <span class="material-symbols-outlined" style="color:#C13584;">photo_camera</span>
+                  <span>הגדרות Instagram</span>
+                  ${credBadge(!!s.instagramAccountId)}
+                  <span class="material-symbols-outlined niche-cred-chevron">expand_more</span>
+                </summary>
+                <div class="niche-cred-body">
+                  <div class="form-group">
+                    <label class="form-label">Instagram Business Account ID ${credBadge(!!s.instagramAccountId)}</label>
+                    ${passField(`niche-ig-account-${s.id}`, !!s.instagramAccountId, '17841400000000000')}
+                    <div class="form-hint">נמצא ב-Meta Graph API Explorer: GET /me/accounts → Instagram Business Account ID. משתמש באותו Access Token של Facebook.</div>
+                  </div>
                 </div>
-              </div>
+              </details>
 
-              <div class="niche-field-label">
-                <span class="material-symbols-outlined">shopping_bag</span>
-                הגדרות AliExpress
-              </div>
-              <div class="form-grid">
-                <div class="form-group form-full" style="grid-column:1/-1;">
-                  <label class="form-label">Tracking ID ${s.aliexpressTrackingId ? '<span style="color:#16a34a;font-size:10px;">✓ מוגדר</span>' : '<span style="color:#6b7280;font-size:10px;">ברירת מחדל</span>'}</label>
-                  <input class="form-input" type="password" id="niche-ali-tracking-${s.id}" value="" placeholder="${s.aliexpressTrackingId ? 'השאר ריק לשמור ערך קיים' : 'הזן Tracking ID (ישתמש בברירת מחדל אם ריק)'}" dir="ltr" style="font-size:13px;" />
-                  <div style="font-size:10px;color:var(--on-surface-var);margin-top:4px;">ה-Tracking ID ישמש בחיפוש מוצרי AliExpress עבור נישה זו. כל לינק שותפים שייווצר יהיה משויך ל-ID זה.</div>
+              <!-- AliExpress accordion -->
+              <details class="niche-cred-section">
+                <summary class="niche-cred-summary">
+                  <span class="material-symbols-outlined" style="color:#e4572e;">shopping_bag</span>
+                  <span>הגדרות AliExpress</span>
+                  ${s.aliexpressTrackingId
+                    ? '<span class="cred-badge cred-set">✓ מוגדר</span>'
+                    : '<span class="cred-badge" style="background:var(--surface-container);color:var(--on-surface-var);">ברירת מחדל</span>'}
+                  <span class="material-symbols-outlined niche-cred-chevron">expand_more</span>
+                </summary>
+                <div class="niche-cred-body">
+                  <div class="form-group">
+                    <label class="form-label">Tracking ID</label>
+                    ${passField(`niche-ali-tracking-${s.id}`, !!s.aliexpressTrackingId, 'הזן Tracking ID (ישתמש בברירת מחדל אם ריק)')}
+                    <div class="form-hint">ה-Tracking ID ישמש בחיפוש מוצרי AliExpress עבור נישה זו. כל לינק שותפים שייווצר יהיה משויך ל-ID זה.</div>
+                  </div>
                 </div>
-              </div>
+              </details>
             </div>
           </div>
 
@@ -619,7 +663,8 @@ function renderNicheGrid() {
     const color = getSubjectColor(idx);
     const icon = getSubjectIcon(idx);
     const bg = hexToRgba(color, 0.1);
-    const isActive = !!(s.whatsappUrl || s.facebookPageId);
+    const isActive = !!(s.macrodroidUrl || s.facebookPageId || s.instagramAccountId);
+    const channelCount = [s.waEnabled, s.fbEnabled, s.instagramEnabled].filter(Boolean).length;
     return `
       <div class="niche-mini-card" onclick="selectSettingsSubject('${s.id}')">
         <div class="niche-mini-card-header">
@@ -627,7 +672,7 @@ function renderNicheGrid() {
           <span class="niche-status-chip ${isActive ? 'active' : 'inactive'}">${isActive ? 'פעיל' : 'טרם הוגדר'}</span>
         </div>
         <div class="niche-mini-name">${escHtml(s.name)}</div>
-        <div class="niche-mini-stat">${s.waGroupName ? `📋 ${escHtml(s.waGroupName)}` : 'קבוצת WA לא הוגדרה'}</div>
+        <div class="niche-mini-stat">${channelCount ? `${channelCount} ערוצים מופעלים` : 'אין ערוצים מופעלים'}</div>
         <button class="niche-mini-edit-btn">ערוך הגדרות</button>
       </div>`;
   }).join('');
@@ -2059,14 +2104,32 @@ function renderWaGroupsList(subjectId, groups) {
     return;
   }
   listEl.innerHTML = groups.map(g => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:8px;border:1px solid rgba(255,255,255,0.07);">
-      <div>
-        <div style="font-size:13px;font-weight:600;">${escHtml(g.name)}</div>
-        <div style="font-size:11px;color:var(--on-surface-var);direction:ltr;">${escHtml(g.waGroup)}${g.joinLink ? ' · קישור ✓' : ''}</div>
+    <div id="wa-group-row-${g.id}" style="background:rgba(255,255,255,0.04);border-radius:8px;border:1px solid rgba(255,255,255,0.07);">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;">
+        <div>
+          <div style="font-size:13px;font-weight:600;">${escHtml(g.name)}</div>
+          <div style="font-size:11px;color:var(--on-surface-var);direction:ltr;">${escHtml(g.waGroup)}${g.joinLink ? ' · קישור ✓' : ''}</div>
+        </div>
+        <div style="display:flex;gap:4px;">
+          <button class="btn btn-ghost btn-sm" onclick="showEditWaGroup('${g.id}')" style="padding:4px 8px;">
+            <span class="material-symbols-outlined" style="font-size:14px;">edit</span>
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="deleteWaGroup('${g.id}','${subjectId}')" style="color:#dc2626;padding:4px 8px;">
+            <span class="material-symbols-outlined" style="font-size:14px;">delete</span>
+          </button>
+        </div>
       </div>
-      <button class="btn btn-ghost btn-sm" onclick="deleteWaGroup('${g.id}','${subjectId}')" style="color:#dc2626;padding:4px 8px;">
-        <span class="material-symbols-outlined" style="font-size:14px;">delete</span>
-      </button>
+      <div id="wa-group-edit-${g.id}" style="display:none;padding:8px 12px;border-top:1px solid rgba(255,255,255,0.07);">
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <input class="form-input" id="edit-wa-name-${g.id}" value="${escHtml(g.name)}" placeholder="שם הקבוצה" style="font-size:13px;" />
+          <input class="form-input" id="edit-wa-group-id-${g.id}" value="${escHtml(g.waGroup)}" placeholder="מזהה קבוצה" dir="ltr" style="font-size:13px;" />
+          <input class="form-input" id="edit-wa-join-${g.id}" value="${escHtml(g.joinLink || '')}" placeholder="https://chat.whatsapp.com/..." dir="ltr" style="font-size:13px;" />
+          <div style="display:flex;gap:6px;justify-content:flex-end;">
+            <button class="btn btn-ghost btn-sm" onclick="hideEditWaGroup('${g.id}')">ביטול</button>
+            <button class="btn btn-primary btn-sm" onclick="saveEditWaGroup('${g.id}','${subjectId}')">שמור</button>
+          </div>
+        </div>
+      </div>
     </div>`).join('');
 }
 
@@ -2101,6 +2164,28 @@ window.deleteWaGroup = async (groupId, subjectId) => {
   if (!confirm('למחוק את הקבוצה?')) return;
   try {
     await api(`/api/subjects/whatsapp-groups/${groupId}`, { method: 'DELETE' });
+    await loadAndRenderWaGroups(subjectId);
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
+
+window.showEditWaGroup = (groupId) => {
+  document.getElementById(`wa-group-edit-${groupId}`).style.display = '';
+};
+window.hideEditWaGroup = (groupId) => {
+  document.getElementById(`wa-group-edit-${groupId}`).style.display = 'none';
+};
+window.saveEditWaGroup = async (groupId, subjectId) => {
+  const name     = document.getElementById(`edit-wa-name-${groupId}`).value.trim();
+  const waGroup  = document.getElementById(`edit-wa-group-id-${groupId}`).value.trim();
+  const joinLink = document.getElementById(`edit-wa-join-${groupId}`).value.trim();
+  if (!name || !waGroup) { alert('שם ומזהה קבוצה הם שדות חובה'); return; }
+  try {
+    await api(`/api/subjects/whatsapp-groups/${groupId}`, {
+      method: 'PUT',
+      body: { name, waGroup, joinLink },
+    });
     await loadAndRenderWaGroups(subjectId);
   } catch (err) {
     alert('שגיאה: ' + err.message);
