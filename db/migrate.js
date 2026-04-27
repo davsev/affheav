@@ -259,7 +259,22 @@ async function migrate() {
   await query(`CREATE INDEX IF NOT EXISTS commission_snapshots_product ON commission_snapshots(aliexpress_product_id)`);
 
   // ── Join link click tracking ───────────────────────────────────────────────
+  // join_short_link kept for backward compat but not required — join_link already holds spoo.me link
   await query(`ALTER TABLE whatsapp_groups ADD COLUMN IF NOT EXISTS join_short_link TEXT`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS join_link_click_snapshots (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      group_id      UUID NOT NULL REFERENCES whatsapp_groups(id) ON DELETE CASCADE,
+      short_link    TEXT NOT NULL,
+      snapshot_date DATE NOT NULL,
+      total_clicks  INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(group_id, snapshot_date)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS jl_snapshots_group ON join_link_click_snapshots(group_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS jl_snapshots_user  ON join_link_click_snapshots(user_id)`);
 
   console.log('✓ Database schema up to date');
 }

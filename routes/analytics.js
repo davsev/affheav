@@ -3,7 +3,7 @@ const router  = express.Router();
 const axios   = require('axios');
 const { query }           = require('../db');
 const { signAndCall }     = require('../services/aliexpressApi');
-const { shortenUrl, getAllClickStats } = require('../services/spooMe');
+const { getAllClickStats } = require('../services/spooMe');
 const workflow        = require('../services/workflow');
 
 // Fetch one page of orders from AliExpress for a given tracking_id + date range + status.
@@ -1021,86 +1021,96 @@ router.get('/marketing-insights', async (req, res) => {
   }
 });
 
-// POST /api/analytics/shorten-join-links
-// Shortens all whatsapp_groups join_link values via spoo.me and saves the short URL.
-router.post('/shorten-join-links', async (req, res) => {
+// POST /api/analytics/sync-join-clicks
+// Takes a daily snapshot of click counts for all WhatsApp group join links (spoo.me).
+// join_link already holds the spoo.me short URL — no shortening needed.
+router.post('/sync-join-clicks', async (req, res) => {
   try {
+    const userId = req.user.id;
     const { rows: groups } = await query(
-      `SELECT id, name, join_link, join_short_link FROM whatsapp_groups
-       WHERE user_id = $1 AND join_link IS NOT NULL AND join_link != ''`,
-      [req.user.id]
+      `SELECT id, name, join_link FROM whatsapp_groups
+       WHERE user_id = $1 AND join_link LIKE '%spoo.me%'`,
+      [userId]
     );
 
-    let shortened = 0;
-    let skipped   = 0;
-    const results = [];
-
-    for (const g of groups) {
-      // Skip if already a spoo.me link
-      if (g.join_short_link && g.join_short_link.includes('spoo.me')) {
-        skipped++;
-        results.push({ name: g.name, short: g.join_short_link, status: 'already_shortened' });
-        continue;
-      }
-      try {
-        const short = await shortenUrl(g.join_link);
-        if (short !== g.join_link) {
-          await query(
-            `UPDATE whatsapp_groups SET join_short_link = $1, updated_at = NOW() WHERE id = $2`,
-            [short, g.id]
-          );
-          shortened++;
-          results.push({ name: g.name, short, status: 'shortened' });
-        } else {
-          skipped++;
-          results.push({ name: g.name, short: g.join_link, status: 'failed' });
-        }
-      } catch (e) {
-        skipped++;
-        results.push({ name: g.name, status: 'error', error: e.message });
-      }
+    if (!groups.length) {
+      return res.json({ success: true, synced: 0, message: 'אין קבוצות עם קישורי spoo.me' });
     }
 
-    res.json({ success: true, shortened, skipped, groups: results });
+    const clickStats = await getAllClickStats();
+    const today      = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    let synced = 0;
+
+    for (const g of groups) {
+      const clicks = clickStats[g.join_link] ?? clickStats[g.join_link.replace(/\/$/, '')] ?? null;
+      if (clicks == null) continue;
+
+      await query(
+        `INSERT INTO join_link_click_snapshots (user_id, group_id, short_link, snapshot_date, total_clicks)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (group_id, snapshot_date) DO UPDATE SET total_clicks = EXCLUDED.total_clicks`,
+        [userId, g.id, g.join_link, today, clicks]
+      );
+      synced++;
+    }
+
+    res.json({ success: true, synced });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 // GET /api/analytics/join-link-stats
-// Returns click counts per WhatsApp group, synced from spoo.me.
+// Returns per-group daily click breakdown from snapshots.
 router.get('/join-link-stats', async (req, res) => {
   try {
-    const { rows: groups } = await query(
-      `SELECT wg.id, wg.name, wg.join_link, wg.join_short_link,
-              s.name AS subject_name, s.color AS subject_color, s.id AS subject_id
+    const userId = req.user.id;
+
+    // All groups with their daily snapshot history
+    const { rows } = await query(
+      `SELECT
+         wg.id          AS group_id,
+         wg.name        AS group_name,
+         wg.join_link,
+         s.name         AS subject_name,
+         s.color        AS subject_color,
+         snap.snapshot_date,
+         snap.total_clicks,
+         snap.total_clicks - LAG(snap.total_clicks) OVER (
+           PARTITION BY wg.id ORDER BY snap.snapshot_date
+         )               AS daily_clicks
        FROM whatsapp_groups wg
        JOIN subjects s ON s.id = wg.subject_id
+       LEFT JOIN join_link_click_snapshots snap
+         ON snap.group_id = wg.id AND snap.user_id = $1
        WHERE wg.user_id = $1
-       ORDER BY s.name, wg.name`,
-      [req.user.id]
+       ORDER BY s.name, wg.name, snap.snapshot_date DESC`,
+      [userId]
     );
 
-    // Fetch live click counts from spoo.me for all account links
-    const clickStats = await getAllClickStats();
+    // Group rows by group_id
+    const groupMap = {};
+    for (const r of rows) {
+      if (!groupMap[r.group_id]) {
+        groupMap[r.group_id] = {
+          group_id:     r.group_id,
+          group_name:   r.group_name,
+          join_link:    r.join_link,
+          subject_name: r.subject_name,
+          subject_color: r.subject_color,
+          days: [],
+        };
+      }
+      if (r.snapshot_date) {
+        groupMap[r.group_id].days.push({
+          date:         r.snapshot_date,
+          total_clicks: parseInt(r.total_clicks, 10),
+          daily_clicks: r.daily_clicks != null ? parseInt(r.daily_clicks, 10) : null,
+        });
+      }
+    }
 
-    const result = groups.map(g => {
-      const shortLink = g.join_short_link;
-      const clicks    = shortLink ? (clickStats[shortLink] ?? null) : null;
-      return {
-        id:           g.id,
-        name:         g.name,
-        subject_name: g.subject_name,
-        subject_color: g.subject_color,
-        subject_id:   g.subject_id,
-        join_link:    g.join_link,
-        short_link:   shortLink,
-        clicks,
-        tracked:      !!shortLink,
-      };
-    });
-
-    res.json({ success: true, groups: result });
+    res.json({ success: true, groups: Object.values(groupMap) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

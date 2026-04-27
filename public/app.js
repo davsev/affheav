@@ -3551,107 +3551,109 @@ async function loadJoinLinkStats() {
     const data   = await api('/api/analytics/join-link-stats');
     const groups = data.groups || [];
 
-    const untracked = groups.filter(g => !g.tracked);
-    const tracked   = groups.filter(g => g.tracked);
-
-    let html = '';
-
-    // ── Shorten button (if any groups have no short link) ────────────────────
-    if (untracked.length) {
-      html += `
-        <div class="card" style="margin-bottom:20px;padding:16px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <span class="material-symbols-outlined" style="color:#f59e0b;font-size:20px;">warning</span>
-          <span style="font-size:13px;flex:1;">${untracked.length} קבוצות עדיין אין להן קישור מקוצר — אין מעקב קליקים</span>
-          <button class="btn btn-primary btn-sm" id="btn-shorten-join-links">
-            <span class="material-symbols-outlined" style="font-size:14px;">link</span>קצר את כל הקישורים
-          </button>
-        </div>`;
-    }
-
-    // ── Stats table ───────────────────────────────────────────────────────────
     if (!groups.length) {
       el.innerHTML = `<div class="card" style="padding:40px;text-align:center;">
         <div style="font-size:36px;margin-bottom:12px;">👥</div>
         <div style="font-weight:700;margin-bottom:8px;">אין קבוצות WhatsApp מוגדרות</div>
-        <div style="font-size:13px;color:var(--on-surface-var);">הוסף קבוצות בהגדרות הנישה כדי לעקוב אחר קליקים</div>
+        <div style="font-size:13px;color:var(--on-surface-var);">הוסף קבוצות בהגדרות הנישה</div>
       </div>`;
       return;
     }
 
-    const rows = groups.map(g => {
-      const color   = g.subject_color || '#702ae1';
-      const clicks  = g.clicks != null ? g.clicks : null;
-      const tracked = g.tracked;
-
-      return `
-        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
-          <td style="padding:12px 16px;">
-            <div style="font-weight:600;font-size:14px;">${escHtml(g.name)}</div>
-            ${g.short_link
-              ? `<div style="font-size:11px;color:#3b82f6;font-family:monospace;margin-top:2px;">${escHtml(g.short_link)}</div>`
-              : `<div style="font-size:11px;color:#f59e0b;margin-top:2px;">לא מקוצר עדיין</div>`}
-          </td>
-          <td style="padding:12px 16px;">
-            <span style="display:inline-flex;align-items:center;gap:6px;">
-              <span style="width:8px;height:8px;border-radius:50%;background:${color};"></span>
-              <span style="font-size:13px;">${escHtml(g.subject_name)}</span>
-            </span>
-          </td>
-          <td style="padding:12px 16px;text-align:center;">
-            ${tracked
-              ? `<span style="font-size:26px;font-weight:900;color:#702ae1;">${clicks != null ? clicks.toLocaleString() : '—'}</span>`
-              : `<span style="font-size:12px;color:#f59e0b;background:rgba(245,158,11,0.1);padding:3px 10px;border-radius:20px;">לא מעקב</span>`}
-          </td>
-          <td style="padding:12px 16px;text-align:center;">
-            ${g.join_link
-              ? `<a href="${escHtml(g.join_link)}" target="_blank" class="btn btn-ghost btn-sm" style="font-size:11px;">
-                   <span class="material-symbols-outlined" style="font-size:13px;">open_in_new</span>פתח
-                 </a>`
-              : '<span style="color:var(--on-surface-var);font-size:12px;">אין קישור</span>'}
-          </td>
-        </tr>`;
-    }).join('');
-
-    html += `
-      <div class="card" style="padding:0;overflow:hidden;">
-        <div style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;">
-          <span class="material-symbols-outlined" style="font-size:18px;color:#702ae1;">group_add</span>
-          <span style="font-weight:700;font-size:15px;">קליקים על קישורי הצטרפות לקבוצות</span>
-          <span style="font-size:11px;color:var(--on-surface-var);margin-right:auto;">מסונכרן מ-spoo.me</span>
+    // ── Sync button header ────────────────────────────────────────────────────
+    let html = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-weight:700;font-size:16px;">קליקים על קישורי הצטרפות</div>
+          <div style="font-size:12px;color:var(--on-surface-var);">מעקב יומי דרך spoo.me — לחץ "עדכן היום" לקחת צילום</div>
         </div>
-        <div style="overflow-x:auto;">
-          <table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <thead>
-              <tr style="border-bottom:2px solid rgba(255,255,255,0.08);">
-                <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--on-surface-var);">קבוצה</th>
-                <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--on-surface-var);">נישה</th>
-                <th style="padding:10px 16px;text-align:center;font-weight:600;color:var(--on-surface-var);">קליקים</th>
-                <th style="padding:10px 16px;text-align:center;font-weight:600;color:var(--on-surface-var);"></th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
+        <button class="btn btn-primary btn-sm" id="btn-sync-join-clicks">
+          <span class="material-symbols-outlined" style="font-size:14px;">update</span>עדכן היום
+        </button>
       </div>`;
+
+    // ── One card per group ────────────────────────────────────────────────────
+    for (const g of groups) {
+      const color   = g.subject_color || '#702ae1';
+      const days    = g.days || [];
+      const today   = days[0];
+      const totalToday = today ? today.total_clicks : null;
+
+      // last 14 days of daily_clicks
+      const recentDays = days.slice(0, 14).reverse();
+      const maxDaily   = Math.max(...recentDays.map(d => d.daily_clicks || 0), 1);
+
+      const bars = recentDays.map(d => {
+        const dc    = d.daily_clicks != null ? Math.max(d.daily_clicks, 0) : 0;
+        const h     = Math.round(dc / maxDaily * 40);
+        const dateStr = new Date(d.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' });
+        return `
+          <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1;">
+            <span style="font-size:9px;color:var(--on-surface-var);">${dc > 0 ? dc : ''}</span>
+            <div style="width:100%;height:40px;display:flex;align-items:flex-end;">
+              <div style="width:100%;height:${h}px;background:${color};border-radius:2px 2px 0 0;min-height:${dc>0?2:0}px;opacity:0.85;"></div>
+            </div>
+            <span style="font-size:9px;color:var(--on-surface-var);white-space:nowrap;">${dateStr}</span>
+          </div>`;
+      }).join('');
+
+      // Daily table (last 10 days)
+      const tableRows = days.slice(0, 10).map(d => {
+        const dc = d.daily_clicks != null ? Math.max(d.daily_clicks, 0) : '—';
+        const dateStr = new Date(d.date).toLocaleDateString('he-IL', { weekday: 'short', day: '2-digit', month: '2-digit' });
+        return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+          <td style="padding:7px 12px;font-size:13px;">${dateStr}</td>
+          <td style="padding:7px 12px;text-align:center;font-weight:700;font-size:15px;color:${color};">${typeof dc === 'number' ? dc.toLocaleString() : dc}</td>
+          <td style="padding:7px 12px;text-align:center;font-size:12px;color:var(--on-surface-var);">${d.total_clicks.toLocaleString()} סה"כ</td>
+        </tr>`;
+      }).join('');
+
+      html += `
+        <div class="card" style="margin-bottom:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></span>
+              <span style="font-weight:700;font-size:15px;">${escHtml(g.group_name)}</span>
+              <span style="font-size:12px;color:var(--on-surface-var);">${escHtml(g.subject_name)}</span>
+            </div>
+            ${totalToday != null
+              ? `<div style="font-size:24px;font-weight:900;color:${color};">${totalToday.toLocaleString()} <span style="font-size:12px;font-weight:400;color:var(--on-surface-var);">קליקים כולל</span></div>`
+              : `<span style="font-size:12px;color:var(--on-surface-var);">לחץ "עדכן היום" להתחיל מעקב</span>`}
+          </div>
+          ${recentDays.length ? `
+            <div style="display:flex;gap:2px;align-items:flex-end;margin-bottom:16px;padding:0 4px;">
+              ${bars}
+            </div>` : ''}
+          ${tableRows ? `
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                  <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+                    <th style="padding:6px 12px;text-align:right;font-size:11px;color:var(--on-surface-var);font-weight:600;">תאריך</th>
+                    <th style="padding:6px 12px;text-align:center;font-size:11px;color:var(--on-surface-var);font-weight:600;">קליקים היום</th>
+                    <th style="padding:6px 12px;text-align:center;font-size:11px;color:var(--on-surface-var);font-weight:600;">סה"כ מצטבר</th>
+                  </tr>
+                </thead>
+                <tbody>${tableRows}</tbody>
+              </table>
+            </div>` : '<div style="font-size:13px;color:var(--on-surface-var);padding:8px 0;">לחץ "עדכן היום" כדי להתחיל לצבור נתונים יומיים</div>'}
+        </div>`;
+    }
 
     el.innerHTML = html;
 
-    // Wire shorten button
-    const shortenBtn = document.getElementById('btn-shorten-join-links');
-    if (shortenBtn) {
-      shortenBtn.addEventListener('click', async () => {
-        shortenBtn.disabled = true;
-        shortenBtn.textContent = 'מקצר...';
-        try {
-          const r = await api('/api/analytics/shorten-join-links', { method: 'POST', body: {} });
-          alert(`✓ ${r.shortened} קישורים קוצרו בהצלחה`);
-          loadJoinLinkStats();
-        } catch (e) {
-          alert('שגיאה: ' + e.message);
-          shortenBtn.disabled = false;
-        }
-      });
-    }
+    document.getElementById('btn-sync-join-clicks').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;">update</span>מעדכן...';
+      try {
+        const r = await api('/api/analytics/sync-join-clicks', { method: 'POST', body: {} });
+        await loadJoinLinkStats();
+      } catch (err) {
+        alert('שגיאה: ' + err.message);
+        btn.disabled = false;
+      }
+    });
   } catch (err) {
     el.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
   }
