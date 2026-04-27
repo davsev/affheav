@@ -1053,28 +1053,40 @@ router.get('/probe-spoo-url', async (req, res) => {
     const API_KEY = process.env.SPOOME_API_KEY;
     const results = {};
 
-    // Try several possible endpoints
-    for (const path of [
-      `/api/v1/url/${alias}`,
-      `/api/v1/urls/${alias}`,
-      `/api/v1/url/${alias}/stats`,
-      `/api/v1/url/${alias}/clicks`,
-    ]) {
-      const raw = await new Promise((resolve) => {
-        const opts = {
-          hostname: 'spoo.me',
-          path,
-          method: 'GET',
-          headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/json', 'Content-Length': 0 },
-        };
-        const r = https.request(opts, resp => {
-          let d = ''; resp.on('data', c => d += c);
-          resp.on('end', () => { try { resolve({ status: resp.statusCode, body: JSON.parse(d) }); } catch { resolve({ status: resp.statusCode, body: d }); } });
-        });
-        r.on('error', e => resolve({ error: e.message }));
-        r.end();
+    const makeReq = (path, method = 'GET', body = null) => new Promise((resolve) => {
+      const bodyBuf = body ? Buffer.from(JSON.stringify(body)) : null;
+      const opts = {
+        hostname: 'spoo.me',
+        path,
+        method,
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Content-Length': bodyBuf ? bodyBuf.length : 0,
+        },
+      };
+      const r = https.request(opts, resp => {
+        let d = ''; resp.on('data', c => d += c);
+        resp.on('end', () => { try { resolve({ status: resp.statusCode, body: JSON.parse(d) }); } catch { resolve({ status: resp.statusCode, body: d }); } });
       });
-      results[path] = raw;
+      r.on('error', e => resolve({ error: e.message }));
+      if (bodyBuf) r.write(bodyBuf);
+      r.end();
+    });
+
+    // Try all plausible endpoints — GET and POST variants
+    const endpoints = [
+      { path: `/api/v1/url/${alias}`,          method: 'GET'  },
+      { path: `/api/v1/urls/${alias}`,          method: 'GET'  },
+      { path: `/api/v1/url/${alias}/stats`,     method: 'GET'  },
+      { path: `/api/v1/url/${alias}/clicks`,    method: 'GET'  },
+      { path: `/stats/${alias}`,                method: 'GET'  },
+      { path: `/stats/${alias}`,                method: 'POST' },
+    ];
+
+    for (const { path, method } of endpoints) {
+      results[`${method} ${path}`] = await makeReq(path, method);
     }
 
     res.json({ success: true, alias, results });
