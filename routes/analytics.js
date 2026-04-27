@@ -1021,6 +1021,68 @@ router.get('/marketing-insights', async (req, res) => {
   }
 });
 
+// GET /api/analytics/probe-spoo-url?alias=abc123
+// Returns the raw spoo.me API response for a single short URL alias.
+// Used to discover what click history fields spoo.me provides.
+router.get('/probe-spoo-url', async (req, res) => {
+  try {
+    const { alias } = req.query;
+    if (!alias) {
+      // If no alias given, return the first item from the account's URL list (raw)
+      const https  = require('https');
+      const API_KEY = process.env.SPOOME_API_KEY;
+      const raw = await new Promise((resolve) => {
+        const opts = {
+          hostname: 'spoo.me',
+          path: '/api/v1/urls?page=1&pageSize=1',
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/json', 'Content-Length': 0 },
+        };
+        const r = require('https').request(opts, resp => {
+          let d = ''; resp.on('data', c => d += c);
+          resp.on('end', () => { try { resolve(JSON.parse(d)); } catch { resolve(d); } });
+        });
+        r.on('error', e => resolve({ error: e.message }));
+        r.end();
+      });
+      return res.json({ success: true, endpoint: '/api/v1/urls?page=1&pageSize=1', raw });
+    }
+
+    // Fetch specific alias detail
+    const https   = require('https');
+    const API_KEY = process.env.SPOOME_API_KEY;
+    const results = {};
+
+    // Try several possible endpoints
+    for (const path of [
+      `/api/v1/url/${alias}`,
+      `/api/v1/urls/${alias}`,
+      `/api/v1/url/${alias}/stats`,
+      `/api/v1/url/${alias}/clicks`,
+    ]) {
+      const raw = await new Promise((resolve) => {
+        const opts = {
+          hostname: 'spoo.me',
+          path,
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${API_KEY}`, 'Accept': 'application/json', 'Content-Length': 0 },
+        };
+        const r = https.request(opts, resp => {
+          let d = ''; resp.on('data', c => d += c);
+          resp.on('end', () => { try { resolve({ status: resp.statusCode, body: JSON.parse(d) }); } catch { resolve({ status: resp.statusCode, body: d }); } });
+        });
+        r.on('error', e => resolve({ error: e.message }));
+        r.end();
+      });
+      results[path] = raw;
+    }
+
+    res.json({ success: true, alias, results });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // POST /api/analytics/sync-join-clicks
 // Takes a daily snapshot of click counts for all WhatsApp group join links (spoo.me).
 // join_link already holds the spoo.me short URL — no shortening needed.
