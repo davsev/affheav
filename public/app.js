@@ -2463,6 +2463,7 @@ async function renderAnalyticsSummary() {
     loadReachSummary().catch(() => {});
     loadInsights();
     loadSalesDashboard();
+    loadJoinLinkStats();
   } catch (err) {
     grid.innerHTML = `<div style="padding:40px;text-align:center;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
   }
@@ -3540,6 +3541,121 @@ async function loadSuggestedProducts(container) {
 }
 
 // ── Analytics: Sales Dashboard ────────────────────────────────────────────────
+
+async function loadJoinLinkStats() {
+  const el = document.getElementById('analytics-join-links-content');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const data   = await api('/api/analytics/join-link-stats');
+    const groups = data.groups || [];
+
+    const untracked = groups.filter(g => !g.tracked);
+    const tracked   = groups.filter(g => g.tracked);
+
+    let html = '';
+
+    // ── Shorten button (if any groups have no short link) ────────────────────
+    if (untracked.length) {
+      html += `
+        <div class="card" style="margin-bottom:20px;padding:16px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <span class="material-symbols-outlined" style="color:#f59e0b;font-size:20px;">warning</span>
+          <span style="font-size:13px;flex:1;">${untracked.length} קבוצות עדיין אין להן קישור מקוצר — אין מעקב קליקים</span>
+          <button class="btn btn-primary btn-sm" id="btn-shorten-join-links">
+            <span class="material-symbols-outlined" style="font-size:14px;">link</span>קצר את כל הקישורים
+          </button>
+        </div>`;
+    }
+
+    // ── Stats table ───────────────────────────────────────────────────────────
+    if (!groups.length) {
+      el.innerHTML = `<div class="card" style="padding:40px;text-align:center;">
+        <div style="font-size:36px;margin-bottom:12px;">👥</div>
+        <div style="font-weight:700;margin-bottom:8px;">אין קבוצות WhatsApp מוגדרות</div>
+        <div style="font-size:13px;color:var(--on-surface-var);">הוסף קבוצות בהגדרות הנישה כדי לעקוב אחר קליקים</div>
+      </div>`;
+      return;
+    }
+
+    const rows = groups.map(g => {
+      const color   = g.subject_color || '#702ae1';
+      const clicks  = g.clicks != null ? g.clicks : null;
+      const tracked = g.tracked;
+
+      return `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+          <td style="padding:12px 16px;">
+            <div style="font-weight:600;font-size:14px;">${escHtml(g.name)}</div>
+            ${g.short_link
+              ? `<div style="font-size:11px;color:#3b82f6;font-family:monospace;margin-top:2px;">${escHtml(g.short_link)}</div>`
+              : `<div style="font-size:11px;color:#f59e0b;margin-top:2px;">לא מקוצר עדיין</div>`}
+          </td>
+          <td style="padding:12px 16px;">
+            <span style="display:inline-flex;align-items:center;gap:6px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:${color};"></span>
+              <span style="font-size:13px;">${escHtml(g.subject_name)}</span>
+            </span>
+          </td>
+          <td style="padding:12px 16px;text-align:center;">
+            ${tracked
+              ? `<span style="font-size:26px;font-weight:900;color:#702ae1;">${clicks != null ? clicks.toLocaleString() : '—'}</span>`
+              : `<span style="font-size:12px;color:#f59e0b;background:rgba(245,158,11,0.1);padding:3px 10px;border-radius:20px;">לא מעקב</span>`}
+          </td>
+          <td style="padding:12px 16px;text-align:center;">
+            ${g.join_link
+              ? `<a href="${escHtml(g.join_link)}" target="_blank" class="btn btn-ghost btn-sm" style="font-size:11px;">
+                   <span class="material-symbols-outlined" style="font-size:13px;">open_in_new</span>פתח
+                 </a>`
+              : '<span style="color:var(--on-surface-var);font-size:12px;">אין קישור</span>'}
+          </td>
+        </tr>`;
+    }).join('');
+
+    html += `
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;">
+          <span class="material-symbols-outlined" style="font-size:18px;color:#702ae1;">group_add</span>
+          <span style="font-weight:700;font-size:15px;">קליקים על קישורי הצטרפות לקבוצות</span>
+          <span style="font-size:11px;color:var(--on-surface-var);margin-right:auto;">מסונכרן מ-spoo.me</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="border-bottom:2px solid rgba(255,255,255,0.08);">
+                <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--on-surface-var);">קבוצה</th>
+                <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--on-surface-var);">נישה</th>
+                <th style="padding:10px 16px;text-align:center;font-weight:600;color:var(--on-surface-var);">קליקים</th>
+                <th style="padding:10px 16px;text-align:center;font-weight:600;color:var(--on-surface-var);"></th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+
+    el.innerHTML = html;
+
+    // Wire shorten button
+    const shortenBtn = document.getElementById('btn-shorten-join-links');
+    if (shortenBtn) {
+      shortenBtn.addEventListener('click', async () => {
+        shortenBtn.disabled = true;
+        shortenBtn.textContent = 'מקצר...';
+        try {
+          const r = await api('/api/analytics/shorten-join-links', { method: 'POST', body: {} });
+          alert(`✓ ${r.shortened} קישורים קוצרו בהצלחה`);
+          loadJoinLinkStats();
+        } catch (e) {
+          alert('שגיאה: ' + e.message);
+          shortenBtn.disabled = false;
+        }
+      });
+    }
+  } catch (err) {
+    el.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
 
 async function sendProductById(productId) {
   if (!productId) return;

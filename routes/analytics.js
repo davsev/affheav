@@ -1,8 +1,9 @@
 const express = require('express');
 const router  = express.Router();
 const axios   = require('axios');
-const { query }       = require('../db');
-const { signAndCall } = require('../services/aliexpressApi');
+const { query }           = require('../db');
+const { signAndCall }     = require('../services/aliexpressApi');
+const { shortenUrl, getAllClickStats } = require('../services/spooMe');
 const workflow        = require('../services/workflow');
 
 // Fetch one page of orders from AliExpress for a given tracking_id + date range + status.
@@ -1015,6 +1016,91 @@ router.get('/marketing-insights', async (req, res) => {
       buyerTypes,
       momentum: momentum[0] || {},
     });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/analytics/shorten-join-links
+// Shortens all whatsapp_groups join_link values via spoo.me and saves the short URL.
+router.post('/shorten-join-links', async (req, res) => {
+  try {
+    const { rows: groups } = await query(
+      `SELECT id, name, join_link, join_short_link FROM whatsapp_groups
+       WHERE user_id = $1 AND join_link IS NOT NULL AND join_link != ''`,
+      [req.user.id]
+    );
+
+    let shortened = 0;
+    let skipped   = 0;
+    const results = [];
+
+    for (const g of groups) {
+      // Skip if already a spoo.me link
+      if (g.join_short_link && g.join_short_link.includes('spoo.me')) {
+        skipped++;
+        results.push({ name: g.name, short: g.join_short_link, status: 'already_shortened' });
+        continue;
+      }
+      try {
+        const short = await shortenUrl(g.join_link);
+        if (short !== g.join_link) {
+          await query(
+            `UPDATE whatsapp_groups SET join_short_link = $1, updated_at = NOW() WHERE id = $2`,
+            [short, g.id]
+          );
+          shortened++;
+          results.push({ name: g.name, short, status: 'shortened' });
+        } else {
+          skipped++;
+          results.push({ name: g.name, short: g.join_link, status: 'failed' });
+        }
+      } catch (e) {
+        skipped++;
+        results.push({ name: g.name, status: 'error', error: e.message });
+      }
+    }
+
+    res.json({ success: true, shortened, skipped, groups: results });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/analytics/join-link-stats
+// Returns click counts per WhatsApp group, synced from spoo.me.
+router.get('/join-link-stats', async (req, res) => {
+  try {
+    const { rows: groups } = await query(
+      `SELECT wg.id, wg.name, wg.join_link, wg.join_short_link,
+              s.name AS subject_name, s.color AS subject_color, s.id AS subject_id
+       FROM whatsapp_groups wg
+       JOIN subjects s ON s.id = wg.subject_id
+       WHERE wg.user_id = $1
+       ORDER BY s.name, wg.name`,
+      [req.user.id]
+    );
+
+    // Fetch live click counts from spoo.me for all account links
+    const clickStats = await getAllClickStats();
+
+    const result = groups.map(g => {
+      const shortLink = g.join_short_link;
+      const clicks    = shortLink ? (clickStats[shortLink] ?? null) : null;
+      return {
+        id:           g.id,
+        name:         g.name,
+        subject_name: g.subject_name,
+        subject_color: g.subject_color,
+        subject_id:   g.subject_id,
+        join_link:    g.join_link,
+        short_link:   shortLink,
+        clicks,
+        tracked:      !!shortLink,
+      };
+    });
+
+    res.json({ success: true, groups: result });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

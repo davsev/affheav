@@ -258,6 +258,9 @@ async function migrate() {
   await query(`ALTER TABLE commission_snapshots ADD COLUMN IF NOT EXISTS category_id TEXT`);
   await query(`CREATE INDEX IF NOT EXISTS commission_snapshots_product ON commission_snapshots(aliexpress_product_id)`);
 
+  // ── Join link click tracking ───────────────────────────────────────────────
+  await query(`ALTER TABLE whatsapp_groups ADD COLUMN IF NOT EXISTS join_short_link TEXT`);
+
   console.log('✓ Database schema up to date');
 }
 
