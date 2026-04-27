@@ -1059,6 +1059,64 @@ tr[draggable].drag-over td { border-top: 2px solid var(--primary); background: r
   color: var(--on-surface-var);
 }
 
+/* ── Niche credential accordion ─────────────────────────────────────────── */
+.niche-cred-section {
+  border: 1px solid var(--outline-var);
+  border-radius: 1.25rem;
+  margin-bottom: 10px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.55);
+}
+.niche-cred-section[open] { background: rgba(255,255,255,0.75); }
+.niche-cred-summary {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 18px; cursor: pointer;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--on-surface);
+  list-style: none; user-select: none;
+  transition: background 0.15s;
+}
+.niche-cred-summary::-webkit-details-marker { display: none; }
+.niche-cred-summary:hover { background: rgba(112,42,225,0.04); }
+.niche-cred-summary .material-symbols-outlined:first-child { font-size: 16px; flex-shrink: 0; }
+.niche-cred-summary > span:nth-child(2) { flex: 1; }
+.niche-cred-chevron {
+  font-size: 18px; color: var(--on-surface-var);
+  transition: transform 0.2s; flex-shrink: 0;
+}
+.niche-cred-section[open] .niche-cred-chevron { transform: rotate(180deg); }
+.niche-cred-body {
+  padding: 16px 18px 18px;
+  border-top: 1px solid var(--outline-var);
+}
+
+/* ── Password field with eye toggle ────────────────────────────────────── */
+.pass-wrap { position: relative; }
+.pass-wrap .form-input { padding-right: 44px; }
+.pass-eye {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer;
+  color: var(--on-surface-var); display: flex; align-items: center;
+  padding: 4px; border-radius: 6px; transition: color 0.15s;
+}
+.pass-eye:hover { color: var(--primary); }
+.pass-eye .material-symbols-outlined { font-size: 18px; }
+
+/* ── Credential status badge ────────────────────────────────────────────── */
+.cred-badge {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.08em;
+  text-transform: uppercase; padding: 3px 8px;
+  border-radius: var(--radius-pill); flex-shrink: 0;
+}
+.cred-set { background: rgba(16,185,129,0.1); color: #059669; }
+.cred-unset { background: rgba(220,38,38,0.08); color: #dc2626; }
+
+/* ── Form hint text ─────────────────────────────────────────────────────── */
+.form-hint {
+  font-size: 11px; color: var(--on-surface-var);
+  margin-top: 5px; line-height: 1.5;
+}
+
 @media (max-width: 900px) {
   .niche-settings-grid { grid-template-columns: 1fr; }
   .niche-config-inner { padding: 24px 20px; }
