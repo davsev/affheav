@@ -1713,7 +1713,98 @@ document.getElementById('btn-check-token').addEventListener('click', loadTokenIn
 document.querySelector('[data-tab="settings"]').addEventListener('click', () => {
   loadPrompt();
   loadSubjects();
+  loadWWebjsStatus();
 });
+
+// ── WhatsApp Web JS panel ──────────────────────────────────────────────────────
+async function loadWWebjsStatus() {
+  const dot        = document.getElementById('wwebjs-status-dot');
+  const label      = document.getElementById('wwebjs-status-label');
+  const qrWrap     = document.getElementById('wwebjs-qr-wrap');
+  const qrImg      = document.getElementById('wwebjs-qr-img');
+  const groupsWrap = document.getElementById('wwebjs-groups-wrap');
+  const noConfig   = document.getElementById('wwebjs-no-config');
+  if (!dot) return;
+
+  try {
+    const status = await api('/api/whatsapp-service/status');
+
+    qrWrap.style.display     = 'none';
+    groupsWrap.style.display = 'none';
+    noConfig.style.display   = 'none';
+
+    if (status.state === 'CONNECTED') {
+      dot.style.background = '#22c55e';
+      label.textContent    = 'מחובר';
+      groupsWrap.style.display = 'block';
+      loadWWebjsGroups();
+    } else if (status.state === 'QR_READY') {
+      dot.style.background = '#f59e0b';
+      label.textContent    = 'ממתין לסריקת QR';
+      if (status.qr) {
+        qrImg.src = status.qr;
+        qrWrap.style.display = 'block';
+      }
+      // Auto-refresh every 20s while waiting for scan
+      setTimeout(loadWWebjsStatus, 20000);
+    } else {
+      dot.style.background = '#94a3b8';
+      label.textContent    = 'מאתחל...';
+      setTimeout(loadWWebjsStatus, 5000);
+    }
+  } catch (err) {
+    dot.style.background   = '#ef4444';
+    label.textContent      = 'שגיאת חיבור לשירות';
+    if (err.message?.includes('not configured')) {
+      noConfig.style.display = 'block';
+      label.textContent      = 'שירות לא מוגדר';
+    }
+  }
+}
+
+async function loadWWebjsGroups() {
+  const list = document.getElementById('wwebjs-groups-list');
+  if (!list) return;
+  list.innerHTML = '<div style="font-size:12px;color:var(--on-surface-var);">טוען קבוצות...</div>';
+  try {
+    const groups = await api('/api/whatsapp-service/groups');
+    if (!groups.length) {
+      list.innerHTML = '<div style="font-size:12px;color:var(--on-surface-var);">אין קבוצות זמינות</div>';
+      return;
+    }
+    list.innerHTML = groups.map(g => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:10px;gap:10px;">
+        <div>
+          <div style="font-size:12px;font-weight:600;">${escHtml(g.name)}</div>
+          <div style="font-size:10px;color:var(--on-surface-var);direction:ltr;">${escHtml(g.id)}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="copyToClipboard('${escHtml(g.id)}')" style="font-size:11px;flex-shrink:0;">
+          <span class="material-symbols-outlined" style="font-size:13px;">content_copy</span>העתק ID
+        </button>
+      </div>
+    `).join('');
+  } catch (err) {
+    list.innerHTML = `<div style="font-size:12px;color:#ef4444;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => showToast('ID הועתק ללוח'));
+}
+
+function showToast(msg) {
+  let t = document.getElementById('_toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = '_toast';
+    t.style.cssText = 'position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#1e1e2e;color:white;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.4);transition:opacity 0.3s;pointer-events:none;';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 2000);
+}
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 async function renderDashboard() {
