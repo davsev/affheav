@@ -60,6 +60,7 @@ async function send(broadcast, userId) {
             image:      imageUrl,
             wa_group:   g.waGroup,
             webhookUrl: subject.macrodroidUrl || null,
+            provider:   subject.waProvider    || null,
           });
           results.whatsapp.push({ group: g.name, ...r });
         } catch (err) {
