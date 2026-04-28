@@ -59,7 +59,9 @@ async function send(broadcast, userId) {
             text:       b.text,
             image:      imageUrl,
             wa_group:   g.waGroup,
+            groupId:    g.waGroup,
             webhookUrl: subject.macrodroidUrl || null,
+            provider:   subject.waProvider || 'macrodroid',
           });
           results.whatsapp.push({ group: g.name, ...r });
         } catch (err) {
