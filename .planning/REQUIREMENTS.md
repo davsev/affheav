@@ -1,92 +1,176 @@
-# Requirements: Affiliate Heaven — Broadcast Messages
+# Requirements: Affiliate Heaven v2.0 — Microservices Rebuild
 
-**Defined:** 2026-04-15
-**Core Value:** Niche owners can schedule evergreen messages to reach their audiences at the right time — without touching the product pipeline.
+**Defined:** 2026-04-29
+**Core Value:** Niche owners can run multiple affiliate channels — each with its own audience, accounts, and schedule — from a single platform, without manual intervention.
 
-## v1 Requirements
+## v2.0 Requirements
 
-### Broadcast Message Management
+### Infrastructure & Tooling
 
-- [x] **BCAST-01**: User can create a broadcast message with a label and pre-written text content
-- [x] **BCAST-02**: User can assign a broadcast message to a specific niche (required — no "all niches" option)
-- [x] **BCAST-03**: User can optionally upload an image to attach to a broadcast message
-- [x] **BCAST-04**: User can edit an existing broadcast message (label, content, image, schedule, niche)
-- [x] **BCAST-05**: User can delete a broadcast message (with confirmation)
-- [x] **BCAST-06**: User can enable or disable a broadcast message without deleting it
-- [x] **BCAST-07**: User can fire a broadcast message immediately regardless of its schedule
+- [ ] **INFRA-01**: Developer can run all services locally with `docker compose up`
+- [ ] **INFRA-02**: pnpm workspace monorepo with shared TypeScript config, ESLint, and Prettier
+- [ ] **INFRA-03**: Shared `packages/db` holds Drizzle ORM schema used by all services
+- [ ] **INFRA-04**: Each service has its own PostgreSQL schema and dedicated DB user with no cross-schema access
+- [ ] **INFRA-05**: Redis available in Docker Compose for BullMQ from day one
+- [ ] **INFRA-06**: Branch merge deadline policy enforced: feature branches merged within 21 days or rebased
 
-### Scheduling
+### API Gateway
 
-- [x] **SCHED-01**: User can set a daily recurrence at a specific hour (e.g. every day at 22:00)
-- [x] **SCHED-02**: User can set a weekly recurrence on a specific day + hour (e.g. every Friday at 18:00)
-- [x] **SCHED-03**: User can set an every-N-days recurrence at a specific hour (e.g. every 3 days at 11:00)
-- [x] **SCHED-04**: Broadcast message list shows next scheduled run time for each enabled message
+- [ ] **GW-01**: Gateway routes all `/api/v1/*` traffic — initially 100% proxied to monolith
+- [ ] **GW-02**: Gateway validates JWT Bearer tokens and rejects unauthenticated requests
+- [ ] **GW-03**: Gateway enforces per-user rate limiting
+- [ ] **GW-04**: Traffic can be switched per-route from monolith to microservice via feature flag without redeployment
 
-### Delivery
+### Authentication
 
-- [x] **DLVR-01**: Scheduled broadcast sends text (+ optional image) to the niche's Facebook page via Graph API
-- [x] **DLVR-02**: Scheduled broadcast sends text (+ optional image) to the niche's WhatsApp group via MacroDroid webhook
+- [ ] **AUTH-01**: User can log in with Google OAuth and receive a JWT (RS256 with `kid` key registry)
+- [ ] **AUTH-02**: JWT is stateless — no server-side session store required in new services
+- [ ] **AUTH-03**: Monolith `isAuthenticated` middleware accepts both session cookie AND JWT Bearer token during transition window (minimum 30 days)
+- [ ] **AUTH-04**: Admin can send invite links; invited users register via Google OAuth
+- [ ] **AUTH-05**: JWT key rotation via `kid` registry without mass logout of active users
 
-### UI
+### User & Credential Management
 
-- [x] **UI-01**: Broadcast messages section appears in the "לוחות זמנים" tab, below existing product schedules, visually separated
-- [x] **UI-02**: Add/edit modal includes: label field, niche selector, textarea with character counter, image uploader with preview, recurrence builder with human-readable preview line
+- [ ] **USER-01**: User account has a role enforced server-side on every request
+- [ ] **USER-02**: Admin can view, activate, deactivate, and delete users
+- [ ] **USER-03**: User credentials (Facebook token, AliExpress key, WhatsApp webhook URL, Instagram token) stored AES-256-GCM encrypted with `key_version` column
+- [ ] **USER-04**: Credential API returns boolean presence indicators only — raw token values never sent to client
+- [ ] **USER-05**: User can connect and disconnect each platform account independently
 
-## v2 Requirements
+### Permissions & Roles
+
+- [ ] **PERM-01**: Super admin can create named custom roles (e.g. "editor", "viewer", "manager")
+- [ ] **PERM-02**: Each role has a configurable permission set with granular read/write/delete per resource type
+- [ ] **PERM-03**: Super admin can assign any role to any user
+- [ ] **PERM-04**: All API endpoints enforce permissions server-side — client-provided role claims are never trusted
+- [ ] **PERM-05**: Only super admin can create, modify, or delete roles
+
+### Database Schema
+
+- [ ] **DB-01**: Schema redesigned: normalized, no redundant columns, full Drizzle ORM TypeScript types
+- [ ] **DB-02**: All tables have `id UUID DEFAULT gen_random_uuid()`, `created_at TIMESTAMPTZ`, `updated_at TIMESTAMPTZ`, and explicit FK constraints
+- [ ] **DB-03**: Google Sheets removed as data source — PostgreSQL is the sole source of truth
+- [ ] **DB-04**: All column changes use expand-contract migration pattern (add nullable → backfill → constrain → drop old column)
+
+### Subjects Service
+
+- [ ] **SUBJ-01**: User can create, read, update, and delete subjects (niches)
+- [ ] **SUBJ-02**: Each subject links to the user's stored credentials per platform (Facebook page, Instagram account, WhatsApp webhook)
+
+### Products Service
+
+- [ ] **PROD-01**: User can create, read, update, and delete products scoped to a subject
+- [ ] **PROD-02**: User can import products from AliExpress affiliate API using their stored AliExpress credentials
+- [ ] **PROD-03**: Each product tracks sent status and sent timestamp
+
+### AI Writer Service
+
+- [ ] **AI-01**: Service generates Hebrew marketing messages from product data via OpenAI using user's stored API key
+- [ ] **AI-02**: Shabbat/Motzei Shabbat greeting automatically applied based on Asia/Jerusalem timezone
+- [ ] **AI-03**: Subject-level prompt override applied when configured by user
+
+### Channels Service
+
+- [ ] **CHAN-01**: Service sends text and optional image to Facebook page via Graph API using user's stored credentials
+- [ ] **CHAN-02**: Service sends text and optional image to WhatsApp group via MacroDroid webhook using user's stored webhook URL
+- [ ] **CHAN-03**: Service publishes to Instagram via two-phase Content Publishing API using user's stored credentials
+- [ ] **CHAN-04**: Per-channel circuit breaker — failure on one platform does not block delivery to others
+- [ ] **CHAN-05**: Failed sends retry up to 3 times with exponential backoff; exhausted jobs go to dead letter queue
+
+### Scheduler Service
+
+- [ ] **SCHED-01**: Enabled schedules loaded from DB on startup and registered as cron jobs
+- [ ] **SCHED-02**: Schedule create, update, and delete hot-reload cron jobs without service restart
+- [ ] **SCHED-03**: Cron job fires by pushing a job to BullMQ with a deterministic job ID for deduplication
+
+### Broadcaster Service
+
+- [ ] **BROAD-01**: Broadcaster consumes BullMQ jobs: fetch product → generate message → send to channels → log result
+- [ ] **BROAD-02**: DB-level sent flag checked before each external API call on every attempt (idempotency guard)
+- [ ] **BROAD-03**: Broadcast result stored in logs table with per-channel success/fail status
+- [ ] **BROAD-04**: Dead letter queue captures exhausted jobs for manual inspection
+
+### Frontend
+
+- [ ] **FE-01**: React 19 + Mantine 9, Hebrew RTL (`DirectionProvider initialDirection="rtl"`), dark mode (`defaultColorScheme="dark"`)
+- [ ] **FE-02**: All existing dashboard sections rebuilt: products, schedules, broadcasts, scraper, logs, settings, users
+- [ ] **FE-03**: Auth flow uses JWT Bearer token (not session cookie)
+- [ ] **FE-04**: Credential connection screens per platform (Facebook, Instagram, AliExpress, WhatsApp)
+- [ ] **FE-05**: Feature Flags management screen for super admin — toggle per flag with immediate effect
+
+### Internationalization (i18n)
+
+- [ ] **I18N-01**: All UI strings externalized — no hardcoded text in components
+- [ ] **I18N-02**: System supports Hebrew (RTL) and English (LTR) at launch; architecture supports adding languages without code changes
+- [ ] **I18N-03**: User can switch display language from profile settings
+- [ ] **I18N-04**: Translation strings stored in JSON files per language (`locales/he.json`, `locales/en.json`)
+
+### Feature Flags
+
+- [ ] **FLAG-01**: Feature flag system with flags stored in DB — each flag maps to a named capability (e.g. `auth-service`, `products-service`)
+- [ ] **FLAG-02**: Super admin can toggle any feature flag via the Feature Flags screen with immediate effect — no redeployment required
+- [ ] **FLAG-03**: When a service flag is off, API Gateway routes to monolith fallback; when on, routes to the new microservice
+- [ ] **FLAG-04**: Each extracted microservice is gated behind its own feature flag — Strangler Fig switch per service
+
+### CI/CD Standards
+
+- [ ] **CI-01**: GitHub Actions CI runs on every PR: `tsc --noEmit` + Vitest unit tests + ESLint
+- [ ] **CI-02**: PR title validated against Conventional Commits format — PR fails CI if title does not match (`feat:`, `fix:`, `refactor:`, `chore:`, `test:`, `docs:`, `ci:`, `perf:`)
+- [ ] **CI-03**: `commitlint` enforces Conventional Commits in CI pipeline
+- [ ] **CI-04**: Playwright visual regression suite runs on merge to `main` — failures block merge
+
+### Testing — E2E & Visual Regression
+
+- [ ] **TEST-01**: Playwright E2E suite covers critical user flows: login, send product, schedule management, feature flag toggle
+- [ ] **TEST-02**: Playwright captures visual snapshots per screen — baseline approved once, future merges to `main` compare pixel-by-pixel
+- [ ] **TEST-03**: Visual snapshot failures block merge to `main` — developer must explicitly update snapshots to approve visual changes
+- [ ] **TEST-04**: Feature flag scenarios tested in both states: flag on (new microservice) and flag off (monolith fallback)
+- [ ] **TEST-05**: Vitest unit tests required for every new service function before phase is considered complete
+
+---
+
+## v3 Requirements (Deferred)
 
 ### Analytics
-
-- **ANLX-01**: Track send success/failure per broadcast message
-- **ANLX-02**: Show send history log per broadcast message
-- **ANLX-03**: Click tracking on links included in broadcast messages
+- **ANLX-01**: Track send success/failure per broadcast message with history log
+- **ANLX-02**: Click tracking on links included in broadcast messages
 
 ### Advanced Scheduling
+- **SCHED-04**: Bi-weekly and monthly recurrence options
+- **SCHED-05**: Multiple send times per day
 
-- **SCHED-05**: Bi-weekly recurrence (every 2 weeks on a specific day)
-- **SCHED-06**: Monthly recurrence (on a specific day of month)
-- **SCHED-07**: Multiple send times per day
+### Infrastructure
+- **INFRA-07**: OpenAPI/Swagger docs auto-generated per service and aggregated at `/api/docs`
+- **INFRA-08**: Distributed tracing (OpenTelemetry) across services
 
-### Delivery
-
-- **DLVR-03**: Instagram support for broadcast messages (when requested)
-- **DLVR-04**: "All niches" broadcast option (send to all subjects simultaneously)
+---
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Instagram delivery | Not requested for this milestone; different API flow |
-| AI-generated content | Messages are pre-written by owner; AI pipeline is for products |
-| "All niches" broadcast | Messages are niche-specific by design; content relevance per audience |
-| Raw cron expression editing | Human-friendly builder covers all stated use cases |
-| Cloud image storage (S3/Cloudinary) | Local filesystem sufficient for this milestone |
-| Per-send analytics | v2 concern; core delivery first |
+| Real-time chat | Not part of product vision |
+| Mobile app (React Native) | PWA is sufficient for this user base |
+| Cloud image storage (S3/Cloudinary) | Local filesystem sufficient — add in v3 |
+| Video posts | Storage/bandwidth cost, not requested |
+| Multi-tenant organization sharing | Single-user account model for v2.0 |
+| Fine-grained per-user permissions (no roles) | Role-based covers all stated use cases |
+
+---
 
 ## Traceability
 
+*Populated during roadmap creation.*
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BCAST-01 | Phase 1 | Complete |
-| BCAST-02 | Phase 1 | Complete |
-| BCAST-03 | Phase 1 | Complete |
-| BCAST-04 | Phase 1 | Complete |
-| BCAST-05 | Phase 1 | Complete |
-| BCAST-06 | Phase 1 | Complete |
-| BCAST-07 | Phase 1 | Complete |
-| SCHED-01 | Phase 1 | Complete |
-| SCHED-02 | Phase 1 | Complete |
-| SCHED-03 | Phase 1 | Complete |
-| SCHED-04 | Phase 1 | Complete |
-| DLVR-01 | Phase 2 | Complete |
-| DLVR-02 | Phase 2 | Complete |
-| UI-01 | Phase 3 | Complete |
-| UI-02 | Phase 3 | Complete |
+| (to be filled by roadmapper) | | |
 
 **Coverage:**
-- v1 requirements: 15 total
-- Mapped to phases: 15
-- Unmapped: 0 ✓
+- v2.0 requirements: 73 total
+- Mapped to phases: 0 (pending roadmap)
+- Unmapped: 73 ⚠️
 
 ---
-*Requirements defined: 2026-04-15*
-*Last updated: 2026-04-15 after roadmap creation (BCAST-03 moved Phase 2 → Phase 1: image upload is a backend data concern, not a delivery concern)*
+*Requirements defined: 2026-04-29*
+*Last updated: 2026-04-29 — initial v2.0 definition*
