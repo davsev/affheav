@@ -160,17 +160,85 @@
 
 ## Traceability
 
-*Populated during roadmap creation.*
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (to be filled by roadmapper) | | |
+| INFRA-01 | Phase 4 | Pending |
+| INFRA-02 | Phase 4 | Pending |
+| INFRA-03 | Phase 4 | Pending |
+| INFRA-04 | Phase 4 | Pending |
+| INFRA-05 | Phase 4 | Pending |
+| INFRA-06 | Phase 4 | Pending |
+| CI-01 | Phase 4 | Pending |
+| CI-02 | Phase 4 | Pending |
+| CI-03 | Phase 4 | Pending |
+| TEST-05 | Phase 4 | Pending |
+| GW-01 | Phase 5 | Pending |
+| GW-02 | Phase 5 | Pending |
+| GW-03 | Phase 5 | Pending |
+| GW-04 | Phase 5 | Pending |
+| FLAG-01 | Phase 5 | Pending |
+| FLAG-02 | Phase 5 | Pending |
+| FLAG-03 | Phase 5 | Pending |
+| FLAG-04 | Phase 5 | Pending |
+| AUTH-01 | Phase 6 | Pending |
+| AUTH-02 | Phase 6 | Pending |
+| AUTH-03 | Phase 6 | Pending |
+| AUTH-04 | Phase 6 | Pending |
+| AUTH-05 | Phase 6 | Pending |
+| USER-01 | Phase 7 | Pending |
+| USER-02 | Phase 7 | Pending |
+| USER-03 | Phase 7 | Pending |
+| USER-04 | Phase 7 | Pending |
+| USER-05 | Phase 7 | Pending |
+| PERM-01 | Phase 7 | Pending |
+| PERM-02 | Phase 7 | Pending |
+| PERM-03 | Phase 7 | Pending |
+| PERM-04 | Phase 7 | Pending |
+| PERM-05 | Phase 7 | Pending |
+| DB-01 | Phase 7 | Pending |
+| DB-02 | Phase 7 | Pending |
+| DB-03 | Phase 7 | Pending |
+| DB-04 | Phase 7 | Pending |
+| SUBJ-01 | Phase 8 | Pending |
+| SUBJ-02 | Phase 8 | Pending |
+| PROD-01 | Phase 8 | Pending |
+| PROD-02 | Phase 8 | Pending |
+| PROD-03 | Phase 8 | Pending |
+| AI-01 | Phase 9 | Pending |
+| AI-02 | Phase 9 | Pending |
+| AI-03 | Phase 9 | Pending |
+| CHAN-01 | Phase 9 | Pending |
+| CHAN-02 | Phase 9 | Pending |
+| CHAN-03 | Phase 9 | Pending |
+| CHAN-04 | Phase 9 | Pending |
+| CHAN-05 | Phase 9 | Pending |
+| SCHED-01 | Phase 10 | Pending |
+| SCHED-02 | Phase 10 | Pending |
+| SCHED-03 | Phase 10 | Pending |
+| BROAD-01 | Phase 10 | Pending |
+| BROAD-02 | Phase 10 | Pending |
+| BROAD-03 | Phase 10 | Pending |
+| BROAD-04 | Phase 10 | Pending |
+| FE-01 | Phase 11 | Pending |
+| FE-02 | Phase 11 | Pending |
+| FE-03 | Phase 11 | Pending |
+| FE-04 | Phase 11 | Pending |
+| FE-05 | Phase 11 | Pending |
+| I18N-01 | Phase 11 | Pending |
+| I18N-02 | Phase 11 | Pending |
+| I18N-03 | Phase 11 | Pending |
+| I18N-04 | Phase 11 | Pending |
+| TEST-01 | Phase 12 | Pending |
+| TEST-02 | Phase 12 | Pending |
+| TEST-03 | Phase 12 | Pending |
+| TEST-04 | Phase 12 | Pending |
+| CI-04 | Phase 12 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 73 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 73 ⚠️
+- Mapped to phases: 73
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-29*
-*Last updated: 2026-04-29 — initial v2.0 definition*
+*Last updated: 2026-04-29 — traceability populated by roadmapper (v2.0 roadmap, 9 phases)*
