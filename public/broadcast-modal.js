@@ -206,7 +206,7 @@ async function saveBroadcast() {
   const skipSat   = el('bcast-skip-sat').checked;
   const fileInput   = el('bcast-image-input');
   const externalUrl = el('bcast-image-url').value.trim();
-  const linkUrl     = el('bcast-link-url').value.trim();
+  const shortLink   = el('bcast-link-url').value.trim();
 
   // Validation
   if (!label)     { alert('יש להזין שם להודעה'); return; }
@@ -232,7 +232,7 @@ async function saveBroadcast() {
       // ── Edit mode ──────────────────────────────────────────────────────
       const putBody = { label, text, subjectId, recurrence };
       if (!hasFile && externalUrl) putBody.imageUrl = externalUrl;
-      if (linkUrl) putBody.linkUrl = linkUrl;
+      if (shortLink !== undefined) putBody.shortLink = shortLink;
       await api(`/api/broadcasts/${_editId}`, { method: 'PUT', body: putBody });
 
       // Upload new file if selected (overrides URL)
@@ -260,7 +260,7 @@ async function saveBroadcast() {
       } else if (externalUrl) {
         fd.append('imageUrl', externalUrl);
       }
-      if (linkUrl) fd.append('linkUrl', linkUrl);
+      if (shortLink) fd.append('shortLink', shortLink);
 
       const res = await fetch('/api/broadcasts', {
         method: 'POST',

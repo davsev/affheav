@@ -2,7 +2,6 @@ const { query } = require('../db');
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
-const { shortenUrl } = require('./spooMe');
 
 // ── Private Helpers ────────────────────────────────────────────────────────────
 
@@ -282,7 +281,7 @@ async function getById(id, userId) {
  * @returns {Promise<object>}
  */
 async function create(userId, fields) {
-  const { subjectId, label, text, recurrence, imageUrl, linkUrl } = fields;
+  const { subjectId, label, text, recurrence, imageUrl, shortLink } = fields;
 
   // Validate subject ownership
   const { rows: subjectRows } = await query(
@@ -296,15 +295,12 @@ async function create(userId, fields) {
   // Convert recurrence to cron string
   const cronExpr = recurrenceToCron(recurrence);
 
-  // Shorten the tracked link if provided
-  const shortLink = linkUrl ? await shortenUrl(linkUrl) : null;
-
   const { rows } = await query(
     `INSERT INTO broadcast_messages
        (user_id, subject_id, label, text, image_url, short_link, recurrence, cron)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [userId, subjectId, label, text, imageUrl || null, shortLink, JSON.stringify(recurrence), cronExpr]
+    [userId, subjectId, label, text, imageUrl || null, shortLink || null, JSON.stringify(recurrence), cronExpr]
   );
   return _row(rows[0]);
 }
@@ -364,10 +360,9 @@ async function update(id, userId, fields) {
     updates.push(`image_url = $${i++}`);
     values.push(fields.imageUrl);
   }
-  if (fields.linkUrl !== undefined) {
-    const shortLink = fields.linkUrl ? await shortenUrl(fields.linkUrl) : null;
+  if (fields.shortLink !== undefined) {
     updates.push(`short_link = $${i++}`);
-    values.push(shortLink);
+    values.push(fields.shortLink || null);
   }
 
   if (updates.length === 0) return getById(id, userId);
