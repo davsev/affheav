@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const { query } = require('../db');
+const { syncAllClicks } = require('../services/clickSync');
 
 let activeJobs = {}; // id → cron.ScheduledTask
 let activeBroadcastJobs = {}; // broadcastId → cron.ScheduledTask
@@ -202,9 +203,24 @@ async function remove(id, userId) {
   if (activeJobs[id]) { activeJobs[id].stop(); delete activeJobs[id]; }
 }
 
+// Static daily job: sync click counts at midnight Israel time.
+function startDailyClickSync() {
+  cron.schedule('0 0 * * *', async () => {
+    log('Running nightly click sync...');
+    try {
+      const { synced } = await syncAllClicks(msg => log(msg));
+      log(`Nightly click sync done — ${synced} products updated`);
+    } catch (err) {
+      log(`Nightly click sync error: ${err.message}`, 'error');
+    }
+  }, { timezone: 'Asia/Jerusalem' });
+  log('Nightly click sync scheduled (00:00 Asia/Jerusalem)');
+}
+
 module.exports = {
   startAll, stopAll, getActiveJobs,
   startBroadcasts, stopBroadcasts,
+  startDailyClickSync,
   add, update, remove,
   setWorkflowRunner, setLogger, fireNow,
 };

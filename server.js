@@ -232,5 +232,7 @@ app.listen(PORT, async () => {
   const count = await scheduler.startAll();
   console.log(`📅 ${count} schedule(s) loaded`);
   const bcount = await scheduler.startBroadcasts();
-  console.log(`📡 ${bcount} broadcast(s) loaded\n`);
+  console.log(`📡 ${bcount} broadcast(s) loaded`);
+  scheduler.startDailyClickSync();
+  console.log('🖱  Nightly click sync scheduled\n');
 });

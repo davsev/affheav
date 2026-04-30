@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query } = require('../db');
 const { shortenUrl, getAllClickStats } = require('../services/spooMe');
+const { syncClicksForUser } = require('../services/clickSync');
 
 const log = (...a) => console.log('[products]', ...a);
 
@@ -150,30 +151,7 @@ router.post('/:id/unsend', async (req, res) => {
 // POST /api/products/sync-clicks — fetch click counts from spoo.me and update DB
 router.post('/sync-clicks', async (req, res) => {
   try {
-    log('Fetching click stats from spoo.me...');
-    const clicks = await getAllClickStats();
-    log(`Got ${Object.keys(clicks).length} links from spoo.me`);
-
-    const { rows: products } = await query(
-      'SELECT id, short_link FROM products WHERE user_id = $1 AND short_link IS NOT NULL',
-      [req.user.id]
-    );
-
-    const today = new Date().toISOString().slice(0, 10);
-    let synced = 0;
-    for (const p of products) {
-      if (clicks[p.short_link] !== undefined) {
-        await query('UPDATE products SET clicks = $1, updated_at = NOW() WHERE id = $2', [clicks[p.short_link], p.id]);
-        await query(
-          `INSERT INTO product_click_snapshots (user_id, product_id, snapshot_date, total_clicks)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (product_id, snapshot_date) DO UPDATE SET total_clicks = EXCLUDED.total_clicks`,
-          [req.user.id, p.id, today, clicks[p.short_link]]
-        );
-        synced++;
-      }
-    }
-    log(`Synced ${synced} rows`);
+    const { synced } = await syncClicksForUser(req.user.id, (...a) => log(...a));
 
     const { rows } = await query(
       `SELECT p.*,
