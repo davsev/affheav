@@ -18,7 +18,8 @@ function rowToProduct(r, idx) {
     sent:       r.sent_at     ? new Date(r.sent_at).toISOString()      : '',
     facebook:   r.facebook_at ? new Date(r.facebook_at).toISOString()  : '',
     instagram:  r.instagram_at? new Date(r.instagram_at).toISOString() : '',
-    clicks:     r.clicks      ?? null,
+    clicks:       r.clicks       ?? null,
+    today_clicks: r.today_clicks != null ? parseInt(r.today_clicks, 10) : null,
     subject:    r.subject_id  || '',
     sort_order: r.sort_order,
     skip_ai:         r.skip_ai        || false,
@@ -32,21 +33,25 @@ function rowToProduct(r, idx) {
 router.get('/', async (req, res) => {
   try {
     const { subject } = req.query;
+    const baseQuery = `
+      SELECT p.*,
+        snap_today.total_clicks - COALESCE(snap_prev.total_clicks, 0) AS today_clicks
+      FROM products p
+      LEFT JOIN product_click_snapshots snap_today
+        ON snap_today.product_id = p.id AND snap_today.snapshot_date = CURRENT_DATE
+      LEFT JOIN product_click_snapshots snap_prev
+        ON snap_prev.product_id = p.id AND snap_prev.snapshot_date = CURRENT_DATE - 1
+      WHERE p.user_id = $1
+        AND p.short_link IS NOT NULL AND p.short_link != ''`;
     let rows;
     if (subject) {
       ({ rows } = await query(
-        `SELECT * FROM products
-         WHERE user_id = $1 AND subject_id = $2
-           AND short_link IS NOT NULL AND short_link != ''
-         ORDER BY sort_order ASC NULLS LAST, created_at ASC`,
+        baseQuery + ` AND p.subject_id = $2 ORDER BY p.sort_order ASC NULLS LAST, p.created_at ASC`,
         [req.user.id, subject]
       ));
     } else {
       ({ rows } = await query(
-        `SELECT * FROM products
-         WHERE user_id = $1
-           AND short_link IS NOT NULL AND short_link != ''
-         ORDER BY sort_order ASC NULLS LAST, created_at ASC`,
+        baseQuery + ` ORDER BY p.sort_order ASC NULLS LAST, p.created_at ASC`,
         [req.user.id]
       ));
     }
@@ -154,19 +159,33 @@ router.post('/sync-clicks', async (req, res) => {
       [req.user.id]
     );
 
+    const today = new Date().toISOString().slice(0, 10);
     let synced = 0;
     for (const p of products) {
       if (clicks[p.short_link] !== undefined) {
         await query('UPDATE products SET clicks = $1, updated_at = NOW() WHERE id = $2', [clicks[p.short_link], p.id]);
+        await query(
+          `INSERT INTO product_click_snapshots (user_id, product_id, snapshot_date, total_clicks)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (product_id, snapshot_date) DO UPDATE SET total_clicks = EXCLUDED.total_clicks`,
+          [req.user.id, p.id, today, clicks[p.short_link]]
+        );
         synced++;
       }
     }
     log(`Synced ${synced} rows`);
 
     const { rows } = await query(
-      `SELECT * FROM products WHERE user_id = $1
-         AND short_link IS NOT NULL AND short_link != ''
-       ORDER BY sort_order ASC NULLS LAST, created_at ASC`,
+      `SELECT p.*,
+         snap_today.total_clicks - COALESCE(snap_prev.total_clicks, 0) AS today_clicks
+       FROM products p
+       LEFT JOIN product_click_snapshots snap_today
+         ON snap_today.product_id = p.id AND snap_today.snapshot_date = CURRENT_DATE
+       LEFT JOIN product_click_snapshots snap_prev
+         ON snap_prev.product_id = p.id AND snap_prev.snapshot_date = CURRENT_DATE - 1
+       WHERE p.user_id = $1
+         AND p.short_link IS NOT NULL AND p.short_link != ''
+       ORDER BY p.sort_order ASC NULLS LAST, p.created_at ASC`,
       [req.user.id]
     );
     res.json({ success: true, synced, products: rows.map(rowToProduct) });

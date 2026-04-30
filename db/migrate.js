@@ -258,6 +258,20 @@ async function migrate() {
   await query(`ALTER TABLE commission_snapshots ADD COLUMN IF NOT EXISTS category_id TEXT`);
   await query(`CREATE INDEX IF NOT EXISTS commission_snapshots_product ON commission_snapshots(aliexpress_product_id)`);
 
+  // ── Product click snapshots (daily delta tracking) ────────────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS product_click_snapshots (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      product_id    UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      snapshot_date DATE NOT NULL,
+      total_clicks  INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(product_id, snapshot_date)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS prod_snapshots_product ON product_click_snapshots(product_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS prod_snapshots_user    ON product_click_snapshots(user_id)`);
+
   // ── Join link click tracking ───────────────────────────────────────────────
   // join_short_link kept for backward compat but not required — join_link already holds spoo.me link
   await query(`ALTER TABLE whatsapp_groups ADD COLUMN IF NOT EXISTS join_short_link TEXT`);

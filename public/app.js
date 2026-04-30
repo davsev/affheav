@@ -1002,9 +1002,12 @@ function renderProducts(products) {
   }
 
   tbody.innerHTML = filtered.map(p => {
+    const todayBadge = p.today_clicks != null
+      ? `<span style="font-size:10px;color:var(--green);margin-right:3px;" title="קליקים היום">+${p.today_clicks}</span>`
+      : '';
     const clicksCell = p.clicks == null
       ? '<span style="color:var(--label-4);font-size:11px;">—</span>'
-      : `<span style="font-weight:600;color:var(--blue);">${p.clicks}</span>`;
+      : `${todayBadge}<span style="font-weight:600;color:var(--blue);">${p.clicks}</span>`;
     const sendCountBadge = p.send_count > 1
       ? `<span style="font-size:10px;color:var(--on-surface-var);margin-right:4px;" title="נשלח ${p.send_count} פעמים">(×${p.send_count})</span>`
       : '';
@@ -1036,8 +1039,11 @@ function renderProducts(products) {
       grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">${_currentFilter === 'unsent' ? 'כל המוצרים נשלחו ✓' : 'אין מוצרים'}</div>`;
     } else {
       grid.innerHTML = filtered.map(p => {
+        const todayClicksHtml = p.today_clicks != null
+          ? `<span style="font-size:10px;color:var(--green);margin-right:4px;" title="קליקים היום">+${p.today_clicks} היום</span>`
+          : '';
         const clicksHtml = p.clicks != null
-          ? `<span class="product-card-clicks">👁 ${p.clicks} קליקים</span>`
+          ? `<span class="product-card-clicks">${todayClicksHtml}👁 ${p.clicks} קליקים</span>`
           : '';
         const sentBadge = p.sent
           ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>`
