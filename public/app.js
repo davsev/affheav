@@ -1497,11 +1497,16 @@ async function loadBroadcasts() {
       const imgIcon = b.imageUrl
         ? `<span class="material-symbols-outlined" title="יש תמונה" style="font-size:14px;color:var(--on-surface-var);vertical-align:middle;">image</span>`
         : '';
+      const clicksBadge = b.shortLink
+        ? `<span style="font-size:11px;color:var(--blue);margin-right:2px;" title="קישור מעקב">`
+          + (b.todayClicks != null ? `<span style="color:var(--green);font-weight:600;">+${b.todayClicks} היום</span> · ` : '')
+          + `🔗</span>`
+        : '';
       return `
       <div class="schedule-item" id="bcast-${escHtml(String(b.id))}">
         <div style="flex:1;min-width:0;">
           <div class="schedule-label" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
-            ${escHtml(b.label)}${imgIcon}${subjChip}${platformChips}
+            ${escHtml(b.label)}${imgIcon}${clicksBadge}${subjChip}${platformChips}
           </div>
           <div class="bcast-msg-preview">${preview}</div>
           <div class="schedule-cron">${escHtml(schedLabel)}</div>

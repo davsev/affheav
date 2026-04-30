@@ -130,6 +130,15 @@ function openModal(broadcast = null) {
   // Character counter
   updateCharCount();
 
+  // Reset tracked link state
+  el('bcast-link-url').value = '';
+  el('bcast-short-link-display').style.display = 'none';
+  el('bcast-short-link-display').textContent = '';
+  if (broadcast && broadcast.shortLink) {
+    el('bcast-short-link-display').textContent = `קישור מקוצר קיים: ${broadcast.shortLink}`;
+    el('bcast-short-link-display').style.display = 'block';
+  }
+
   // Reset image state
   el('bcast-image-input').value = '';
   el('bcast-image-url').value = '';
@@ -197,6 +206,7 @@ async function saveBroadcast() {
   const skipSat   = el('bcast-skip-sat').checked;
   const fileInput   = el('bcast-image-input');
   const externalUrl = el('bcast-image-url').value.trim();
+  const linkUrl     = el('bcast-link-url').value.trim();
 
   // Validation
   if (!label)     { alert('יש להזין שם להודעה'); return; }
@@ -222,6 +232,7 @@ async function saveBroadcast() {
       // ── Edit mode ──────────────────────────────────────────────────────
       const putBody = { label, text, subjectId, recurrence };
       if (!hasFile && externalUrl) putBody.imageUrl = externalUrl;
+      if (linkUrl) putBody.linkUrl = linkUrl;
       await api(`/api/broadcasts/${_editId}`, { method: 'PUT', body: putBody });
 
       // Upload new file if selected (overrides URL)
@@ -249,6 +260,7 @@ async function saveBroadcast() {
       } else if (externalUrl) {
         fd.append('imageUrl', externalUrl);
       }
+      if (linkUrl) fd.append('linkUrl', linkUrl);
 
       const res = await fetch('/api/broadcasts', {
         method: 'POST',

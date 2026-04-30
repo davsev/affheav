@@ -2,6 +2,7 @@ const { query } = require('../db');
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
+const { shortenUrl } = require('./spooMe');
 
 // ── Private Helpers ────────────────────────────────────────────────────────────
 
@@ -219,6 +220,8 @@ function _row(r) {
     label:              r.label,
     text:               r.text,
     imageUrl:           r.image_url,
+    shortLink:          r.short_link || null,
+    todayClicks:        r.today_clicks != null ? parseInt(r.today_clicks, 10) : null,
     recurrence:         r.recurrence,
     cron:               r.cron,
     enabled:            r.enabled,
@@ -228,6 +231,17 @@ function _row(r) {
     updatedAt:          r.updated_at,
   };
 }
+
+// Query fragment that joins broadcast_click_snapshots to get today's delta.
+const _SELECT_WITH_CLICKS = `
+  SELECT bm.*,
+    snap_today.total_clicks - COALESCE(snap_prev.total_clicks, 0) AS today_clicks
+  FROM broadcast_messages bm
+  LEFT JOIN broadcast_click_snapshots snap_today
+    ON snap_today.broadcast_id = bm.id AND snap_today.snapshot_date = CURRENT_DATE
+  LEFT JOIN broadcast_click_snapshots snap_prev
+    ON snap_prev.broadcast_id = bm.id AND snap_prev.snapshot_date = CURRENT_DATE - 1
+`;
 
 // ── CRUD ───────────────────────────────────────────────────────────────────────
 
@@ -239,7 +253,7 @@ function _row(r) {
  */
 async function listByUser(userId) {
   const { rows } = await query(
-    'SELECT * FROM broadcast_messages WHERE user_id = $1 ORDER BY created_at DESC',
+    _SELECT_WITH_CLICKS + ' WHERE bm.user_id = $1 ORDER BY bm.created_at DESC',
     [userId]
   );
   return rows.map(_row);
@@ -254,7 +268,7 @@ async function listByUser(userId) {
  */
 async function getById(id, userId) {
   const { rows } = await query(
-    'SELECT * FROM broadcast_messages WHERE id = $1 AND user_id = $2',
+    _SELECT_WITH_CLICKS + ' WHERE bm.id = $1 AND bm.user_id = $2',
     [id, userId]
   );
   return _row(rows[0]);
@@ -268,7 +282,7 @@ async function getById(id, userId) {
  * @returns {Promise<object>}
  */
 async function create(userId, fields) {
-  const { subjectId, label, text, recurrence, imageUrl } = fields;
+  const { subjectId, label, text, recurrence, imageUrl, linkUrl } = fields;
 
   // Validate subject ownership
   const { rows: subjectRows } = await query(
@@ -282,12 +296,15 @@ async function create(userId, fields) {
   // Convert recurrence to cron string
   const cronExpr = recurrenceToCron(recurrence);
 
+  // Shorten the tracked link if provided
+  const shortLink = linkUrl ? await shortenUrl(linkUrl) : null;
+
   const { rows } = await query(
     `INSERT INTO broadcast_messages
-       (user_id, subject_id, label, text, image_url, recurrence, cron)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (user_id, subject_id, label, text, image_url, short_link, recurrence, cron)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [userId, subjectId, label, text, imageUrl || null, JSON.stringify(recurrence), cronExpr]
+    [userId, subjectId, label, text, imageUrl || null, shortLink, JSON.stringify(recurrence), cronExpr]
   );
   return _row(rows[0]);
 }
@@ -346,6 +363,11 @@ async function update(id, userId, fields) {
   if (fields.imageUrl !== undefined) {
     updates.push(`image_url = $${i++}`);
     values.push(fields.imageUrl);
+  }
+  if (fields.linkUrl !== undefined) {
+    const shortLink = fields.linkUrl ? await shortenUrl(fields.linkUrl) : null;
+    updates.push(`short_link = $${i++}`);
+    values.push(shortLink);
   }
 
   if (updates.length === 0) return getById(id, userId);

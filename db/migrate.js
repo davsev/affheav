@@ -272,6 +272,21 @@ async function migrate() {
   await query(`CREATE INDEX IF NOT EXISTS prod_snapshots_product ON product_click_snapshots(product_id)`);
   await query(`CREATE INDEX IF NOT EXISTS prod_snapshots_user    ON product_click_snapshots(user_id)`);
 
+  // ── Broadcast short_link + click snapshots ────────────────────────────────
+  await query(`ALTER TABLE broadcast_messages ADD COLUMN IF NOT EXISTS short_link TEXT`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS broadcast_click_snapshots (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      broadcast_id   UUID NOT NULL REFERENCES broadcast_messages(id) ON DELETE CASCADE,
+      snapshot_date  DATE NOT NULL,
+      total_clicks   INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(broadcast_id, snapshot_date)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS bcast_snapshots_broadcast ON broadcast_click_snapshots(broadcast_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS bcast_snapshots_user      ON broadcast_click_snapshots(user_id)`);
+
   // ── Join link click tracking ───────────────────────────────────────────────
   // join_short_link kept for backward compat but not required — join_link already holds spoo.me link
   await query(`ALTER TABLE whatsapp_groups ADD COLUMN IF NOT EXISTS join_short_link TEXT`);
