@@ -552,14 +552,20 @@ function renderActiveNicheCard() {
                     <div style="font-size:12px;color:var(--on-surface-var);">טוען קבוצות...</div>
                   </div>
                   <div id="add-wa-group-form-${s.id}" style="display:none;margin-top:12px;padding:14px;background:var(--surface-low);border-radius:1rem;border:1px solid var(--outline-var);">
+                    <div class="form-group" style="margin-bottom:10px;">
+                      <label class="form-label">בחר מקבוצות מחוברות</label>
+                      <select class="form-input" id="wa-service-pick-${s.id}" style="font-size:13px;">
+                        <option value="">טוען קבוצות...</option>
+                      </select>
+                    </div>
                     <div class="form-grid">
                       <div class="form-group">
                         <label class="form-label">שם לתצוגה</label>
                         <input class="form-input" id="new-wa-name-${s.id}" placeholder="קבוצת דיג צפון" style="font-size:13px;" />
                       </div>
                       <div class="form-group">
-                        <label class="form-label">מזהה קבוצה (MacroDroid)</label>
-                        <input class="form-input" id="new-wa-group-id-${s.id}" placeholder="fishing_north" dir="ltr" style="font-size:13px;" />
+                        <label class="form-label">מזהה קבוצה</label>
+                        <input class="form-input" id="new-wa-group-id-${s.id}" placeholder="120363...@g.us" dir="ltr" style="font-size:13px;" />
                       </div>
                       <div class="form-group form-full">
                         <label class="form-label">קישור הצטרפות</label>
@@ -2256,6 +2262,7 @@ function renderWaGroupsList(subjectId, groups) {
       </div>
       <div id="wa-group-edit-${g.id}" style="display:none;padding:8px 12px;border-top:1px solid rgba(255,255,255,0.07);">
         <div style="display:flex;flex-direction:column;gap:6px;">
+          <select class="form-input" id="wa-service-pick-edit-${g.id}" style="font-size:12px;"><option value="">טוען קבוצות...</option></select>
           <input class="form-input" id="edit-wa-name-${g.id}" value="${escHtml(g.name)}" placeholder="שם הקבוצה" style="font-size:13px;" />
           <input class="form-input" id="edit-wa-group-id-${g.id}" value="${escHtml(g.waGroup)}" placeholder="מזהה קבוצה" dir="ltr" style="font-size:13px;" />
           <input class="form-input" id="edit-wa-join-${g.id}" value="${escHtml(g.joinLink || '')}" placeholder="https://chat.whatsapp.com/..." dir="ltr" style="font-size:13px;" />
@@ -2268,8 +2275,33 @@ function renderWaGroupsList(subjectId, groups) {
     </div>`).join('');
 }
 
+async function loadWaServiceGroupsIntoSelect(selectId, nameFieldId, idFieldId) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  try {
+    const groups = await api('/api/whatsapp-service/groups');
+    if (!groups.length) {
+      sel.innerHTML = '<option value="">אין קבוצות מחוברות</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">-- בחר קבוצה מחוברת --</option>' +
+      groups.map(g => `<option value="${escHtml(g.id)}" data-name="${escHtml(g.name)}">${escHtml(g.name)}</option>`).join('');
+    sel.onchange = () => {
+      const opt = sel.options[sel.selectedIndex];
+      if (!opt.value) return;
+      const nameEl = document.getElementById(nameFieldId);
+      const idEl   = document.getElementById(idFieldId);
+      if (nameEl && !nameEl.value) nameEl.value = opt.dataset.name || opt.text;
+      if (idEl) idEl.value = opt.value;
+    };
+  } catch {
+    sel.innerHTML = '<option value="">שגיאה בטעינת קבוצות (WA לא מחובר?)</option>';
+  }
+}
+
 window.showAddWaGroup = (subjectId) => {
   document.getElementById(`add-wa-group-form-${subjectId}`).style.display = '';
+  loadWaServiceGroupsIntoSelect(`wa-service-pick-${subjectId}`, `new-wa-name-${subjectId}`, `new-wa-group-id-${subjectId}`);
 };
 window.hideAddWaGroup = (subjectId) => {
   document.getElementById(`add-wa-group-form-${subjectId}`).style.display = 'none';
@@ -2307,6 +2339,7 @@ window.deleteWaGroup = async (groupId, subjectId) => {
 
 window.showEditWaGroup = (groupId) => {
   document.getElementById(`wa-group-edit-${groupId}`).style.display = '';
+  loadWaServiceGroupsIntoSelect(`wa-service-pick-edit-${groupId}`, `edit-wa-name-${groupId}`, `edit-wa-group-id-${groupId}`);
 };
 window.hideEditWaGroup = (groupId) => {
   document.getElementById(`wa-group-edit-${groupId}`).style.display = 'none';
