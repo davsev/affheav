@@ -43,7 +43,11 @@ async function sendViaMacroDroid({ text, image, wa_group, webhookUrl }) {
     ? data.trim() === 'OK'
     : data?.data === 'OK' || data === 'OK';
 
-  return { success, raw: data };
+  if (!success) {
+    const preview = JSON.stringify(data).slice(0, 120);
+    return { success: false, error: `MacroDroid responded: ${preview}`, raw: data };
+  }
+  return { success: true, raw: data };
 }
 
 // provider priority: explicit arg > WHATSAPP_PROVIDER env var > 'macrodroid'
