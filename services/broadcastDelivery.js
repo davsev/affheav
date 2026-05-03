@@ -92,7 +92,7 @@ async function send(broadcast, userId, { fireNow = false } = {}) {
           });
           results.whatsapp.push({ group: g.name, ...r });
           if (r.success) {
-            log(`✓ WhatsApp sent to "${g.name}" (WA group name: "${r.chatName || '?'}")`);
+            log(`✓ WhatsApp sent to "${g.name}" via ${r._provider} (WA group: "${r.chatName || g.waGroup}")`);
           } else {
             log(`⚠ WhatsApp not OK for "${g.name}": ${JSON.stringify(r.raw)}`, 'warn');
           }
