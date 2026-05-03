@@ -46,7 +46,7 @@ function _normalize(b) {
 // Sends broadcast to all WhatsApp groups (sequenced, 2-min delay) and Facebook.
 // Returns: { whatsapp: Array|Object, facebook: Object }
 // Each platform result is independent — failure in one does not affect the other.
-async function send(broadcast, userId) {
+async function send(broadcast, userId, { fireNow = false } = {}) {
   const b       = _normalize(broadcast);
   log(`▶ Firing broadcast: "${b.label}" (subject: ${b.subject_id})`);
 
@@ -77,7 +77,7 @@ async function send(broadcast, userId) {
     } else {
       results.whatsapp = [];
       for (let i = 0; i < groups.length; i++) {
-        if (i > 0) {
+        if (i > 0 && !fireNow) {
           log('⏳ Waiting 2 minutes before next group...');
           await sleep(WA_GROUP_DELAY_MS);
         }
