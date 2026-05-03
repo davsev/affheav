@@ -4,15 +4,26 @@ require('dotenv').config();
 // Send via the whatsapp-service microservice (whatsapp-web.js)
 async function sendViaWebJs({ text, image, groupId }) {
   const baseUrl = process.env.WHATSAPP_SERVICE_URL;
-  const response = await axios.post(
-    `${baseUrl}/send`,
-    { groupId, text, imageUrl: image || undefined },
-    {
-      headers: { 'X-API-Key': process.env.WHATSAPP_API_KEY || '' },
-      timeout: 30000,
-    }
-  );
+  let response;
+  try {
+    response = await axios.post(
+      `${baseUrl}/send`,
+      { groupId, text, imageUrl: image || undefined },
+      {
+        headers: { 'X-API-Key': process.env.WHATSAPP_API_KEY || '' },
+        timeout: 30000,
+        validateStatus: () => true, // always resolve so we can read the error body
+      }
+    );
+  } catch (err) {
+    // Network-level failure (no response at all)
+    throw new Error(`WhatsApp service unreachable: ${err.message}`);
+  }
   const data = response.data;
+  if (response.status >= 400) {
+    // Surface the actual error from the service (e.g. "Could not get chat", "not connected")
+    throw new Error(data?.error || `WhatsApp service returned HTTP ${response.status}`);
+  }
   return { success: !!data.success, raw: data };
 }
 
