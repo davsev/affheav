@@ -112,6 +112,17 @@ app.post('/send', requireApiKey, async (req, res) => {
   }
 
   try {
+    // Verify the chat exists and the client is a member before sending
+    let chat;
+    try {
+      chat = await client.getChatById(groupId);
+    } catch (_) {
+      chat = null;
+    }
+    if (!chat) {
+      return res.status(404).json({ success: false, error: `Group not found: ${groupId}` });
+    }
+
     let message;
     if (imageUrl) {
       const media = await MessageMedia.fromUrl(imageUrl, { unsafeMime: true });
