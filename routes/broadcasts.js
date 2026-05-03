@@ -134,17 +134,15 @@ router.post('/:id/image', upload.single('image'), async (req, res) => {
   }
 });
 
-// POST /:id/fire-now — Trigger delivery immediately (async, matches schedules.js pattern)
+// POST /:id/fire-now — Trigger delivery immediately; awaits result so caller sees errors
 router.post('/:id/fire-now', async (req, res) => {
   try {
     const msg = await getById(req.params.id, req.user.id);
     if (!msg) return res.status(404).json({ success: false, error: 'Not found' });
-    // Respond immediately; delivery runs async (matches schedules.js pattern)
-    res.json({ success: true, fired: true });
-    broadcastDelivery.send(msg, req.user.id).catch(err => {
-      console.error(`[broadcasts] fire-now error for broadcast ${msg.id}: ${err.message}`);
-    });
+    const result = await broadcastDelivery.send(msg, req.user.id, { fireNow: true });
+    res.json({ success: true, fired: true, result });
   } catch (err) {
+    console.error(`[broadcasts] fire-now error for broadcast ${req.params.id}: ${err.message}`);
     res.status(500).json({ success: false, error: err.message });
   }
 });

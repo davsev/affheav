@@ -1521,8 +1521,19 @@ async function loadBroadcasts() {
 
 window.fireBroadcastNow = async (id) => {
   try {
-    await api(`/api/broadcasts/${id}/fire-now`, { method: 'POST' });
-    alert('ההודעה נשלחת!');
+    const data = await api(`/api/broadcasts/${id}/fire-now`, { method: 'POST' });
+    const wa = data.result?.whatsapp;
+    if (Array.isArray(wa)) {
+      const ok   = wa.filter(r => r.success);
+      const fail = wa.filter(r => !r.success);
+      const msg  = ok.length ? `✓ נשלח ל-${ok.length} קבוצות` : '';
+      const errMsg = fail.length ? `✗ ${fail.length} נכשלו: ${fail.map(r => r.error || r.group).join(', ')}` : '';
+      alert([msg, errMsg].filter(Boolean).join('\n') || 'נשלח');
+    } else if (wa?.success === false) {
+      alert(`שגיאה בוואטסאפ: ${wa.error}`);
+    } else {
+      alert('ההודעה נשלחה!');
+    }
   } catch (err) {
     alert('שגיאה: ' + err.message);
   }
