@@ -198,6 +198,7 @@ process.on('SIGTERM', async () => {
 });
 
 workflow.setEmitter(emitLog);
+require('./services/broadcastDelivery').setEmitter(emitLog);
 
 // ── Protected API Routes ──────────────────────────────────────────────────────
 app.use('/api/products',  isAuthenticated, require('./routes/products'));
