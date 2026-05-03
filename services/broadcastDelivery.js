@@ -46,7 +46,13 @@ async function send(broadcast, userId) {
 
   // ── WhatsApp ──────────────────────────────────────────────────────────────
   try {
-    const groups = await getGroupsBySubject(b.subject_id, userId);
+    let groups = await getGroupsBySubject(b.subject_id, userId);
+
+    // Fallback to subject-level wa_group when no whatsapp_groups rows exist (matches workflow.js)
+    if (groups.length === 0 && subject.waGroup) {
+      groups = [{ name: subject.name, waGroup: subject.waGroup }];
+    }
+
     if (groups.length === 0) {
       results.whatsapp = { success: false, error: 'No WhatsApp groups configured for this subject' };
     } else {
@@ -60,6 +66,7 @@ async function send(broadcast, userId) {
             image:      imageUrl,
             wa_group:   g.waGroup,
             webhookUrl: subject.macrodroidUrl || null,
+            provider:   subject.waProvider    || null,
           });
           results.whatsapp.push({ group: g.name, ...r });
         } catch (err) {
