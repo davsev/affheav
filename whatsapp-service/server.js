@@ -122,6 +122,9 @@ app.post('/send', requireApiKey, async (req, res) => {
     if (!chat) {
       return res.status(404).json({ success: false, error: `Group not found: ${groupId}` });
     }
+    if (!chat.isGroup) {
+      return res.status(400).json({ success: false, error: `ID is not a group (it's a private chat): ${groupId}` });
+    }
 
     let message;
     if (imageUrl) {
@@ -130,7 +133,8 @@ app.post('/send', requireApiKey, async (req, res) => {
     } else {
       message = await client.sendMessage(groupId, text);
     }
-    res.json({ success: true, messageId: message.id._serialized });
+    console.log(`[WA] Sent to group "${chat.name}" (${groupId}) — messageId: ${message.id._serialized}`);
+    res.json({ success: true, messageId: message.id._serialized, chatName: chat.name });
   } catch (err) {
     console.error('[WA] Send error:', err.message);
     res.status(500).json({ success: false, error: err.message });

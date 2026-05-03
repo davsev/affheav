@@ -1532,9 +1532,9 @@ window.fireBroadcastNow = async (id) => {
     if (Array.isArray(wa)) {
       const ok   = wa.filter(r => r.success);
       const fail = wa.filter(r => !r.success);
-      const msg  = ok.length ? `✓ נשלח ל-${ok.length} קבוצות` : '';
-      const errMsg = fail.length ? `✗ ${fail.length} נכשלו: ${fail.map(r => r.error || r.group).join(', ')}` : '';
-      alert([msg, errMsg].filter(Boolean).join('\n') || 'נשלח');
+      const msg  = ok.length ? `✓ נשלח ל-${ok.length} קבוצות:\n${ok.map(r => r.chatName || r.group).join('\n')}` : '';
+      const errMsg = fail.length ? `✗ ${fail.length} נכשלו:\n${fail.map(r => r.error || r.group).join('\n')}` : '';
+      alert([msg, errMsg].filter(Boolean).join('\n\n') || 'נשלח');
     } else if (wa?.success === false) {
       alert(`שגיאה בוואטסאפ: ${wa.error}`);
     } else {
