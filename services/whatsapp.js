@@ -53,12 +53,15 @@ async function sendViaMacroDroid({ text, image, wa_group, webhookUrl }) {
 // provider priority: explicit arg > WHATSAPP_PROVIDER env var > 'macrodroid'
 async function send({ text, image, wa_group, webhookUrl, groupId, provider }) {
   const resolved = provider || process.env.WHATSAPP_PROVIDER || 'macrodroid';
+  console.log(`[WhatsApp] provider resolved: ${resolved}`);
   if (resolved === 'webjs') {
     const target = groupId || wa_group;
     console.log('[WhatsApp] Sending via whatsapp-web.js service to:', target);
-    return sendViaWebJs({ text, image, groupId: target });
+    const result = await sendViaWebJs({ text, image, groupId: target });
+    return { ...result, _provider: 'webjs', chatName: result.raw?.chatName };
   }
-  return sendViaMacroDroid({ text, image, wa_group, webhookUrl });
+  const result = await sendViaMacroDroid({ text, image, wa_group, webhookUrl });
+  return { ...result, _provider: 'macrodroid' };
 }
 
 module.exports = { send };
