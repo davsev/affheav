@@ -276,6 +276,29 @@ async function migrate() {
   await query(`CREATE INDEX IF NOT EXISTS jl_snapshots_group ON join_link_click_snapshots(group_id)`);
   await query(`CREATE INDEX IF NOT EXISTS jl_snapshots_user  ON join_link_click_snapshots(user_id)`);
 
+  // ── Product Suggestions (AI discovery agent) ──────────────────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS product_suggestions (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      subject_id     UUID REFERENCES subjects(id) ON DELETE SET NULL,
+      aliexpress_id  TEXT NOT NULL,
+      title          TEXT NOT NULL,
+      image_url      TEXT,
+      promotion_link TEXT NOT NULL,
+      sale_price     NUMERIC(10,2),
+      evaluate_rate  TEXT,
+      lastest_volume INTEGER,
+      source_keyword TEXT,
+      status         TEXT NOT NULL DEFAULT 'pending',
+      score          NUMERIC(6,2),
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(user_id, aliexpress_id)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS product_suggestions_user   ON product_suggestions(user_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS product_suggestions_status ON product_suggestions(user_id, status)`);
+
   console.log('✓ Database schema up to date');
 }
 
