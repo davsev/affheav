@@ -196,11 +196,9 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
         try {
           log(`Sending to WhatsApp group: ${group.name} (${group.waGroup})`);
           const waResult = await whatsapp.send({
-            text:       message,
-            image:      product.image,
-            wa_group:   group.waGroup,
-            webhookUrl: subjectConfig?.macrodroidUrl || null,
-            provider:   subjectConfig?.waProvider,
+            text:     message,
+            image:    product.image,
+            wa_group: group.waGroup,
           });
           results.whatsapp.push({ group: group.name, ...waResult });
           if (waResult.success) {
@@ -223,11 +221,9 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
       try {
         log(`Sending to WhatsApp group: ${waGroup}`);
         const waResult = await whatsapp.send({
-          text:       message,
-          image:      product.image,
-          wa_group:   waGroup,
-          webhookUrl: subjectConfig?.macrodroidUrl || null,
-          provider:   subjectConfig?.waProvider,
+          text:     message,
+          image:    product.image,
+          wa_group: waGroup,
         });
         results.whatsapp = waResult;
         if (waResult.success) {

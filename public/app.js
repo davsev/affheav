@@ -516,32 +516,9 @@ function renderActiveNicheCard() {
                 <summary class="niche-cred-summary">
                   <span class="material-symbols-outlined" style="color:#16a34a;">forum</span>
                   <span>הגדרות WhatsApp</span>
-                  ${credBadge(!!s.macrodroidUrl)}
                   <span class="material-symbols-outlined niche-cred-chevron">expand_more</span>
                 </summary>
                 <div class="niche-cred-body">
-                  <div class="form-group" style="margin-bottom:16px;">
-                    <label class="form-label" style="margin-bottom:6px;display:block;">ספק שליחה</label>
-                    <input type="hidden" id="wa-provider-${s.id}" value="${waProvider}" />
-                    <div style="display:flex;gap:0;background:var(--surface-low);border-radius:10px;padding:3px;">
-                      <button id="wa-provider-btn-macrodroid-${s.id}" onclick="window.setWaProvider('${s.id}', 'macrodroid')"
-                        style="flex:1;padding:7px 10px;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.2s;
-                               background:${waProvider === 'macrodroid' ? 'var(--primary)' : 'transparent'};
-                               color:${waProvider === 'macrodroid' ? 'white' : 'var(--on-surface-var)'};">
-                        MacroDroid
-                      </button>
-                      <button id="wa-provider-btn-webjs-${s.id}" onclick="window.setWaProvider('${s.id}', 'webjs')"
-                        style="flex:1;padding:7px 10px;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.2s;
-                               background:${waProvider === 'webjs' ? 'var(--primary)' : 'transparent'};
-                               color:${waProvider === 'webjs' ? 'white' : 'var(--on-surface-var)'};">
-                        WhatsApp Web JS
-                      </button>
-                    </div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:16px;">
-                    <label class="form-label">Webhook URL (MacroDroid)</label>
-                    ${passField(`niche-wa-url-${s.id}`, !!s.macrodroidUrl, 'הזן Webhook URL')}
-                  </div>
                   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
                     <label class="form-label" style="margin:0;">קבוצות WhatsApp</label>
                     <div style="display:flex;gap:6px;">
@@ -804,17 +781,6 @@ document.getElementById('gen-token-modal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeGenerateTokenModal();
 });
 
-window.setWaProvider = (id, provider) => {
-  const hidden = document.getElementById(`wa-provider-${id}`);
-  if (hidden) hidden.value = provider;
-  ['macrodroid', 'webjs'].forEach(p => {
-    const btn = document.getElementById(`wa-provider-btn-${p}-${id}`);
-    if (!btn) return;
-    btn.style.background = p === provider ? 'var(--primary)' : 'transparent';
-    btn.style.color = p === provider ? 'white' : 'var(--on-surface-var)';
-  });
-  scheduleNicheSave(id);
-};
 
 const _nicheDebounceTimers = {};
 function scheduleNicheSave(id) {
@@ -825,7 +791,6 @@ function scheduleNicheSave(id) {
 function attachNicheAutoSave(id) {
   const inputIds = [
     `niche-prompt-${id}`,
-    `niche-wa-url-${id}`,
     `niche-fb-page-${id}`,
     `niche-fb-token-${id}`,
     `niche-fb-app-id-${id}`,
@@ -852,8 +817,6 @@ window.saveNiche = async (id) => {
         waEnabled:           document.getElementById(`wa-toggle-${id}`)?.classList.contains('active') ?? true,
         fbEnabled:           document.getElementById(`fb-toggle-${id}`)?.classList.contains('active') ?? true,
         instagramEnabled:    document.getElementById(`ig-toggle-${id}`)?.classList.contains('active') ?? true,
-        waProvider:          document.getElementById(`wa-provider-${id}`)?.value || 'macrodroid',
-        macrodroidUrl:       document.getElementById(`niche-wa-url-${id}`)?.value.trim() || '',
         facebookPageId:      document.getElementById(`niche-fb-page-${id}`)?.value.trim() || '',
         facebookToken:       document.getElementById(`niche-fb-token-${id}`)?.value.trim() || '',
         facebookAppId:       document.getElementById(`niche-fb-app-id-${id}`)?.value.trim() || '',
@@ -1537,7 +1500,7 @@ window.fireBroadcastNow = async (id) => {
     if (Array.isArray(wa)) {
       const ok   = wa.filter(r => r.success);
       const fail = wa.filter(r => !r.success);
-      const msg  = ok.length ? `✓ נשלח ל-${ok.length} קבוצות:\n${ok.map(r => `${r.chatName || r.group} (${r._provider || '?'})`).join('\n')}` : '';
+      const msg  = ok.length ? `✓ נשלח ל-${ok.length} קבוצות:\n${ok.map(r => r.chatName || r.group).join('\n')}` : '';
       const errMsg = fail.length ? `✗ ${fail.length} נכשלו:\n${fail.map(r => `${r.group} [${r.waGroupId || '?'}]: ${r.error || 'שגיאה לא ידועה'}`).join('\n')}` : '';
       alert([msg, errMsg].filter(Boolean).join('\n\n') || 'נשלח');
     } else if (wa?.success === false) {

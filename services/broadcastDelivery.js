@@ -85,15 +85,13 @@ async function send(broadcast, userId, { fireNow = false } = {}) {
         try {
           log(`Sending to WhatsApp group: "${g.name}" (${g.waGroup})`);
           const r = await whatsapp.send({
-            text:       b.text,
-            image:      imageUrl,
-            wa_group:   g.waGroup,
-            webhookUrl: subject.macrodroidUrl || null,
-            provider:   subject.waProvider    || null,
+            text:     b.text,
+            image:    imageUrl,
+            wa_group: g.waGroup,
           });
           results.whatsapp.push({ group: g.name, waGroupId: g.waGroup, ...r });
           if (r.success) {
-            log(`✓ WhatsApp sent to "${g.name}" via ${r._provider} (WA group: "${r.chatName || g.waGroup}")`);
+            log(`✓ WhatsApp sent to "${g.name}" (chat: "${r.chatName || g.waGroup}")`);
           } else {
             log(`⚠ WhatsApp not OK for "${g.name}": ${JSON.stringify(r.raw)}`, 'warn');
           }
