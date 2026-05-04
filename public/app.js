@@ -1533,7 +1533,7 @@ window.fireBroadcastNow = async (id) => {
       const ok   = wa.filter(r => r.success);
       const fail = wa.filter(r => !r.success);
       const msg  = ok.length ? `✓ נשלח ל-${ok.length} קבוצות:\n${ok.map(r => `${r.chatName || r.group} (${r._provider || '?'})`).join('\n')}` : '';
-      const errMsg = fail.length ? `✗ ${fail.length} נכשלו:\n${fail.map(r => r.error || r.group).join('\n')}` : '';
+      const errMsg = fail.length ? `✗ ${fail.length} נכשלו:\n${fail.map(r => `${r.group} [${r.waGroupId || '?'}]: ${r.error || 'שגיאה לא ידועה'}`).join('\n')}` : '';
       alert([msg, errMsg].filter(Boolean).join('\n\n') || 'נשלח');
     } else if (wa?.success === false) {
       alert(`שגיאה בוואטסאפ: ${wa.error}`);

@@ -91,7 +91,7 @@ async function send(broadcast, userId, { fireNow = false } = {}) {
             webhookUrl: subject.macrodroidUrl || null,
             provider:   subject.waProvider    || null,
           });
-          results.whatsapp.push({ group: g.name, ...r });
+          results.whatsapp.push({ group: g.name, waGroupId: g.waGroup, ...r });
           if (r.success) {
             log(`✓ WhatsApp sent to "${g.name}" via ${r._provider} (WA group: "${r.chatName || g.waGroup}")`);
           } else {
@@ -99,7 +99,7 @@ async function send(broadcast, userId, { fireNow = false } = {}) {
           }
         } catch (err) {
           log(`✗ WhatsApp failed for "${g.name}": ${err.message}`, 'error');
-          results.whatsapp.push({ group: g.name, success: false, error: err.message });
+          results.whatsapp.push({ group: g.name, waGroupId: g.waGroup, success: false, error: err.message });
         }
       }
     }
