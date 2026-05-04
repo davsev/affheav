@@ -519,6 +519,12 @@ function renderActiveNicheCard() {
                   <span class="material-symbols-outlined niche-cred-chevron">expand_more</span>
                 </summary>
                 <div class="niche-cred-body">
+                  <div class="form-group" style="margin-bottom:16px;">
+                    <label class="form-label" style="margin-bottom:6px;display:block;">קבוצה ראשית <span style="font-size:11px;color:var(--on-surface-var);">(שידורים)</span></label>
+                    <select class="form-input" id="niche-wa-group-${s.id}" onchange="scheduleNicheSave('${s.id}')">
+                      <option value="">טוען קבוצות...</option>
+                    </select>
+                  </div>
                   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
                     <label class="form-label" style="margin:0;">קבוצות WhatsApp</label>
                     <div style="display:flex;gap:6px;">
@@ -656,6 +662,7 @@ function renderActiveNicheCard() {
 
   // Load WA groups for this niche after rendering
   loadAndRenderWaGroups(s.id);
+  loadWaServiceGroupsIntoSelect(`niche-wa-group-${s.id}`, null, null, s.waGroup || '');
   attachNicheAutoSave(s.id);
 }
 
@@ -823,6 +830,7 @@ window.saveNiche = async (id) => {
         facebookAppSecret:   document.getElementById(`niche-fb-app-secret-${id}`)?.value.trim() || '',
         instagramAccountId:      document.getElementById(`niche-ig-account-${id}`)?.value.trim() || '',
         aliexpressTrackingId:    document.getElementById(`niche-ali-tracking-${id}`)?.value.trim() || '',
+        waGroup:                 document.getElementById(`niche-wa-group-${id}`)?.value || '',
       },
     });
     if (result) { result.style.color = '#16a34a'; result.textContent = '✓ נשמר'; }
@@ -2239,7 +2247,7 @@ function renderWaGroupsList(subjectId, groups) {
     </div>`).join('');
 }
 
-async function loadWaServiceGroupsIntoSelect(selectId, nameFieldId, idFieldId) {
+async function loadWaServiceGroupsIntoSelect(selectId, nameFieldId, idFieldId, selectedValue = '') {
   const sel = document.getElementById(selectId);
   if (!sel) return;
   try {
@@ -2249,15 +2257,17 @@ async function loadWaServiceGroupsIntoSelect(selectId, nameFieldId, idFieldId) {
       return;
     }
     sel.innerHTML = '<option value="">-- בחר קבוצה מחוברת --</option>' +
-      groups.map(g => `<option value="${escHtml(g.id)}" data-name="${escHtml(g.name)}">${escHtml(g.name)}</option>`).join('');
-    sel.onchange = () => {
-      const opt = sel.options[sel.selectedIndex];
-      if (!opt.value) return;
-      const nameEl = document.getElementById(nameFieldId);
-      const idEl   = document.getElementById(idFieldId);
-      if (nameEl && !nameEl.value) nameEl.value = opt.dataset.name || opt.text;
-      if (idEl) idEl.value = opt.value;
-    };
+      groups.map(g => `<option value="${escHtml(g.id)}" data-name="${escHtml(g.name)}" ${g.id === selectedValue ? 'selected' : ''}>${escHtml(g.name)}</option>`).join('');
+    if (nameFieldId || idFieldId) {
+      sel.onchange = () => {
+        const opt = sel.options[sel.selectedIndex];
+        if (!opt.value) return;
+        const nameEl = document.getElementById(nameFieldId);
+        const idEl   = document.getElementById(idFieldId);
+        if (nameEl && !nameEl.value) nameEl.value = opt.dataset.name || opt.text;
+        if (idEl) idEl.value = opt.value;
+      };
+    }
   } catch {
     sel.innerHTML = '<option value="">שגיאה בטעינת קבוצות (WA לא מחובר?)</option>';
   }

@@ -98,6 +98,7 @@ async function updateSubject(id, userId, fields) {
     fbEnabled:              'fb_enabled',
     instagramEnabled:       'instagram_enabled',
     aliexpressTrackingId:   'aliexpress_tracking_id',
+    waGroup:                'wa_group',
     waProvider:             'wa_provider',
   };
 
