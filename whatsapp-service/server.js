@@ -7,10 +7,38 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
 const API_KEY = process.env.WHATSAPP_API_KEY;
+const RETRY_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 2000;
+const MAX_RECONNECT_DELAY_MS = 60 * 1000;
 
-// In-memory state
 let qrCodeBase64 = null;
 let clientState = 'LOADING'; // LOADING | QR_READY | CONNECTED | DISCONNECTED
+let reconnectDelay = 5000;
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Sequential send queue — one message at a time to avoid WA rate-limiting
+let sendQueue = Promise.resolve();
+function enqueue(task) {
+  return new Promise((resolve, reject) => {
+    sendQueue = sendQueue.then(() => task().then(resolve, reject));
+  });
+}
+
+// Retry wrapper — retries on any error up to RETRY_ATTEMPTS times
+async function withRetry(fn) {
+  let lastErr;
+  for (let i = 0; i < RETRY_ATTEMPTS; i++) {
+    try { return await fn(); } catch (err) {
+      lastErr = err;
+      if (i < RETRY_ATTEMPTS - 1) {
+        console.warn(`[WA] Attempt ${i + 1} failed (${err.message}) — retrying in ${RETRY_DELAY_MS}ms`);
+        await sleep(RETRY_DELAY_MS);
+      }
+    }
+  }
+  throw lastErr;
+}
 
 const DATA_PATH = process.env.WHATSAPP_DATA_PATH || './wwebjs_auth';
 
@@ -30,6 +58,18 @@ const client = new Client({
   },
 });
 
+function scheduleReconnect() {
+  console.log(`[WA] Reconnecting in ${reconnectDelay / 1000}s...`);
+  setTimeout(() => {
+    clientState = 'LOADING';
+    client.initialize().catch((e) => {
+      console.error('[WA] Reinit error:', e.message);
+      reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
+      scheduleReconnect();
+    });
+  }, reconnectDelay);
+}
+
 client.on('qr', async (qr) => {
   clientState = 'QR_READY';
   qrCodeBase64 = await qrcode.toDataURL(qr);
@@ -39,6 +79,7 @@ client.on('qr', async (qr) => {
 client.on('ready', () => {
   clientState = 'CONNECTED';
   qrCodeBase64 = null;
+  reconnectDelay = 5000; // reset backoff on successful connect
   console.log('[WA] Client connected');
 });
 
@@ -49,23 +90,19 @@ client.on('authenticated', () => {
 client.on('auth_failure', (msg) => {
   clientState = 'DISCONNECTED';
   console.error('[WA] Auth failure:', msg);
+  scheduleReconnect();
 });
 
 client.on('disconnected', (reason) => {
   clientState = 'DISCONNECTED';
   console.warn('[WA] Disconnected:', reason);
-  // Attempt reconnect after 5s
-  setTimeout(() => {
-    clientState = 'LOADING';
-    client.initialize().catch((e) => console.error('[WA] Reinit error:', e));
-  }, 5000);
+  scheduleReconnect();
 });
 
 client.initialize().catch((e) => console.error('[WA] Init error:', e));
 
-// Auth middleware
 function requireApiKey(req, res, next) {
-  if (!API_KEY) return next(); // No key configured — open in dev
+  if (!API_KEY) return next();
   if (req.headers['x-api-key'] !== API_KEY) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -80,7 +117,7 @@ app.get('/status', (req, res) => {
   });
 });
 
-// GET /qr — render QR as an HTML page for easy browser scanning
+// GET /qr
 app.get('/qr', (req, res) => {
   if (clientState === 'CONNECTED') {
     return res.send('<p style="font-family:sans-serif;font-size:1.5rem">✅ Already connected</p>');
@@ -100,8 +137,8 @@ app.get('/qr', (req, res) => {
 </html>`);
 });
 
-// POST /send
-app.post('/send', requireApiKey, async (req, res) => {
+// POST /send — queued + retried
+app.post('/send', requireApiKey, (req, res) => {
   const { groupId, text, imageUrl } = req.body;
 
   if (!groupId || !text) {
@@ -111,40 +148,39 @@ app.post('/send', requireApiKey, async (req, res) => {
     return res.status(503).json({ error: 'WhatsApp not connected', state: clientState });
   }
 
-  try {
-    // Verify the chat exists and the client is a member before sending
+  enqueue(async () => {
     let chat;
-    try {
-      chat = await client.getChatById(groupId);
-    } catch (_) {
-      chat = null;
-    }
+    try { chat = await client.getChatById(groupId); } catch (_) { chat = null; }
     if (!chat) {
-      return res.status(404).json({ success: false, error: `Group not found: ${groupId}` });
+      const err = new Error(`Group not found: ${groupId}`);
+      err.status = 404;
+      throw err;
     }
     if (!chat.isGroup) {
-      return res.status(400).json({ success: false, error: `ID is not a group (it's a private chat): ${groupId}` });
+      const err = new Error(`Not a group: ${groupId}`);
+      err.status = 400;
+      throw err;
     }
 
-    let message;
-    if (imageUrl) {
-      const media = await MessageMedia.fromUrl(imageUrl, { unsafeMime: true });
-      message = await client.sendMessage(groupId, media, { caption: text });
-    } else {
-      message = await client.sendMessage(groupId, text);
-    }
-    console.log(`[WA] Sent to group "${chat.name}" (${groupId}) — messageId: ${message.id._serialized}`);
-    res.json({ success: true, messageId: message.id._serialized, chatName: chat.name });
-  } catch (err) {
-    console.error('[WA] Send error:', err.message, err.stack);
-    const errMsg = err.message === 't'
-      ? `WhatsApp rejected the message to group "${groupId}" (may be admin-only or rate limited)`
-      : err.message;
-    res.status(500).json({ success: false, error: errMsg });
-  }
+    const message = await withRetry(async () => {
+      if (imageUrl) {
+        const media = await MessageMedia.fromUrl(imageUrl, { unsafeMime: true });
+        return client.sendMessage(groupId, media, { caption: text });
+      }
+      return client.sendMessage(groupId, text);
+    });
+
+    console.log(`[WA] Sent to "${chat.name}" (${groupId}) — ${message.id._serialized}`);
+    return { chatName: chat.name, messageId: message.id._serialized };
+  })
+    .then(result => res.json({ success: true, ...result }))
+    .catch(err => {
+      console.error('[WA] Send failed:', err.message);
+      res.status(err.status || 500).json({ success: false, error: err.message });
+    });
 });
 
-// GET /groups — list joined groups (useful for finding groupId values)
+// GET /groups
 app.get('/groups', requireApiKey, async (req, res) => {
   if (clientState !== 'CONNECTED') {
     return res.status(503).json({ error: 'WhatsApp not connected', state: clientState });
