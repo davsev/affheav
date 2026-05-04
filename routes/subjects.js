@@ -4,6 +4,7 @@ const {
   getSubjectsByUser, getSubjectById, createSubject, updateSubject, deleteSubject,
   stripSensitive,
   getGroupsBySubject, getAllGroupsByUser, createGroup, updateGroup, deleteGroup,
+  deleteInvalidGroups,
 } = require('../services/subjectService');
 
 // GET /api/subjects
@@ -104,6 +105,16 @@ router.delete('/whatsapp-groups/:groupId', async (req, res) => {
   try {
     await deleteGroup(req.params.groupId, req.user.id);
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE /api/subjects/whatsapp-groups-invalid — remove groups with non-JID wa_group values
+router.delete('/whatsapp-groups-invalid', async (req, res) => {
+  try {
+    const deleted = await deleteInvalidGroups(req.user.id);
+    res.json({ success: true, deleted });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
