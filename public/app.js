@@ -544,9 +544,14 @@ function renderActiveNicheCard() {
                   </div>
                   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
                     <label class="form-label" style="margin:0;">קבוצות WhatsApp</label>
-                    <button class="btn btn-ghost btn-sm" onclick="showAddWaGroup('${s.id}')" style="font-size:11px;padding:4px 10px;">
-                      <span class="material-symbols-outlined" style="font-size:13px;">add</span>הוסף קבוצה
-                    </button>
+                    <div style="display:flex;gap:6px;">
+                      <button class="btn btn-ghost btn-sm" onclick="cleanupInvalidWaGroups('${s.id}')" style="font-size:11px;padding:4px 10px;color:#dc2626;" title="מחק קבוצות עם מזהה לא תקין">
+                        <span class="material-symbols-outlined" style="font-size:13px;">delete_sweep</span>
+                      </button>
+                      <button class="btn btn-ghost btn-sm" onclick="showAddWaGroup('${s.id}')" style="font-size:11px;padding:4px 10px;">
+                        <span class="material-symbols-outlined" style="font-size:13px;">add</span>הוסף קבוצה
+                      </button>
+                    </div>
                   </div>
                   <div id="wa-groups-list-${s.id}" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;">
                     <div style="font-size:12px;color:var(--on-surface-var);">טוען קבוצות...</div>
@@ -2322,6 +2327,17 @@ window.saveNewWaGroup = async (subjectId) => {
     );
     hideAddWaGroup(subjectId);
     await loadAndRenderWaGroups(subjectId);
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
+
+window.cleanupInvalidWaGroups = async (subjectId) => {
+  if (!confirm('למחוק את כל הקבוצות עם מזהה לא תקין (לא מסתיים ב-@g.us)?')) return;
+  try {
+    const data = await api('/api/subjects/whatsapp-groups-invalid', { method: 'DELETE' });
+    await loadAndRenderWaGroups(subjectId);
+    alert(`נמחקו ${data.deleted} קבוצות לא תקינות`);
   } catch (err) {
     alert('שגיאה: ' + err.message);
   }
