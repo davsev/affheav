@@ -125,9 +125,6 @@ app.post('/send', requireApiKey, async (req, res) => {
     if (!chat.isGroup) {
       return res.status(400).json({ success: false, error: `ID is not a group (it's a private chat): ${groupId}` });
     }
-    if (chat.isReadOnly) {
-      return res.status(403).json({ success: false, error: `Group "${chat.name}" is in announcement mode — only admins can send messages` });
-    }
 
     let message;
     if (imageUrl) {
