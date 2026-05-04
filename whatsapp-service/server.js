@@ -125,6 +125,9 @@ app.post('/send', requireApiKey, async (req, res) => {
     if (!chat.isGroup) {
       return res.status(400).json({ success: false, error: `ID is not a group (it's a private chat): ${groupId}` });
     }
+    if (chat.isReadOnly) {
+      return res.status(403).json({ success: false, error: `Group "${chat.name}" is in announcement mode — only admins can send messages` });
+    }
 
     let message;
     if (imageUrl) {
@@ -136,8 +139,11 @@ app.post('/send', requireApiKey, async (req, res) => {
     console.log(`[WA] Sent to group "${chat.name}" (${groupId}) — messageId: ${message.id._serialized}`);
     res.json({ success: true, messageId: message.id._serialized, chatName: chat.name });
   } catch (err) {
-    console.error('[WA] Send error:', err.message);
-    res.status(500).json({ success: false, error: err.message });
+    console.error('[WA] Send error:', err.message, err.stack);
+    const errMsg = err.message === 't'
+      ? `WhatsApp rejected the message to group "${groupId}" (may be admin-only or rate limited)`
+      : err.message;
+    res.status(500).json({ success: false, error: errMsg });
   }
 });
 
