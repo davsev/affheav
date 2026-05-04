@@ -1497,14 +1497,10 @@ window.fireBroadcastNow = async (id) => {
   try {
     const data = await api(`/api/broadcasts/${id}/fire-now`, { method: 'POST' });
     const wa = data.result?.whatsapp;
-    if (Array.isArray(wa)) {
-      const ok   = wa.filter(r => r.success);
-      const fail = wa.filter(r => !r.success);
-      const msg  = ok.length ? `✓ נשלח ל-${ok.length} קבוצות:\n${ok.map(r => r.chatName || r.group).join('\n')}` : '';
-      const errMsg = fail.length ? `✗ ${fail.length} נכשלו:\n${fail.map(r => `${r.group} [${r.waGroupId || '?'}]: ${r.error || 'שגיאה לא ידועה'}`).join('\n')}` : '';
-      alert([msg, errMsg].filter(Boolean).join('\n\n') || 'נשלח');
-    } else if (wa?.success === false) {
+    if (wa?.success === false) {
       alert(`שגיאה בוואטסאפ: ${wa.error}`);
+    } else if (wa?.success) {
+      alert(`✓ נשלח (${wa.chatName || wa.group || ''})`);
     } else {
       alert('ההודעה נשלחה!');
     }
