@@ -162,20 +162,35 @@ app.post('/send', requireApiKey, (req, res) => {
       throw err;
     }
 
-    const message = await withRetry(async () => {
-      if (imageUrl) {
-        const media = await MessageMedia.fromUrl(imageUrl, { unsafeMime: true });
-        return client.sendMessage(groupId, media, { caption: text });
+    let message;
+    if (imageUrl) {
+      console.log(`[WA] Loading image from: ${imageUrl}`);
+      let media = null;
+      try {
+        media = await MessageMedia.fromUrl(imageUrl, { unsafeMime: true });
+        if (!media.mimetype?.startsWith('image/')) {
+          console.warn(`[WA] Image URL returned non-image content (${media.mimetype}) — falling back to text-only`);
+          media = null;
+        }
+      } catch (imgErr) {
+        console.warn(`[WA] Failed to load image (${imgErr.message}) — falling back to text-only`);
       }
-      return client.sendMessage(groupId, text);
-    });
+
+      if (media) {
+        message = await withRetry(() => client.sendMessage(groupId, media, { caption: text }));
+      } else {
+        message = await withRetry(() => client.sendMessage(groupId, text));
+      }
+    } else {
+      message = await withRetry(() => client.sendMessage(groupId, text));
+    }
 
     console.log(`[WA] Sent to "${chat.name}" (${groupId}) — ${message.id._serialized}`);
     return { chatName: chat.name, messageId: message.id._serialized };
   })
     .then(result => res.json({ success: true, ...result }))
     .catch(err => {
-      console.error('[WA] Send failed:', err.message);
+      console.error('[WA] Send failed:', err.message, err.stack);
       res.status(err.status || 500).json({ success: false, error: err.message });
     });
 });
