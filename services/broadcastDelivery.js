@@ -51,6 +51,7 @@ async function send(broadcast, userId) {
   log(`Subject: "${subject.name}" | wa_group: ${subject.waGroup || '(none)'}`);
 
   const imageUrl = buildImageUrl(b.image_url);
+  if (imageUrl) log(`Image URL: ${imageUrl}`);
   const results  = { whatsapp: null, facebook: null };
 
   // ── WhatsApp ──────────────────────────────────────────────────────────────
