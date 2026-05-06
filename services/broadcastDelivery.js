@@ -27,12 +27,13 @@ function buildImageUrl(imageUrl) {
 // Accept camelCase (from service) or snake_case (from DB row)
 function _normalize(b) {
   return {
-    id:         b.id,
-    label:      b.label,
-    text:       b.text,
-    image_url:  b.image_url  ?? b.imageUrl  ?? null,
-    subject_id: b.subject_id ?? b.subjectId ?? null,
-    user_id:    b.user_id    ?? b.userId    ?? null,
+    id:           b.id,
+    label:        b.label,
+    text:         b.text,
+    image_url:    b.image_url    ?? b.imageUrl    ?? null,
+    subject_id:   b.subject_id  ?? b.subjectId   ?? null,
+    user_id:      b.user_id     ?? b.userId      ?? null,
+    send_facebook: b.send_facebook ?? b.sendFacebook ?? true,
   };
 }
 
@@ -79,32 +80,37 @@ async function send(broadcast, userId) {
   }
 
   // ── Facebook (independent of WhatsApp result) ─────────────────────────────
-  try {
-    log('Posting to Facebook...');
-    let fbResult;
-    if (imageUrl) {
-      fbResult = await facebook.postPhoto({
-        message:        b.text,
-        imageUrl,
-        facebookPageId: subject.facebookPageId || null,
-        facebookToken:  subject.facebookToken  || null,
-      });
-    } else {
-      fbResult = await facebook.postText({
-        message:        b.text,
-        facebookPageId: subject.facebookPageId || null,
-        facebookToken:  subject.facebookToken  || null,
-      });
+  if (!b.send_facebook) {
+    log('⏭ Facebook skipped (disabled for this broadcast)');
+    results.facebook = { success: false, skipped: true };
+  } else {
+    try {
+      log('Posting to Facebook...');
+      let fbResult;
+      if (imageUrl) {
+        fbResult = await facebook.postPhoto({
+          message:        b.text,
+          imageUrl,
+          facebookPageId: subject.facebookPageId || null,
+          facebookToken:  subject.facebookToken  || null,
+        });
+      } else {
+        fbResult = await facebook.postText({
+          message:        b.text,
+          facebookPageId: subject.facebookPageId || null,
+          facebookToken:  subject.facebookToken  || null,
+        });
+      }
+      results.facebook = fbResult;
+      if (fbResult.success) {
+        log(`✓ Facebook posted (id: ${fbResult.data?.post_id || fbResult.data?.id})`);
+      } else {
+        log(`⚠ Facebook not OK: ${JSON.stringify(fbResult)}`, 'warn');
+      }
+    } catch (err) {
+      log(`✗ Facebook failed: ${err.message}`, 'error');
+      results.facebook = { success: false, error: err.message };
     }
-    results.facebook = fbResult;
-    if (fbResult.success) {
-      log(`✓ Facebook posted (id: ${fbResult.data?.post_id || fbResult.data?.id})`);
-    } else {
-      log(`⚠ Facebook not OK: ${JSON.stringify(fbResult)}`, 'warn');
-    }
-  } catch (err) {
-    log(`✗ Facebook failed: ${err.message}`, 'error');
-    results.facebook = { success: false, error: err.message };
   }
 
   log(`■ Broadcast complete — WA: ${JSON.stringify(results.whatsapp)} | FB: ${JSON.stringify(results.facebook)}`);

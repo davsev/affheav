@@ -127,6 +127,10 @@ function openModal(broadcast = null) {
     subjSel.value = broadcast.subjectId;
   }
 
+  // Platform toggles
+  const sendFb = broadcast ? broadcast.sendFacebook !== false : true;
+  el('bcast-send-facebook').classList.toggle('active', sendFb);
+
   // Character counter
   updateCharCount();
 
@@ -195,8 +199,9 @@ async function saveBroadcast() {
   const minute    = parseInt(el('bcast-minute').value, 10);
   const skipFri   = el('bcast-skip-fri').checked;
   const skipSat   = el('bcast-skip-sat').checked;
-  const fileInput   = el('bcast-image-input');
-  const externalUrl = el('bcast-image-url').value.trim();
+  const fileInput     = el('bcast-image-input');
+  const externalUrl   = el('bcast-image-url').value.trim();
+  const sendFacebook  = el('bcast-send-facebook').classList.contains('active');
 
   // Validation
   if (!label)     { alert('יש להזין שם להודעה'); return; }
@@ -220,7 +225,7 @@ async function saveBroadcast() {
 
     if (_editId) {
       // ── Edit mode ──────────────────────────────────────────────────────
-      const putBody = { label, text, subjectId, recurrence };
+      const putBody = { label, text, subjectId, recurrence, sendFacebook };
       if (!hasFile && externalUrl) putBody.imageUrl = externalUrl;
       await api(`/api/broadcasts/${_editId}`, { method: 'PUT', body: putBody });
 
@@ -243,7 +248,8 @@ async function saveBroadcast() {
       fd.append('label',      label);
       fd.append('text',       text);
       fd.append('subjectId',  subjectId);
-      fd.append('recurrence', JSON.stringify(recurrence));
+      fd.append('recurrence',    JSON.stringify(recurrence));
+      fd.append('sendFacebook',  String(sendFacebook));
       if (hasFile) {
         fd.append('image', fileInput.files[0]);
       } else if (externalUrl) {
