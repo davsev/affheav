@@ -1333,6 +1333,11 @@
         <!-- Live preview -->
         <div style="font-size:13px;color:var(--primary);font-weight:600;min-height:20px;" id="bcast-recurrence-preview"></div>
       </div>
+      <!-- Platforms -->
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 0 2px;">
+        <div class="ios-toggle active" id="bcast-send-facebook" role="switch" aria-label="שלח לפייסבוק" onclick="this.classList.toggle('active')"></div>
+        <label style="font-size:14px;cursor:pointer;" onclick="document.getElementById('bcast-send-facebook').classList.toggle('active')">שלח לפייסבוק</label>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeBroadcastModal()">ביטול</button>

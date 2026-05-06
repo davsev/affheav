@@ -177,7 +177,12 @@ app.post('/send', requireApiKey, (req, res) => {
       }
 
       if (media) {
-        message = await withRetry(() => client.sendMessage(groupId, media, { caption: text }));
+        try {
+          message = await withRetry(() => client.sendMessage(groupId, media, { caption: text }));
+        } catch (sendErr) {
+          console.warn(`[WA] Image send failed (${sendErr.message}) — falling back to text-only`);
+          message = await withRetry(() => client.sendMessage(groupId, text));
+        }
       } else {
         message = await withRetry(() => client.sendMessage(groupId, text));
       }

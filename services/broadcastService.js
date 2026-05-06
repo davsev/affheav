@@ -219,6 +219,7 @@ function _row(r) {
     label:              r.label,
     text:               r.text,
     imageUrl:           r.image_url,
+    sendFacebook:       r.send_facebook ?? true,
     recurrence:         r.recurrence,
     cron:               r.cron,
     enabled:            r.enabled,
@@ -268,7 +269,7 @@ async function getById(id, userId) {
  * @returns {Promise<object>}
  */
 async function create(userId, fields) {
-  const { subjectId, label, text, recurrence, imageUrl } = fields;
+  const { subjectId, label, text, recurrence, imageUrl, sendFacebook } = fields;
 
   // Validate subject ownership
   const { rows: subjectRows } = await query(
@@ -284,10 +285,10 @@ async function create(userId, fields) {
 
   const { rows } = await query(
     `INSERT INTO broadcast_messages
-       (user_id, subject_id, label, text, image_url, recurrence, cron)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (user_id, subject_id, label, text, image_url, recurrence, cron, send_facebook)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [userId, subjectId, label, text, imageUrl || null, JSON.stringify(recurrence), cronExpr]
+    [userId, subjectId, label, text, imageUrl || null, JSON.stringify(recurrence), cronExpr, sendFacebook !== false]
   );
   return _row(rows[0]);
 }
@@ -346,6 +347,10 @@ async function update(id, userId, fields) {
   if (fields.imageUrl !== undefined) {
     updates.push(`image_url = $${i++}`);
     values.push(fields.imageUrl);
+  }
+  if (fields.sendFacebook !== undefined) {
+    updates.push(`send_facebook = $${i++}`);
+    values.push(!!fields.sendFacebook);
   }
 
   if (updates.length === 0) return getById(id, userId);
