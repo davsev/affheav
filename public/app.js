@@ -1757,6 +1757,8 @@ async function loadWWebjsStatus() {
   const qrImg      = document.getElementById('wwebjs-qr-img');
   const groupsWrap = document.getElementById('wwebjs-groups-wrap');
   const noConfig   = document.getElementById('wwebjs-no-config');
+  const debugWrap  = document.getElementById('wwebjs-debug-wrap');
+  const debugPre   = document.getElementById('wwebjs-debug-pre');
   if (!dot) return;
 
   try {
@@ -1765,6 +1767,7 @@ async function loadWWebjsStatus() {
     qrWrap.style.display     = 'none';
     groupsWrap.style.display = 'none';
     noConfig.style.display   = 'none';
+    if (debugWrap) debugWrap.style.display = 'none';
 
     if (status.state === 'CONNECTED') {
       dot.style.background = '#22c55e';
@@ -1778,15 +1781,15 @@ async function loadWWebjsStatus() {
         qrImg.src = status.qr;
         qrWrap.style.display = 'block';
       }
-      // Auto-refresh every 20s while waiting for scan
       setTimeout(loadWWebjsStatus, 20000);
-    } else if (status.state === 'DISCONNECTED') {
-      dot.style.background = '#ef4444';
-      label.textContent    = status.error ? `שגיאה: ${status.error}` : 'מנותק — מנסה להתחבר מחדש...';
-      setTimeout(loadWWebjsStatus, 5000);
     } else {
-      dot.style.background = '#94a3b8';
-      label.textContent    = 'מאתחל...';
+      const isDisconnected = status.state === 'DISCONNECTED';
+      dot.style.background = isDisconnected ? '#ef4444' : '#94a3b8';
+      label.textContent    = isDisconnected
+        ? (status.error ? `שגיאה: ${status.error}` : 'מנותק — מנסה להתחבר מחדש...')
+        : 'מאתחל...';
+      // Fetch debug info to show exactly what Chrome is doing
+      loadWWebjsDebug();
       setTimeout(loadWWebjsStatus, 5000);
     }
   } catch (err) {
@@ -1797,6 +1800,17 @@ async function loadWWebjsStatus() {
       label.textContent      = 'שירות לא מוגדר';
     }
   }
+}
+
+async function loadWWebjsDebug() {
+  const debugWrap = document.getElementById('wwebjs-debug-wrap');
+  const debugPre  = document.getElementById('wwebjs-debug-pre');
+  if (!debugWrap || !debugPre) return;
+  try {
+    const info = await api('/api/whatsapp-service/debug');
+    debugWrap.style.display = 'block';
+    debugPre.textContent = JSON.stringify(info, null, 2);
+  } catch (_) {}
 }
 
 async function loadWWebjsGroups() {
