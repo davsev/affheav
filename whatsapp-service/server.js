@@ -1,6 +1,7 @@
 const express = require('express');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
+const sharp = require('sharp');
 
 const app = express();
 app.use(express.json());
@@ -171,6 +172,16 @@ app.post('/send', requireApiKey, (req, res) => {
         if (!media.mimetype?.startsWith('image/')) {
           console.warn(`[WA] Image URL returned non-image content (${media.mimetype}) — falling back to text-only`);
           media = null;
+        } else if (media.mimetype === 'image/webp') {
+          // WhatsApp rejects webp as a regular photo — convert to JPEG
+          try {
+            const jpegBuf = await sharp(Buffer.from(media.data, 'base64')).jpeg({ quality: 85 }).toBuffer();
+            media = new MessageMedia('image/jpeg', jpegBuf.toString('base64'), 'image.jpg');
+            console.log('[WA] Converted webp → JPEG');
+          } catch (convErr) {
+            console.warn(`[WA] webp conversion failed (${convErr.message}) — sending text-only`);
+            media = null;
+          }
         }
       } catch (imgErr) {
         console.warn(`[WA] Failed to load image (${imgErr.message}) — falling back to text-only`);
