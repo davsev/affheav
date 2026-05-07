@@ -2,6 +2,9 @@ const express = require('express');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const sharp = require('sharp');
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
 
 const app = express();
 app.use(express.json());
@@ -46,24 +49,35 @@ async function withRetry(fn) {
 
 const DATA_PATH = process.env.WHATSAPP_DATA_PATH || './wwebjs_auth';
 
-const client = new Client({
-  authStrategy: new LocalAuth({ dataPath: DATA_PATH }),
-  // Always fetch the current WA Web version rather than a pinned snapshot.
-  // Pinned snapshots go stale quickly; WhatsApp rejects old versions within weeks.
-  webVersionCache: { type: 'none' },
-  puppeteer: {
-    headless: true,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--no-first-run',
-      '--no-zygote',
-    ],
-  },
-});
+// Remove the Chrome SingletonLock if left behind by a crashed process
+function cleanupStaleLock() {
+  const lockFile = path.join(DATA_PATH, 'session', 'SingletonLock');
+  try { fs.unlinkSync(lockFile); console.log('[WA] Removed stale Chrome lock'); } catch (_) {}
+}
+
+function makeClient() {
+  return new Client({
+    authStrategy: new LocalAuth({ dataPath: DATA_PATH }),
+    // Always fetch the current WA Web version rather than a pinned snapshot.
+    webVersionCache: { type: 'none' },
+    puppeteer: {
+      headless: true,
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-extensions',
+        '--disable-background-networking',
+      ],
+    },
+  });
+}
+
+let client = makeClient();
 
 function startInitTimeout() {
   clearTimeout(initTimeoutId);
@@ -79,7 +93,12 @@ function startInitTimeout() {
 
 function scheduleReconnect() {
   console.log(`[WA] Reconnecting in ${reconnectDelay / 1000}s...`);
-  setTimeout(() => {
+  setTimeout(async () => {
+    // Destroy old client + clean up stale Chrome lock before re-init
+    try { await client.destroy(); } catch (_) {}
+    cleanupStaleLock();
+    client = makeClient();
+    attachClientEvents();
     clientState = 'LOADING';
     startInitTimeout();
     client.initialize().catch((e) => {
@@ -92,41 +111,46 @@ function scheduleReconnect() {
   }, reconnectDelay);
 }
 
-client.on('qr', async (qr) => {
-  clearTimeout(initTimeoutId);
-  lastError = null;
-  clientState = 'QR_READY';
-  qrCodeBase64 = await qrcode.toDataURL(qr);
-  console.log('[WA] QR ready — visit /qr to scan');
-});
+function attachClientEvents() {
+  client.on('qr', async (qr) => {
+    clearTimeout(initTimeoutId);
+    lastError = null;
+    clientState = 'QR_READY';
+    qrCodeBase64 = await qrcode.toDataURL(qr);
+    console.log('[WA] QR ready — visit /qr to scan');
+  });
 
-client.on('ready', () => {
-  clearTimeout(initTimeoutId);
-  lastError = null;
-  clientState = 'CONNECTED';
-  qrCodeBase64 = null;
-  reconnectDelay = 5000;
-  console.log('[WA] Client connected');
-});
+  client.on('ready', () => {
+    clearTimeout(initTimeoutId);
+    lastError = null;
+    clientState = 'CONNECTED';
+    qrCodeBase64 = null;
+    reconnectDelay = 5000;
+    console.log('[WA] Client connected');
+  });
 
-client.on('authenticated', () => {
-  console.log('[WA] Authenticated');
-});
+  client.on('authenticated', () => {
+    console.log('[WA] Authenticated');
+  });
 
-client.on('auth_failure', (msg) => {
-  lastError = `Auth failure: ${msg}`;
-  clientState = 'DISCONNECTED';
-  console.error('[WA] Auth failure:', msg);
-  scheduleReconnect();
-});
+  client.on('auth_failure', (msg) => {
+    lastError = `Auth failure: ${msg}`;
+    clientState = 'DISCONNECTED';
+    console.error('[WA] Auth failure:', msg);
+    scheduleReconnect();
+  });
 
-client.on('disconnected', (reason) => {
-  lastError = `Disconnected: ${reason}`;
-  clientState = 'DISCONNECTED';
-  console.warn('[WA] Disconnected:', reason);
-  scheduleReconnect();
-});
+  client.on('disconnected', (reason) => {
+    lastError = `Disconnected: ${reason}`;
+    clientState = 'DISCONNECTED';
+    console.warn('[WA] Disconnected:', reason);
+    scheduleReconnect();
+  });
+}
 
+// Boot
+cleanupStaleLock();
+attachClientEvents();
 startInitTimeout();
 client.initialize().catch((e) => {
   clearTimeout(initTimeoutId);
@@ -150,6 +174,29 @@ app.get('/status', (req, res) => {
     state: clientState,
     qr: clientState === 'QR_READY' ? qrCodeBase64 : undefined,
     error: lastError || undefined,
+  });
+});
+
+// GET /debug — full diagnostics to help troubleshoot deployment issues
+app.get('/debug', (req, res) => {
+  const chromePath = process.env.PUPPETEER_EXECUTABLE_PATH || '(auto-detect)';
+  let chromeVersion = null;
+  let chromeError = null;
+  try {
+    chromeVersion = execSync(
+      `"${process.env.PUPPETEER_EXECUTABLE_PATH || 'google-chrome-stable'}" --version --no-sandbox 2>&1`,
+      { timeout: 5000 }
+    ).toString().trim();
+  } catch (e) {
+    chromeError = e.message.split('\n')[0];
+  }
+  res.json({
+    state: clientState,
+    error: lastError || null,
+    reconnectDelaySec: reconnectDelay / 1000,
+    chrome: { path: chromePath, version: chromeVersion, error: chromeError },
+    node: process.version,
+    dataPath: DATA_PATH,
   });
 });
 
@@ -208,7 +255,6 @@ app.post('/send', requireApiKey, (req, res) => {
           console.warn(`[WA] Image URL returned non-image content (${media.mimetype}) — falling back to text-only`);
           media = null;
         } else if (media.mimetype === 'image/webp') {
-          // WhatsApp rejects webp as a regular photo — convert to JPEG
           try {
             const jpegBuf = await sharp(Buffer.from(media.data, 'base64')).jpeg({ quality: 85 }).toBuffer();
             media = new MessageMedia('image/jpeg', jpegBuf.toString('base64'), 'image.jpg');
