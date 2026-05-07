@@ -1,10 +1,11 @@
 # Uses the official Puppeteer image which includes a compatible Chrome build
-FROM ghcr.io/puppeteer/puppeteer:22
+FROM ghcr.io/puppeteer/puppeteer:24
 
 USER root
 
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+# Skip re-downloading Chrome on npm install; use the Chrome bundled in the base image.
+# Do NOT override PUPPETEER_EXECUTABLE_PATH — the base image already sets it correctly.
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 WORKDIR /app
 

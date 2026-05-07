@@ -45,6 +45,12 @@ const DATA_PATH = process.env.WHATSAPP_DATA_PATH || './wwebjs_auth';
 
 const client = new Client({
   authStrategy: new LocalAuth({ dataPath: DATA_PATH }),
+  // Pin to a known-compatible WA Web version; without this the library fetches
+  // whatever is live on WhatsApp's servers, which often breaks auth/session.
+  webVersionCache: {
+    type: 'remote',
+    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+  },
   puppeteer: {
     headless: true,
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
