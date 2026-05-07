@@ -45,6 +45,9 @@ const DATA_PATH = process.env.WHATSAPP_DATA_PATH || './wwebjs_auth';
 
 const client = new Client({
   authStrategy: new LocalAuth({ dataPath: DATA_PATH }),
+  // Always fetch the current WA Web version rather than a pinned snapshot.
+  // Pinned snapshots go stale quickly; WhatsApp rejects old versions within weeks.
+  webVersionCache: { type: 'none' },
   puppeteer: {
     headless: true,
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
