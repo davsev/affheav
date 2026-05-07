@@ -1780,6 +1780,10 @@ async function loadWWebjsStatus() {
       }
       // Auto-refresh every 20s while waiting for scan
       setTimeout(loadWWebjsStatus, 20000);
+    } else if (status.state === 'DISCONNECTED') {
+      dot.style.background = '#ef4444';
+      label.textContent    = status.error ? `שגיאה: ${status.error}` : 'מנותק — מנסה להתחבר מחדש...';
+      setTimeout(loadWWebjsStatus, 5000);
     } else {
       dot.style.background = '#94a3b8';
       label.textContent    = 'מאתחל...';

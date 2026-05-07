@@ -15,6 +15,9 @@ const MAX_RECONNECT_DELAY_MS = 60 * 1000;
 let qrCodeBase64 = null;
 let clientState = 'LOADING'; // LOADING | QR_READY | CONNECTED | DISCONNECTED
 let reconnectDelay = 5000;
+let lastError = null;
+let initTimeoutId = null;
+const INIT_TIMEOUT_MS = 120_000;
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -62,11 +65,26 @@ const client = new Client({
   },
 });
 
+function startInitTimeout() {
+  clearTimeout(initTimeoutId);
+  initTimeoutId = setTimeout(() => {
+    if (clientState === 'LOADING') {
+      lastError = 'Initialization timed out after 2 minutes';
+      console.warn('[WA]', lastError);
+      clientState = 'DISCONNECTED';
+      scheduleReconnect();
+    }
+  }, INIT_TIMEOUT_MS);
+}
+
 function scheduleReconnect() {
   console.log(`[WA] Reconnecting in ${reconnectDelay / 1000}s...`);
   setTimeout(() => {
     clientState = 'LOADING';
+    startInitTimeout();
     client.initialize().catch((e) => {
+      clearTimeout(initTimeoutId);
+      lastError = e.message;
       console.error('[WA] Reinit error:', e.message);
       reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
       scheduleReconnect();
@@ -75,15 +93,19 @@ function scheduleReconnect() {
 }
 
 client.on('qr', async (qr) => {
+  clearTimeout(initTimeoutId);
+  lastError = null;
   clientState = 'QR_READY';
   qrCodeBase64 = await qrcode.toDataURL(qr);
   console.log('[WA] QR ready — visit /qr to scan');
 });
 
 client.on('ready', () => {
+  clearTimeout(initTimeoutId);
+  lastError = null;
   clientState = 'CONNECTED';
   qrCodeBase64 = null;
-  reconnectDelay = 5000; // reset backoff on successful connect
+  reconnectDelay = 5000;
   console.log('[WA] Client connected');
 });
 
@@ -92,18 +114,27 @@ client.on('authenticated', () => {
 });
 
 client.on('auth_failure', (msg) => {
+  lastError = `Auth failure: ${msg}`;
   clientState = 'DISCONNECTED';
   console.error('[WA] Auth failure:', msg);
   scheduleReconnect();
 });
 
 client.on('disconnected', (reason) => {
+  lastError = `Disconnected: ${reason}`;
   clientState = 'DISCONNECTED';
   console.warn('[WA] Disconnected:', reason);
   scheduleReconnect();
 });
 
-client.initialize().catch((e) => console.error('[WA] Init error:', e));
+startInitTimeout();
+client.initialize().catch((e) => {
+  clearTimeout(initTimeoutId);
+  lastError = e.message;
+  console.error('[WA] Init error:', e.message);
+  clientState = 'DISCONNECTED';
+  scheduleReconnect();
+});
 
 function requireApiKey(req, res, next) {
   if (!API_KEY) return next();
@@ -118,6 +149,7 @@ app.get('/status', (req, res) => {
   res.json({
     state: clientState,
     qr: clientState === 'QR_READY' ? qrCodeBase64 : undefined,
+    error: lastError || undefined,
   });
 });
 
