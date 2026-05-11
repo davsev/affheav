@@ -323,6 +323,26 @@
           </div>
         </div>
 
+        <!-- Sync progress bar -->
+        <div id="sync-progress-panel" style="display:none;margin-bottom:12px;">
+          <div class="sync-progress-bar-wrap">
+            <div id="sync-progress-fill"></div>
+          </div>
+          <div id="sync-progress-text" class="sync-progress-text"></div>
+        </div>
+
+        <!-- 404 results panel -->
+        <div id="sync-404-panel" style="display:none;margin-bottom:14px;">
+          <div class="sync-404-header">
+            <span>⚠ <span id="sync-404-count"></span> מוצרים לא נמצאו ב-AliExpress</span>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-sm" id="btn-delete-all-404" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.2);">מחק הכל</button>
+              <button class="btn btn-sm btn-ghost" id="btn-dismiss-404">סגור</button>
+            </div>
+          </div>
+          <ul id="sync-404-list" class="sync-404-list"></ul>
+        </div>
+
         <!-- Table view -->
         <div id="products-table-view">
           <div class="table-wrap">

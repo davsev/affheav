@@ -90,6 +90,25 @@ router.post('/', async (req, res) => {
   }
 });
 
+// DELETE /api/products/batch — bulk delete by ids array
+// Body: { ids: string[] }
+router.delete('/batch', async (req, res) => {
+  const { ids } = req.body || {};
+  if (!Array.isArray(ids) || !ids.length) {
+    return res.status(400).json({ success: false, error: 'ids array required' });
+  }
+  try {
+    const placeholders = ids.map((_, i) => `$${i + 2}`).join(', ');
+    const { rowCount } = await query(
+      `DELETE FROM products WHERE user_id = $1 AND id IN (${placeholders})`,
+      [req.user.id, ...ids]
+    );
+    res.json({ success: true, deleted: rowCount });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // DELETE /api/products/:id — remove a product
 router.delete('/:id', async (req, res) => {
   try {

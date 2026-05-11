@@ -486,6 +486,60 @@ td { padding: 12px 14px; vertical-align: middle; color: var(--on-surface); }
 #btn-back-to-top:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(112,42,225,0.45); }
 #btn-back-to-top .material-symbols-outlined { font-size: 22px; }
 
+/* ── Sync progress ───────────────────────────────────────────────────────── */
+.sync-progress-bar-wrap {
+  height: 6px;
+  background: rgba(112,42,225,0.12);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+#sync-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #a78bfa);
+  border-radius: 99px;
+  width: 0%;
+  transition: width 0.3s ease;
+}
+.sync-progress-text {
+  font-size: 12px;
+  color: var(--on-surface-var);
+  text-align: center;
+}
+.sync-404-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 10px 10px 0 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ef4444;
+}
+.sync-404-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: rgba(239,68,68,0.04);
+  border: 1px solid rgba(239,68,68,0.15);
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.sync-404-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  border-bottom: 1px solid rgba(239,68,68,0.08);
+  font-size: 12px;
+}
+.sync-404-list li:last-child { border-bottom: none; }
+.sync-404-list li a { color: #ef4444; word-break: break-all; dir: ltr; }
+
 /* ── Forms ──────────────────────────────────────────────────────────────── */
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .form-full { grid-column: 1 / -1; }

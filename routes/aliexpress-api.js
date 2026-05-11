@@ -130,12 +130,12 @@ router.post('/add', async (req, res) => {
 router.post('/sync/:id', async (req, res) => {
   try {
     const result = await syncProduct(req.params.id, req.user.id);
-    if (result.deleted) {
-      workflow.log(`✓ Deleted product ${req.params.id} (404 on AliExpress)`);
-      return res.json({ success: true, deleted: true });
+    if (result.not_found) {
+      workflow.log(`⚠ Product ${req.params.id} returned 404 on AliExpress`);
+      return res.json({ success: true, not_found: true });
     }
     workflow.log(`✓ Synced product ${req.params.id}: ${result.data?.title?.slice(0, 60) || '(no title)'}`);
-    res.json({ success: true, deleted: false, data: result.data });
+    res.json({ success: true, not_found: false, data: result.data });
   } catch (err) {
     workflow.log(`✗ Sync failed for ${req.params.id}: ${err.message}`, 'error');
     res.status(500).json({ success: false, error: err.message });

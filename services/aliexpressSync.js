@@ -131,10 +131,7 @@ async function syncProduct(dbProductId, userId) {
 
   const { finalUrl, status } = await resolveUrl(product.long_url);
 
-  if (status === 404) {
-    await query('DELETE FROM products WHERE id = $1 AND user_id = $2', [dbProductId, userId]);
-    return { deleted: true };
-  }
+  if (status === 404) return { not_found: true };
 
   const productId = extractProductId(finalUrl);
   let data = null;
@@ -147,10 +144,7 @@ async function syncProduct(dbProductId, userId) {
     try {
       data = await fetchViaScraper(finalUrl);
     } catch (err) {
-      if (err.code === 'NOT_FOUND') {
-        await query('DELETE FROM products WHERE id = $1 AND user_id = $2', [dbProductId, userId]);
-        return { deleted: true };
-      }
+      if (err.code === 'NOT_FOUND') return { not_found: true };
       throw err;
     }
   }
@@ -176,16 +170,16 @@ async function syncProduct(dbProductId, userId) {
   return { data };
 }
 
-// Returns { succeeded, deleted, failed, errors }
+// Returns { succeeded, not_found, failed, errors }
 async function syncProducts(productIds, userId) {
-  const result = { succeeded: 0, deleted: 0, failed: 0, errors: [] };
+  const result = { succeeded: 0, not_found: 0, failed: 0, errors: [] };
 
   for (let i = 0; i < productIds.length; i++) {
     const id = productIds[i];
     try {
       const res = await syncProduct(id, userId);
-      if (res.deleted) result.deleted++;
-      else             result.succeeded++;
+      if (res.not_found) result.not_found++;
+      else               result.succeeded++;
     } catch (err) {
       result.failed++;
       result.errors.push({ id, error: err.message });
