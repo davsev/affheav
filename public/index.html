@@ -305,6 +305,9 @@
               </button>
             </div>
             <!-- Actions -->
+            <button class="icon-btn" id="btn-sync-aliexpress-bulk" title="סנכרן נתוני מוצרים מ-AliExpress">
+              <span class="material-symbols-outlined">store</span>
+            </button>
             <button class="icon-btn" id="btn-shuffle-products" title="ערבב סדר מוצרים אקראית">
               <span class="material-symbols-outlined">shuffle</span>
             </button>
@@ -326,6 +329,7 @@
             <table id="products-table">
               <thead>
                 <tr>
+                  <th style="width:28px;"><input type="checkbox" id="chk-select-all-products" title="בחר הכל" /></th>
                   <th style="width:32px;"></th>
                   <th>תמונה</th>
                   <th>שם מוצר</th>
@@ -338,7 +342,7 @@
                 </tr>
               </thead>
               <tbody id="products-body">
-                <tr><td colspan="9" class="empty-state">טוען...</td></tr>
+                <tr><td colspan="10" class="empty-state">טוען...</td></tr>
               </tbody>
             </table>
           </div>

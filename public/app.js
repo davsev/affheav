@@ -979,7 +979,7 @@ function renderProducts(products) {
   }
 
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${_currentFilter === 'unsent' ? 'כל המוצרים נשלחו ✓' : 'אין מוצרים'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" class="empty-state">${_currentFilter === 'unsent' ? 'כל המוצרים נשלחו ✓' : 'אין מוצרים'}</td></tr>`;
     return;
   }
 
@@ -992,9 +992,13 @@ function renderProducts(products) {
       : '';
     return `
     <tr draggable="true" data-id="${p.id}">
+      <td><input type="checkbox" class="product-chk" data-id="${p.id}" /></td>
       <td><span class="drag-handle" title="גרור לסידור מחדש">⠿</span></td>
       <td>${p.image ? `<img class="img-thumb" src="${escHtml(p.image)}" onerror="this.style.display='none'" />` : '—'}</td>
-      <td style="max-width:200px;word-break:break-word;">${escHtml(p.Text)}</td>
+      <td style="max-width:200px;word-break:break-word;">
+        ${escHtml(p.Text)}
+        ${p.title && p.title !== p.Text ? `<div style="font-size:10px;color:var(--on-surface-var);margin-top:2px;line-height:1.3;" dir="ltr">${escHtml(p.title)}</div>` : ''}
+      </td>
       <td><a href="${escHtml(p.Link)}" target="_blank" style="color:var(--blue);font-size:12px;" dir="ltr">🔗 קישור</a></td>
       <td>${escHtml(p.wa_group)}</td>
       <td>${sendCountBadge}${p.sent ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>` : '<span class="badge badge-unsent">טרם נשלח</span>'}</td>
@@ -1004,6 +1008,7 @@ function renderProducts(products) {
         <button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct('${p.id}', this)" title="${p.sent ? 'שלח שוב' : 'שלח'}">▶ שלח</button>
         <button class="btn btn-sm btn-ghost" onclick="editProduct('${p.id}')" title="ערוך טקסט">✏</button>
         ${p.sent ? `<button class="btn btn-sm btn-ghost" onclick="unsendProduct('${p.id}', this)" title="החזר למוצרים שלא נשלחו" style="font-size:11px;">↩</button>` : ''}
+        <button class="btn btn-sm btn-ghost" onclick="syncProductData('${p.id}', this)" title="סנכרן מ-AliExpress"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">store</span></button>
         <button class="btn btn-sm btn-ghost" onclick="deleteProduct('${p.id}', this)" title="מחק מוצר" style="color:#f87171;">✕</button>
       </td>
     </tr>`;
@@ -1103,18 +1108,18 @@ function initDragAndDrop(tbody) {
 
 async function loadProducts() {
   const tbody = document.getElementById('products-body');
-  tbody.innerHTML = '<tr><td colspan="9" class="empty-state">טוען...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="10" class="empty-state">טוען...</td></tr>';
 
   try {
     const url = _currentSubject ? `/api/products?subject=${encodeURIComponent(_currentSubject)}` : '/api/products';
     const { products } = await api(url);
     if (!products.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="empty-state">אין מוצרים בגיליון</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="empty-state">אין מוצרים בגיליון</td></tr>';
       return;
     }
     renderProducts(products);
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-state" style="color:#f87171;">${escHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" class="empty-state" style="color:#f87171;">${escHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -1140,6 +1145,25 @@ window.unsendProduct = async (id, btn) => {
     alert('שגיאה: ' + err.message);
     btn.disabled = false;
   }
+};
+
+window.syncProductData = async (id, btn) => {
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;animation:spin 1s linear infinite;">sync</span>';
+  try {
+    const res = await api(`/api/aliexpress/sync/${id}`, { method: 'POST' });
+    if (res.deleted) {
+      btn.innerHTML = '<span style="font-size:11px;color:#f87171;" title="המוצר הוסר (404)">🗑 404</span>';
+    } else {
+      btn.innerHTML = '<span style="font-size:12px;color:#4ade80;">✓</span>';
+    }
+    await loadProducts();
+  } catch (err) {
+    btn.innerHTML = '<span style="font-size:12px;color:#f87171;">✗</span>';
+    console.error('Sync failed:', err.message);
+  }
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = orig; }, 2500);
 };
 
 window.editProduct = (id) => {
@@ -1298,6 +1322,38 @@ document.getElementById('btn-shorten-all').addEventListener('click', async (e) =
     btn.innerHTML = '<span style="font-size:12px;">✗</span>';
   }
   setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">link</span>'; }, 3000);
+});
+
+// Select-all checkbox wires up after each render
+document.getElementById('chk-select-all-products').addEventListener('change', function () {
+  document.querySelectorAll('.product-chk').forEach(chk => { chk.checked = this.checked; });
+});
+
+document.getElementById('btn-sync-aliexpress-bulk').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const ids = [...document.querySelectorAll('.product-chk:checked')].map(el => el.dataset.id);
+  if (!ids.length) { alert('יש לבחור לפחות מוצר אחד לסנכרון'); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="animation:spin 1s linear infinite;font-size:17px;">sync</span>';
+  try {
+    const res = await api('/api/aliexpress/sync-bulk', { method: 'POST', body: { ids } });
+    if (res.success) {
+      const parts = [];
+      if (res.succeeded) parts.push(`✓ ${res.succeeded}`);
+      if (res.deleted)   parts.push(`🗑 ${res.deleted}`);
+      if (res.failed)    parts.push(`✗ ${res.failed}`);
+      btn.innerHTML = `<span style="font-size:11px;font-weight:700;">${parts.join(' ')}</span>`;
+      await loadProducts();
+    } else {
+      btn.innerHTML = '<span style="font-size:12px;">✗</span>';
+      alert(res.error);
+    }
+  } catch (err) {
+    btn.innerHTML = '<span style="font-size:12px;">✗</span>';
+    alert('שגיאה: ' + err.message);
+  }
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">store</span>'; }, 5000);
 });
 
 document.getElementById('btn-execute').addEventListener('click', async (e) => {

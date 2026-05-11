@@ -4,6 +4,7 @@ const googleSheets = require('../services/googleSheets');
 const workflow = require('../services/workflow');
 const { query } = require('../db');
 const { signAndCall } = require('../services/aliexpressApi');
+const { syncProduct, syncProducts } = require('../services/aliexpressSync');
 
 const DEFAULT_TRACKING_ID = process.env.ALIEXPRESS_TRACKING_ID || 'TechSalebuy';
 
@@ -121,6 +122,49 @@ router.post('/add', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     workflow.log(`✗ Failed to add product: ${err.message}`, 'error');
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/aliexpress/sync/:id — sync one product's data from AliExpress
+router.post('/sync/:id', async (req, res) => {
+  try {
+    const result = await syncProduct(req.params.id, req.user.id);
+    if (result.deleted) {
+      workflow.log(`✓ Deleted product ${req.params.id} (404 on AliExpress)`);
+      return res.json({ success: true, deleted: true });
+    }
+    workflow.log(`✓ Synced product ${req.params.id}: ${result.data?.title?.slice(0, 60) || '(no title)'}`);
+    res.json({ success: true, deleted: false, data: result.data });
+  } catch (err) {
+    workflow.log(`✗ Sync failed for ${req.params.id}: ${err.message}`, 'error');
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/aliexpress/sync-bulk — sync multiple products
+// Body: { ids?: string[] }  — omit ids to sync all unsent products
+router.post('/sync-bulk', async (req, res) => {
+  try {
+    let ids = req.body?.ids;
+
+    if (!ids || !ids.length) {
+      const { rows } = await query(
+        `SELECT id FROM products WHERE user_id = $1 AND long_url IS NOT NULL AND long_url != ''
+         ORDER BY sort_order ASC NULLS LAST, created_at ASC`,
+        [req.user.id]
+      );
+      ids = rows.map(r => r.id);
+    }
+
+    if (!ids.length) return res.json({ success: true, succeeded: 0, failed: 0, errors: [] });
+
+    workflow.log(`Starting bulk AliExpress sync for ${ids.length} products`);
+    const result = await syncProducts(ids, req.user.id);
+    workflow.log(`Bulk sync done: ${result.succeeded} succeeded, ${result.failed} failed`);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    workflow.log(`✗ Bulk sync error: ${err.message}`, 'error');
     res.status(500).json({ success: false, error: err.message });
   }
 });
