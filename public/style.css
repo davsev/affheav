@@ -204,7 +204,6 @@ body {
 }
 .topbar-breadcrumb span { color: var(--on-surface); font-weight: 700; }
 .execute-row { display: flex; align-items: center; gap: 10px; }
-.execute-label { font-size: 12px; color: var(--on-surface-var); }
 
 /* ── KPI Strip ──────────────────────────────────────────────────────────── */
 .kpi-strip {
@@ -317,18 +316,6 @@ body {
 }
 .btn-sm { padding: 5px 14px; font-size: 12px; }
 
-/* Execute button */
-.btn-execute {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 9px 20px; border: none; border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, #702ae1, #a67aff);
-  color: white; font-family: var(--font-sans); font-size: 13px; font-weight: 700;
-  cursor: pointer; box-shadow: 0 4px 16px rgba(112,42,225,0.3);
-  transition: all 0.2s;
-}
-.btn-execute:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(112,42,225,0.4); }
-.btn-execute:active { transform: scale(0.97); }
-.btn-execute:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
 /* ── Icon buttons ───────────────────────────────────────────────────────── */
 .icon-btn {

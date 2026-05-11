@@ -1455,27 +1455,6 @@ document.getElementById('btn-sync-aliexpress-bulk').addEventListener('click', as
   setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">store</span>'; }, 5000);
 });
 
-document.getElementById('btn-execute').addEventListener('click', async (e) => {
-  const btn = e.target;
-  btn.disabled = true;
-  btn.textContent = '...מריץ';
-  showLogTab();
-  try {
-    const body = _currentSubject ? { subject: _currentSubject } : {};
-    const result = await api('/api/send/execute', { method: 'POST', body });
-    if (!result.success && result.reason === 'no_unsent_products') {
-      alert('אין מוצרים שלא נשלחו');
-    } else {
-      await loadProducts();
-    }
-  } catch (err) {
-    alert('שגיאה: ' + err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '▶ הרץ עכשיו';
-  }
-});
-
 // ── Schedules ─────────────────────────────────────────────────────────────────
 async function loadSchedules() {
   const container = document.getElementById('schedules-list');
