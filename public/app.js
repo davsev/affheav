@@ -994,7 +994,10 @@ function renderProducts(products) {
     <tr draggable="true" data-id="${p.id}">
       <td><span class="drag-handle" title="גרור לסידור מחדש">⠿</span></td>
       <td>${p.image ? `<img class="img-thumb" src="${escHtml(p.image)}" onerror="this.style.display='none'" />` : '—'}</td>
-      <td style="max-width:200px;word-break:break-word;">${escHtml(p.Text)}</td>
+      <td style="max-width:200px;word-break:break-word;">
+        ${escHtml(p.Text)}
+        ${p.title && p.title !== p.Text ? `<div style="font-size:10px;color:var(--on-surface-var);margin-top:2px;line-height:1.3;" dir="ltr">${escHtml(p.title)}</div>` : ''}
+      </td>
       <td><a href="${escHtml(p.Link)}" target="_blank" style="color:var(--blue);font-size:12px;" dir="ltr">🔗 קישור</a></td>
       <td>${escHtml(p.wa_group)}</td>
       <td>${sendCountBadge}${p.sent ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>` : '<span class="badge badge-unsent">טרם נשלח</span>'}</td>
@@ -1004,6 +1007,7 @@ function renderProducts(products) {
         <button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct('${p.id}', this)" title="${p.sent ? 'שלח שוב' : 'שלח'}">▶ שלח</button>
         <button class="btn btn-sm btn-ghost" onclick="editProduct('${p.id}')" title="ערוך טקסט">✏</button>
         ${p.sent ? `<button class="btn btn-sm btn-ghost" onclick="unsendProduct('${p.id}', this)" title="החזר למוצרים שלא נשלחו" style="font-size:11px;">↩</button>` : ''}
+        <button class="btn btn-sm btn-ghost" onclick="syncProductData('${p.id}', this)" title="סנכרן מ-AliExpress"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">store</span></button>
         <button class="btn btn-sm btn-ghost" onclick="deleteProduct('${p.id}', this)" title="מחק מוצר" style="color:#f87171;">✕</button>
       </td>
     </tr>`;
@@ -1140,6 +1144,21 @@ window.unsendProduct = async (id, btn) => {
     alert('שגיאה: ' + err.message);
     btn.disabled = false;
   }
+};
+
+window.syncProductData = async (id, btn) => {
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;animation:spin 1s linear infinite;">sync</span>';
+  try {
+    await api(`/api/aliexpress/sync/${id}`, { method: 'POST' });
+    btn.innerHTML = '<span style="font-size:12px;color:#4ade80;">✓</span>';
+    await loadProducts();
+  } catch (err) {
+    btn.innerHTML = '<span style="font-size:12px;color:#f87171;">✗</span>';
+    console.error('Sync failed:', err.message);
+  }
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = orig; }, 2500);
 };
 
 window.editProduct = (id) => {
@@ -1298,6 +1317,32 @@ document.getElementById('btn-shorten-all').addEventListener('click', async (e) =
     btn.innerHTML = '<span style="font-size:12px;">✗</span>';
   }
   setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">link</span>'; }, 3000);
+});
+
+document.getElementById('btn-sync-aliexpress-bulk').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  if (!confirm('לסנכרן נתוני מוצרים מ-AliExpress? הפעולה עשויה לקחת מספר דקות.')) return;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="animation:spin 1s linear infinite;font-size:17px;">sync</span>';
+  try {
+    const body = {};
+    if (_currentSubject) {
+      const { products } = await api(_currentSubject ? `/api/products?subject=${encodeURIComponent(_currentSubject)}` : '/api/products');
+      body.ids = products.map(p => p.id);
+    }
+    const res = await api('/api/aliexpress/sync-bulk', { method: 'POST', body });
+    if (res.success) {
+      btn.innerHTML = `<span style="font-size:12px;font-weight:700;">✓ ${res.succeeded}</span>`;
+      await loadProducts();
+    } else {
+      btn.innerHTML = '<span style="font-size:12px;">✗</span>';
+      alert(res.error);
+    }
+  } catch (err) {
+    btn.innerHTML = '<span style="font-size:12px;">✗</span>';
+    alert('שגיאה: ' + err.message);
+  }
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">store</span>'; }, 4000);
 });
 
 document.getElementById('btn-execute').addEventListener('click', async (e) => {

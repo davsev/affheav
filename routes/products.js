@@ -12,6 +12,7 @@ function rowToProduct(r, idx) {
     long_url:   r.long_url    || '',
     Link:       r.short_link  || '',
     image:      r.image       || '',
+    title:      r.title       || '',
     Text:       r.text        || '',
     join_link:  r.join_link   || '',
     wa_group:   r.wa_group    || '',
