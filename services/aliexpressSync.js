@@ -190,4 +190,4 @@ async function syncProducts(productIds, userId) {
   return result;
 }
 
-module.exports = { syncProduct, syncProducts };
+module.exports = { syncProduct, syncProducts, resolveUrl };

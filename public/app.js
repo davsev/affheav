@@ -86,6 +86,7 @@ window.doLogout = async () => {
         if (navUsers) navUsers.style.display = '';
       }
       hideLoginPage();
+      loadUserSettings();
     } else {
       showLoginPage();
     }
@@ -93,6 +94,23 @@ window.doLogout = async () => {
     showLoginPage();
   }
 })();
+
+async function loadUserSettings() {
+  try {
+    const { settings } = await api('/api/settings');
+    const chk = document.getElementById('chk-recycle-products');
+    if (chk) chk.checked = settings.recycle_products === 'true';
+  } catch { /* non-critical */ }
+}
+
+document.getElementById('chk-recycle-products').addEventListener('change', async function () {
+  try {
+    await api('/api/settings', { method: 'PATCH', body: { key: 'recycle_products', value: String(this.checked) } });
+  } catch (err) {
+    alert('שגיאה בשמירת הגדרה: ' + err.message);
+    this.checked = !this.checked; // revert
+  }
+});
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 document.querySelectorAll('.tab-btn').forEach(btn => {
