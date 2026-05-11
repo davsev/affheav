@@ -12,12 +12,19 @@ router.post('/execute', async (req, res) => {
     if (subject !== undefined)  opts.subject    = subject;
     if (waGroupIds)             opts.waGroupIds = waGroupIds;
 
-    // Quick check: are there any unsent products?
-    const countQ = subject
-      ? await query('SELECT 1 FROM products WHERE user_id=$1 AND subject_id=$2 AND sent_at IS NULL AND short_link IS NOT NULL AND short_link != \'\' LIMIT 1', [req.user.id, subject])
-      : await query('SELECT 1 FROM products WHERE user_id=$1 AND sent_at IS NULL AND short_link IS NOT NULL AND short_link != \'\' LIMIT 1', [req.user.id]);
-    if (!countQ.rows[0]) {
-      return res.json({ success: false, reason: 'no_unsent_products' });
+    // Quick check: are there any unsent products? (skipped when recycle mode is on)
+    const { rows: settingRows } = await query(
+      'SELECT value FROM settings WHERE user_id = $1 AND key = $2',
+      [req.user.id, 'recycle_products']
+    );
+    const recycleEnabled = settingRows[0]?.value === 'true';
+    if (!recycleEnabled) {
+      const countQ = subject
+        ? await query('SELECT 1 FROM products WHERE user_id=$1 AND subject_id=$2 AND sent_at IS NULL AND short_link IS NOT NULL AND short_link != \'\' LIMIT 1', [req.user.id, subject])
+        : await query('SELECT 1 FROM products WHERE user_id=$1 AND sent_at IS NULL AND short_link IS NOT NULL AND short_link != \'\' LIMIT 1', [req.user.id]);
+      if (!countQ.rows[0]) {
+        return res.json({ success: false, reason: 'no_unsent_products' });
+      }
     }
 
     res.json({ success: true }); // respond immediately — full result appears in logs panel

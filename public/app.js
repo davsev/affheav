@@ -86,6 +86,7 @@ window.doLogout = async () => {
         if (navUsers) navUsers.style.display = '';
       }
       hideLoginPage();
+      loadUserSettings();
     } else {
       showLoginPage();
     }
@@ -93,6 +94,23 @@ window.doLogout = async () => {
     showLoginPage();
   }
 })();
+
+async function loadUserSettings() {
+  try {
+    const { settings } = await api('/api/settings');
+    const chk = document.getElementById('chk-recycle-products');
+    if (chk) chk.checked = settings.recycle_products === 'true';
+  } catch { /* non-critical */ }
+}
+
+document.getElementById('chk-recycle-products').addEventListener('change', async function () {
+  try {
+    await api('/api/settings', { method: 'PATCH', body: { key: 'recycle_products', value: String(this.checked) } });
+  } catch (err) {
+    alert('שגיאה בשמירת הגדרה: ' + err.message);
+    this.checked = !this.checked; // revert
+  }
+});
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1034,6 +1052,7 @@ function renderProducts(products) {
           : '';
         return `
         <div class="product-card">
+          <input type="checkbox" class="product-chk product-card-chk" data-id="${p.id}" />
           ${p.image
             ? `<img class="product-card-img" src="${escHtml(p.image)}" onerror="this.style.display='none'" loading="lazy" />`
             : `<div class="product-card-img-placeholder">📦</div>`}
@@ -1153,8 +1172,8 @@ window.syncProductData = async (id, btn) => {
   btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;animation:spin 1s linear infinite;">sync</span>';
   try {
     const res = await api(`/api/aliexpress/sync/${id}`, { method: 'POST' });
-    if (res.deleted) {
-      btn.innerHTML = '<span style="font-size:11px;color:#f87171;" title="המוצר הוסר (404)">🗑 404</span>';
+    if (res.not_found) {
+      btn.innerHTML = '<span style="font-size:11px;color:#f87171;" title="המוצר לא נמצא ב-AliExpress (404)">⚠ 404</span>';
     } else {
       btn.innerHTML = '<span style="font-size:12px;color:#4ade80;">✓</span>';
     }
@@ -1264,6 +1283,17 @@ window.sendProduct = async (rowNumber, btn) => {
 
 document.getElementById('btn-refresh-products').addEventListener('click', loadProducts);
 
+// Back to top
+(function () {
+  const btn     = document.getElementById('btn-back-to-top');
+  const content = document.querySelector('.content');
+  if (!btn || !content) return;
+  content.addEventListener('scroll', () => {
+    btn.style.display = content.scrollTop > 400 ? 'flex' : 'none';
+  });
+  btn.addEventListener('click', () => content.scrollTo({ top: 0, behavior: 'smooth' }));
+})();
+
 document.getElementById('btn-shuffle-products').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   btn.disabled = true;
@@ -1329,6 +1359,59 @@ document.getElementById('chk-select-all-products').addEventListener('change', fu
   document.querySelectorAll('.product-chk').forEach(chk => { chk.checked = this.checked; });
 });
 
+// ── Bulk AliExpress sync with progress bar ────────────────────────────────
+const _syncUI = {
+  panel:    document.getElementById('sync-progress-panel'),
+  fill:     document.getElementById('sync-progress-fill'),
+  text:     document.getElementById('sync-progress-text'),
+  panel404: document.getElementById('sync-404-panel'),
+  count404: document.getElementById('sync-404-count'),
+  list404:  document.getElementById('sync-404-list'),
+};
+
+function syncShowProgress(done, total, succeeded, notFound, failed) {
+  _syncUI.panel.style.display = '';
+  _syncUI.fill.style.width    = `${Math.round((done / total) * 100)}%`;
+  const parts = [];
+  if (succeeded) parts.push(`✓ ${succeeded}`);
+  if (notFound)  parts.push(`⚠ ${notFound} לא נמצאו`);
+  if (failed)    parts.push(`✗ ${failed}`);
+  _syncUI.text.textContent = `${done} / ${total}${parts.length ? ' · ' + parts.join(' · ') : ''}`;
+}
+
+function syncShow404Panel(notFoundProducts) {
+  if (!notFoundProducts.length) { _syncUI.panel404.style.display = 'none'; return; }
+  _syncUI.count404.textContent = notFoundProducts.length;
+  _syncUI.list404.innerHTML = notFoundProducts.map(p => `
+    <li>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(p.label)}</span>
+      <a href="${escHtml(p.url)}" target="_blank" dir="ltr" style="flex-shrink:0;">🔗</a>
+    </li>`).join('');
+  _syncUI.panel404.style.display = '';
+  _syncUI.panel404.dataset.ids = JSON.stringify(notFoundProducts.map(p => p.id));
+}
+
+document.getElementById('btn-dismiss-404').addEventListener('click', () => {
+  _syncUI.panel404.style.display = 'none';
+});
+
+document.getElementById('btn-delete-all-404').addEventListener('click', async function () {
+  const ids = JSON.parse(_syncUI.panel404.dataset.ids || '[]');
+  if (!ids.length) return;
+  this.disabled = true;
+  this.textContent = '...';
+  try {
+    await api('/api/products/batch', { method: 'DELETE', body: { ids } });
+    _syncUI.panel404.style.display = 'none';
+    await loadProducts();
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  } finally {
+    this.disabled = false;
+    this.textContent = 'מחק הכל';
+  }
+});
+
 document.getElementById('btn-sync-aliexpress-bulk').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   const ids = [...document.querySelectorAll('.product-chk:checked')].map(el => el.dataset.id);
@@ -1336,45 +1419,40 @@ document.getElementById('btn-sync-aliexpress-bulk').addEventListener('click', as
 
   btn.disabled = true;
   btn.innerHTML = '<span class="material-symbols-outlined" style="animation:spin 1s linear infinite;font-size:17px;">sync</span>';
-  try {
-    const res = await api('/api/aliexpress/sync-bulk', { method: 'POST', body: { ids } });
-    if (res.success) {
-      const parts = [];
-      if (res.succeeded) parts.push(`✓ ${res.succeeded}`);
-      if (res.deleted)   parts.push(`🗑 ${res.deleted}`);
-      if (res.failed)    parts.push(`✗ ${res.failed}`);
-      btn.innerHTML = `<span style="font-size:11px;font-weight:700;">${parts.join(' ')}</span>`;
-      await loadProducts();
-    } else {
-      btn.innerHTML = '<span style="font-size:12px;">✗</span>';
-      alert(res.error);
-    }
-  } catch (err) {
-    btn.innerHTML = '<span style="font-size:12px;">✗</span>';
-    alert('שגיאה: ' + err.message);
-  }
-  setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">store</span>'; }, 5000);
-});
+  _syncUI.panel404.style.display = 'none';
 
-document.getElementById('btn-execute').addEventListener('click', async (e) => {
-  const btn = e.target;
-  btn.disabled = true;
-  btn.textContent = '...מריץ';
-  showLogTab();
-  try {
-    const body = _currentSubject ? { subject: _currentSubject } : {};
-    const result = await api('/api/send/execute', { method: 'POST', body });
-    if (!result.success && result.reason === 'no_unsent_products') {
-      alert('אין מוצרים שלא נשלחו');
-    } else {
-      await loadProducts();
+  let succeeded = 0, notFound = 0, failed = 0;
+  const notFoundProducts = [];
+
+  syncShowProgress(0, ids.length, 0, 0, 0);
+
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i];
+    const product = _lastProducts.find(p => p.id === id);
+    try {
+      const res = await api(`/api/aliexpress/sync/${id}`, { method: 'POST' });
+      if (res.not_found) {
+        notFound++;
+        notFoundProducts.push({ id, label: product?.Text || product?.title || id, url: product?.long_url || '' });
+      } else {
+        succeeded++;
+      }
+    } catch {
+      failed++;
     }
-  } catch (err) {
-    alert('שגיאה: ' + err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '▶ הרץ עכשיו';
+    syncShowProgress(i + 1, ids.length, succeeded, notFound, failed);
   }
+
+  _syncUI.text.textContent += ' · סנכרון הסתיים';
+  syncShow404Panel(notFoundProducts);
+  await loadProducts();
+
+  const parts = [];
+  if (succeeded) parts.push(`✓ ${succeeded}`);
+  if (notFound)  parts.push(`⚠ ${notFound}`);
+  if (failed)    parts.push(`✗ ${failed}`);
+  btn.innerHTML = `<span style="font-size:11px;font-weight:700;">${parts.join(' ')}</span>`;
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">store</span>'; }, 5000);
 });
 
 // ── Schedules ─────────────────────────────────────────────────────────────────
