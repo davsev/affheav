@@ -11,22 +11,30 @@ const SCRAPE_HEADERS = {
   'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 };
 
+function notFound() {
+  const e = new Error('Product not found (404)');
+  e.code  = 'NOT_FOUND';
+  return e;
+}
+
 function extractProductId(url) {
   const m = url.match(/\/item\/(\d+)\.html/);
   return m ? m[1] : null;
 }
 
+// Returns { finalUrl, status } — status is the HTTP status of the final response.
 async function resolveUrl(url) {
   try {
     const res = await axios.get(url, {
-      maxRedirects: 10,
-      timeout:      15000,
-      headers:      SCRAPE_HEADERS,
+      maxRedirects:   10,
+      timeout:        15000,
+      headers:        SCRAPE_HEADERS,
       validateStatus: () => true,
     });
-    return res.request.res?.responseUrl || res.config?.url || url;
+    const finalUrl = res.request.res?.responseUrl || res.config?.url || url;
+    return { finalUrl, status: res.status };
   } catch {
-    return url;
+    return { finalUrl: url, status: 0 };
   }
 }
 
@@ -54,8 +62,21 @@ async function fetchViaApi(productId, trackingId) {
 }
 
 async function fetchViaScraper(url) {
-  const res = await axios.get(url, { timeout: 15000, headers: SCRAPE_HEADERS });
-  const $   = cheerio.load(res.data);
+  let res;
+  try {
+    res = await axios.get(url, {
+      timeout:        15000,
+      headers:        SCRAPE_HEADERS,
+      validateStatus: () => true,
+    });
+  } catch (err) {
+    if (err.response?.status === 404) throw notFound();
+    throw err;
+  }
+
+  if (res.status === 404) throw notFound();
+
+  const $ = cheerio.load(res.data);
 
   // Tier 1: JSON-LD structured data
   const scripts = $('script[type="application/ld+json"]').toArray();
@@ -93,6 +114,7 @@ async function fetchViaScraper(url) {
   return { title, image, sale_price: null };
 }
 
+// Returns { data } on success, { deleted: true } if the product was 404'd and removed.
 async function syncProduct(dbProductId, userId) {
   const { rows } = await query(
     `SELECT p.id, p.long_url, s.aliexpress_tracking_id
@@ -107,17 +129,32 @@ async function syncProduct(dbProductId, userId) {
   const trackingId = product.aliexpress_tracking_id || DEFAULT_TRACKING_ID;
   if (!product.long_url) throw new Error('Product has no URL');
 
-  const finalUrl  = await resolveUrl(product.long_url);
-  const productId = extractProductId(finalUrl);
+  const { finalUrl, status } = await resolveUrl(product.long_url);
 
+  if (status === 404) {
+    await query('DELETE FROM products WHERE id = $1 AND user_id = $2', [dbProductId, userId]);
+    return { deleted: true };
+  }
+
+  const productId = extractProductId(finalUrl);
   let data = null;
 
   if (productId) {
     try { data = await fetchViaApi(productId, trackingId); } catch { /* fall through */ }
   }
+
   if (!data) {
-    data = await fetchViaScraper(finalUrl);
+    try {
+      data = await fetchViaScraper(finalUrl);
+    } catch (err) {
+      if (err.code === 'NOT_FOUND') {
+        await query('DELETE FROM products WHERE id = $1 AND user_id = $2', [dbProductId, userId]);
+        return { deleted: true };
+      }
+      throw err;
+    }
   }
+
   if (!data) throw new Error('Could not fetch product data');
 
   const sets   = [];
@@ -136,17 +173,19 @@ async function syncProduct(dbProductId, userId) {
     [...values, dbProductId, userId]
   );
 
-  return data;
+  return { data };
 }
 
+// Returns { succeeded, deleted, failed, errors }
 async function syncProducts(productIds, userId) {
-  const result = { succeeded: 0, failed: 0, errors: [] };
+  const result = { succeeded: 0, deleted: 0, failed: 0, errors: [] };
 
   for (let i = 0; i < productIds.length; i++) {
     const id = productIds[i];
     try {
-      await syncProduct(id, userId);
-      result.succeeded++;
+      const res = await syncProduct(id, userId);
+      if (res.deleted) result.deleted++;
+      else             result.succeeded++;
     } catch (err) {
       result.failed++;
       result.errors.push({ id, error: err.message });

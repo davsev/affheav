@@ -979,7 +979,7 @@ function renderProducts(products) {
   }
 
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${_currentFilter === 'unsent' ? 'כל המוצרים נשלחו ✓' : 'אין מוצרים'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" class="empty-state">${_currentFilter === 'unsent' ? 'כל המוצרים נשלחו ✓' : 'אין מוצרים'}</td></tr>`;
     return;
   }
 
@@ -992,6 +992,7 @@ function renderProducts(products) {
       : '';
     return `
     <tr draggable="true" data-id="${p.id}">
+      <td><input type="checkbox" class="product-chk" data-id="${p.id}" /></td>
       <td><span class="drag-handle" title="גרור לסידור מחדש">⠿</span></td>
       <td>${p.image ? `<img class="img-thumb" src="${escHtml(p.image)}" onerror="this.style.display='none'" />` : '—'}</td>
       <td style="max-width:200px;word-break:break-word;">
@@ -1107,18 +1108,18 @@ function initDragAndDrop(tbody) {
 
 async function loadProducts() {
   const tbody = document.getElementById('products-body');
-  tbody.innerHTML = '<tr><td colspan="9" class="empty-state">טוען...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="10" class="empty-state">טוען...</td></tr>';
 
   try {
     const url = _currentSubject ? `/api/products?subject=${encodeURIComponent(_currentSubject)}` : '/api/products';
     const { products } = await api(url);
     if (!products.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="empty-state">אין מוצרים בגיליון</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="empty-state">אין מוצרים בגיליון</td></tr>';
       return;
     }
     renderProducts(products);
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-state" style="color:#f87171;">${escHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" class="empty-state" style="color:#f87171;">${escHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -1151,8 +1152,12 @@ window.syncProductData = async (id, btn) => {
   btn.disabled = true;
   btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;animation:spin 1s linear infinite;">sync</span>';
   try {
-    await api(`/api/aliexpress/sync/${id}`, { method: 'POST' });
-    btn.innerHTML = '<span style="font-size:12px;color:#4ade80;">✓</span>';
+    const res = await api(`/api/aliexpress/sync/${id}`, { method: 'POST' });
+    if (res.deleted) {
+      btn.innerHTML = '<span style="font-size:11px;color:#f87171;" title="המוצר הוסר (404)">🗑 404</span>';
+    } else {
+      btn.innerHTML = '<span style="font-size:12px;color:#4ade80;">✓</span>';
+    }
     await loadProducts();
   } catch (err) {
     btn.innerHTML = '<span style="font-size:12px;color:#f87171;">✗</span>';
@@ -1319,20 +1324,26 @@ document.getElementById('btn-shorten-all').addEventListener('click', async (e) =
   setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">link</span>'; }, 3000);
 });
 
+// Select-all checkbox wires up after each render
+document.getElementById('chk-select-all-products').addEventListener('change', function () {
+  document.querySelectorAll('.product-chk').forEach(chk => { chk.checked = this.checked; });
+});
+
 document.getElementById('btn-sync-aliexpress-bulk').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
-  if (!confirm('לסנכרן נתוני מוצרים מ-AliExpress? הפעולה עשויה לקחת מספר דקות.')) return;
+  const ids = [...document.querySelectorAll('.product-chk:checked')].map(el => el.dataset.id);
+  if (!ids.length) { alert('יש לבחור לפחות מוצר אחד לסנכרון'); return; }
+
   btn.disabled = true;
   btn.innerHTML = '<span class="material-symbols-outlined" style="animation:spin 1s linear infinite;font-size:17px;">sync</span>';
   try {
-    const body = {};
-    if (_currentSubject) {
-      const { products } = await api(_currentSubject ? `/api/products?subject=${encodeURIComponent(_currentSubject)}` : '/api/products');
-      body.ids = products.map(p => p.id);
-    }
-    const res = await api('/api/aliexpress/sync-bulk', { method: 'POST', body });
+    const res = await api('/api/aliexpress/sync-bulk', { method: 'POST', body: { ids } });
     if (res.success) {
-      btn.innerHTML = `<span style="font-size:12px;font-weight:700;">✓ ${res.succeeded}</span>`;
+      const parts = [];
+      if (res.succeeded) parts.push(`✓ ${res.succeeded}`);
+      if (res.deleted)   parts.push(`🗑 ${res.deleted}`);
+      if (res.failed)    parts.push(`✗ ${res.failed}`);
+      btn.innerHTML = `<span style="font-size:11px;font-weight:700;">${parts.join(' ')}</span>`;
       await loadProducts();
     } else {
       btn.innerHTML = '<span style="font-size:12px;">✗</span>';
@@ -1342,7 +1353,7 @@ document.getElementById('btn-sync-aliexpress-bulk').addEventListener('click', as
     btn.innerHTML = '<span style="font-size:12px;">✗</span>';
     alert('שגיאה: ' + err.message);
   }
-  setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">store</span>'; }, 4000);
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">store</span>'; }, 5000);
 });
 
 document.getElementById('btn-execute').addEventListener('click', async (e) => {

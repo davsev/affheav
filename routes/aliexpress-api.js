@@ -129,9 +129,13 @@ router.post('/add', async (req, res) => {
 // POST /api/aliexpress/sync/:id — sync one product's data from AliExpress
 router.post('/sync/:id', async (req, res) => {
   try {
-    const data = await syncProduct(req.params.id, req.user.id);
-    workflow.log(`✓ Synced product ${req.params.id}: ${data.title?.slice(0, 60) || '(no title)'}`);
-    res.json({ success: true, data });
+    const result = await syncProduct(req.params.id, req.user.id);
+    if (result.deleted) {
+      workflow.log(`✓ Deleted product ${req.params.id} (404 on AliExpress)`);
+      return res.json({ success: true, deleted: true });
+    }
+    workflow.log(`✓ Synced product ${req.params.id}: ${result.data?.title?.slice(0, 60) || '(no title)'}`);
+    res.json({ success: true, deleted: false, data: result.data });
   } catch (err) {
     workflow.log(`✗ Sync failed for ${req.params.id}: ${err.message}`, 'error');
     res.status(500).json({ success: false, error: err.message });
