@@ -1034,6 +1034,7 @@ function renderProducts(products) {
           : '';
         return `
         <div class="product-card">
+          <input type="checkbox" class="product-chk product-card-chk" data-id="${p.id}" />
           ${p.image
             ? `<img class="product-card-img" src="${escHtml(p.image)}" onerror="this.style.display='none'" loading="lazy" />`
             : `<div class="product-card-img-placeholder">📦</div>`}
@@ -1263,6 +1264,17 @@ window.sendProduct = async (rowNumber, btn) => {
 };
 
 document.getElementById('btn-refresh-products').addEventListener('click', loadProducts);
+
+// Back to top
+(function () {
+  const btn     = document.getElementById('btn-back-to-top');
+  const content = document.querySelector('.content');
+  if (!btn || !content) return;
+  content.addEventListener('scroll', () => {
+    btn.style.display = content.scrollTop > 400 ? 'flex' : 'none';
+  });
+  btn.addEventListener('click', () => content.scrollTo({ top: 0, behavior: 'smooth' }));
+})();
 
 document.getElementById('btn-shuffle-products').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
