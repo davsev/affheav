@@ -1386,3 +1386,11 @@ tr[draggable].drag-over td { border-top: 2px solid var(--primary); background: r
   /* Bottom safe-area breathing room */
   #tab-analytics { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
 }
+
+/* Day filter buttons in analytics orders section */
+.an-day-btn.active {
+  background: linear-gradient(135deg, #702ae1, #a67aff);
+  color: white;
+  box-shadow: 0 2px 8px rgba(112,42,225,0.35);
+}
+.an-day-btn:hover:not(.active) { background: rgba(112,42,225,0.08); color: var(--primary); }

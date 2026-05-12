@@ -2812,6 +2812,8 @@ async function renderAnalyticsSummary() {
     if (roasSel) roasSel.innerHTML = '<option value="">בחר נישה</option>' +
       niches.map(n => `<option value="${escHtml(n.id)}">${escHtml(n.name)}</option>`).join('');
 
+    loadDailyStats();
+    loadAnalyticsOrders();
     loadTopProducts();
     loadRealProductOrders();
     loadTimingHeatmap();
@@ -2903,6 +2905,7 @@ document.getElementById('btn-sync-commissions').addEventListener('click', async 
 
     // Refresh summary cards and orders
     await renderAnalyticsSummary();
+    await loadDailyStats();
     await loadAnalyticsOrders();
   } catch (err) {
     status.style.color = '#f87171';
@@ -2923,14 +2926,22 @@ document.querySelectorAll('.an-tab').forEach(btn => {
   });
 });
 
-async function loadAnalyticsOrders(subjectId = '') {
+// Shared state for orders section filters
+const _ordersFilter = { days: '7', subjectId: '' };
+
+async function loadAnalyticsOrders(subjectId = _ordersFilter.subjectId, days = _ordersFilter.days) {
+  _ordersFilter.subjectId = subjectId;
+  _ordersFilter.days      = days;
+
   const el = document.getElementById('analytics-orders-table');
   if (!el) return;
   el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
 
   try {
-    const qs   = subjectId ? `?subjectId=${encodeURIComponent(subjectId)}` : '';
-    const data = await api(`/api/analytics/orders${qs}`);
+    const qs = new URLSearchParams();
+    if (subjectId) qs.set('subjectId', subjectId);
+    if (days)      qs.set('days', days);
+    const data   = await api(`/api/analytics/orders${qs.toString() ? '?' + qs : ''}`);
     const orders = data.orders || [];
 
     if (!orders.length) {
@@ -2977,9 +2988,117 @@ async function loadAnalyticsOrders(subjectId = '') {
   }
 }
 
-// Niche filter for orders table
+async function loadDailyStats(subjectId = _ordersFilter.subjectId, days = _ordersFilter.days) {
+  const el = document.getElementById('analytics-daily-stats');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const qs = new URLSearchParams();
+    if (subjectId) qs.set('subjectId', subjectId);
+    if (days)      qs.set('days', days);
+    const data = await api(`/api/analytics/daily-stats${qs.toString() ? '?' + qs : ''}`);
+    const dayRows = (data.days || []).slice().reverse(); // oldest first for chart
+
+    if (!dayRows.length) {
+      el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">אין נתונים לתקופה הנבחרת</div>';
+      return;
+    }
+
+    const maxOrders     = Math.max(...dayRows.map(d => parseInt(d.orders_count, 10)));
+    const maxCommission = Math.max(...dayRows.map(d => parseFloat(d.total_commission)));
+
+    const totalOrders     = dayRows.reduce((s, d) => s + parseInt(d.orders_count, 10), 0);
+    const totalCommission = dayRows.reduce((s, d) => s + parseFloat(d.total_commission), 0);
+    const avgOrders       = (totalOrders / dayRows.length).toFixed(1);
+    const avgCommission   = (totalCommission / dayRows.length).toFixed(2);
+
+    el.innerHTML = `
+      <!-- Summary row -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px;">
+        ${[
+          { label:'סה"כ הזמנות',    value: totalOrders.toLocaleString(),       color:'var(--on-surface)', icon:'shopping_bag' },
+          { label:'סה"כ עמלה',      value: `$${totalCommission.toFixed(2)}`,   color:'#16a34a',            icon:'paid' },
+          { label:'ממוצע הזמנות/יום', value: avgOrders,                        color:'#702ae1',            icon:'trending_up' },
+          { label:'ממוצע עמלה/יום',  value: `$${avgCommission}`,              color:'#059669',            icon:'show_chart' },
+        ].map(k => `
+          <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;">
+            <span class="material-symbols-outlined" style="font-size:20px;color:${k.color};">${k.icon}</span>
+            <div>
+              <div style="font-size:16px;font-weight:800;color:${k.color};">${k.value}</div>
+              <div style="font-size:11px;color:var(--on-surface-var);">${k.label}</div>
+            </div>
+          </div>`).join('')}
+      </div>
+
+      <!-- Bars -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <!-- Orders per day -->
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--on-surface-var);margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+            <span class="material-symbols-outlined" style="font-size:14px;color:#702ae1;">shopping_bag</span>הזמנות לפי יום
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            ${dayRows.map(d => {
+              const cnt  = parseInt(d.orders_count, 10);
+              const pct  = maxOrders > 0 ? (cnt / maxOrders * 100).toFixed(1) : 0;
+              const date = d.day ? d.day.toString().slice(0, 10) : '—';
+              return `<div style="display:flex;align-items:center;gap:8px;">
+                <div style="width:70px;font-size:10px;color:var(--on-surface-var);text-align:left;flex-shrink:0;">${date.slice(5)}</div>
+                <div style="flex:1;background:rgba(255,255,255,0.05);border-radius:4px;height:18px;overflow:hidden;">
+                  <div style="width:${pct}%;background:#702ae1;height:100%;border-radius:4px;transition:width 0.3s;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;">
+                    ${cnt > 0 ? `<span style="font-size:10px;color:#fff;font-weight:700;">${cnt}</span>` : ''}
+                  </div>
+                </div>
+                ${cnt === 0 ? `<span style="font-size:10px;color:var(--on-surface-var);">0</span>` : ''}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- Commission per day -->
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--on-surface-var);margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+            <span class="material-symbols-outlined" style="font-size:14px;color:#16a34a;">paid</span>עמלה לפי יום
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            ${dayRows.map(d => {
+              const comm = parseFloat(d.total_commission);
+              const pct  = maxCommission > 0 ? (comm / maxCommission * 100).toFixed(1) : 0;
+              const date = d.day ? d.day.toString().slice(0, 10) : '—';
+              return `<div style="display:flex;align-items:center;gap:8px;">
+                <div style="width:70px;font-size:10px;color:var(--on-surface-var);text-align:left;flex-shrink:0;">${date.slice(5)}</div>
+                <div style="flex:1;background:rgba(255,255,255,0.05);border-radius:4px;height:18px;overflow:hidden;">
+                  <div style="width:${pct}%;background:#16a34a;height:100%;border-radius:4px;transition:width 0.3s;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;">
+                    ${comm > 0 ? `<span style="font-size:10px;color:#fff;font-weight:700;">$${comm.toFixed(2)}</span>` : ''}
+                  </div>
+                </div>
+                ${comm === 0 ? `<span style="font-size:10px;color:var(--on-surface-var);">$0</span>` : ''}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>`;
+  } catch (err) {
+    el.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+// Niche filter for orders section
 document.getElementById('analytics-niche-filter').addEventListener('change', function () {
   loadAnalyticsOrders(this.value);
+  loadDailyStats(this.value);
+});
+
+// Day filter quick-buttons
+document.querySelectorAll('.an-day-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.an-day-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const days = btn.dataset.days;
+    loadDailyStats(_ordersFilter.subjectId, days);
+    loadAnalyticsOrders(_ordersFilter.subjectId, days);
+  });
 });
 
 // ── Analytics: Top Products (real attribution) ───────────────────────────────

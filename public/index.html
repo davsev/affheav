@@ -727,12 +727,33 @@
 
       <!-- Orders section -->
       <div id="an-section-orders" style="margin-bottom:24px;">
+        <!-- Daily stats chart -->
+        <div class="card" style="border-radius:0;border-bottom:1px solid rgba(255,255,255,0.06);padding:20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="material-symbols-outlined" style="font-size:18px;color:var(--primary);">calendar_month</span>
+              <span style="font-size:14px;font-weight:700;color:var(--on-surface);">הזמנות והכנסות לפי יום</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <div class="an-day-filters" style="display:flex;gap:4px;">
+                <button class="btn btn-ghost btn-sm an-day-btn active" data-days="7">7 ימים</button>
+                <button class="btn btn-ghost btn-sm an-day-btn" data-days="30">30 ימים</button>
+                <button class="btn btn-ghost btn-sm an-day-btn" data-days="90">90 ימים</button>
+                <button class="btn btn-ghost btn-sm an-day-btn" data-days="">הכל</button>
+              </div>
+              <select id="analytics-niche-filter" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;">
+                <option value="">כל הנישות</option>
+              </select>
+            </div>
+          </div>
+          <div id="analytics-daily-stats">
+            <div style="padding:20px;text-align:center;color:var(--on-surface-var);">לחץ "עדכן עמלות" לטעינת נתונים</div>
+          </div>
+        </div>
+        <!-- Orders table -->
         <div class="card" id="analytics-orders-card" style="border-radius:0 0 16px 16px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
             <div class="card-title" style="margin:0;">פירוט הזמנות</div>
-            <select id="analytics-niche-filter" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;">
-              <option value="">כל הנישות</option>
-            </select>
           </div>
           <div id="analytics-orders-table">
             <div style="padding:20px;text-align:center;color:var(--on-surface-var);">לחץ "עדכן עמלות" לטעינת נתונים</div>
