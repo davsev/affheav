@@ -129,6 +129,31 @@ app.get('/auth/google/callback',
 app.post('/auth/logout', (req, res) => {
   req.logout(() => res.json({ success: true }));
 });
+
+// ── Test-only Auth Bypass ─────────────────────────────────────────────────────
+// Creates a real session for a synthetic user — no Google OAuth required.
+// ONLY available when NODE_ENV=test. Never exposed in production.
+if (process.env.NODE_ENV === 'test') {
+  app.post('/auth/test-login', async (req, res) => {
+    try {
+      const role = req.body?.role === 'user' ? 'user' : 'admin';
+      const googleId = `test-${role}`;
+      const email    = `test-${role}@affiliate-heaven.test`;
+      const user = await createUser({ googleId, email, name: `Test ${role}`, photo: null });
+      // Force the role regardless of ADMIN_GOOGLE_EMAIL env var
+      const { query: dbQuery } = require('./db');
+      await dbQuery('UPDATE users SET role = $1 WHERE google_id = $2', [role, googleId]);
+      user.role = role;
+      req.login(user, (err) => {
+        if (err) return res.status(500).json({ success: false, error: err.message });
+        res.json({ success: true, user: { id: user.id, email: user.email, role: user.role } });
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+}
+
 app.get('/api/me', (req, res) => {
   if (!req.isAuthenticated() || !req.user) return res.status(401).json({ success: false });
   const { id, email, name, photo, role } = req.user;

@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-04-29)
 
 **Core value:** Niche owners can run multiple affiliate channels — each with its own audience, accounts, and schedule — from a single platform, without manual intervention.
-**Current focus:** Milestone v2.0 — Microservices Rebuild (roadmap created, ready for Phase 4 planning)
+**Current focus:** Milestone v2.0 — Microservices Rebuild (Phase 4 complete, ready for Phase 5)
 
 ## Current Position
 
-Phase: Phase 4 — Monorepo Scaffold + Infrastructure (not started)
+Phase: Phase 5 — API Gateway + Feature Flag System (not started)
 Plan: —
-Status: Roadmap created — awaiting `/gsd:plan-phase 4`
-Last activity: 2026-04-29 — Milestone v2.0 roadmap created (9 phases, 73 requirements)
+Status: Phase 4 complete — awaiting `/gsd:plan-phase 5`
+Last activity: 2026-05-13 — Phase 4 executed (3 plans: monorepo scaffold, Docker/DB isolation, packages/db + CI)
 
-Progress: ░░░░░░░░░░ 0%
+Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 
 ## Performance Metrics (v1.0 Reference)
 
@@ -28,6 +28,12 @@ Progress: ░░░░░░░░░░ 0%
 | 01-backend-foundation | 3 | 15 min | 5 min |
 | 02-scheduler-delivery | 2 | 9 min | 4.5 min |
 | 03-frontend-ui | 2 | 11 min | 5.5 min |
+
+**v2.0 Velocity (so far):**
+
+| Phase | Plans | Status |
+|-------|-------|--------|
+| 04-monorepo-scaffold-infrastructure | 3 | ✅ Complete |
 
 ## Accumulated Context
 
@@ -47,9 +53,18 @@ Progress: ░░░░░░░░░░ 0%
 - Separate PostgreSQL DB user per service — enforced from Phase 4; cross-boundary writes must fail with `permission denied`
 - BullMQ idempotency requires BOTH deterministic job ID AND DB sent-flag check — neither guard alone is sufficient
 - Drizzle migrations gated behind `RUN_MIGRATIONS=true` — never auto-run on startup
+- NodeNext module resolution requires `.js` extensions in import paths (not `.ts`) — even inside TypeScript source files
+
+### Phase 4 Decisions (locked)
+
+- `pnpm -r run typecheck` (not `pnpm -r tsc --noEmit`) — the latter looks for a script named `tsc`; each package exposes a `typecheck` script
+- All packages expose `test` and `lint` scripts so `pnpm -r run test/lint` recurse cleanly in CI
+- `packages/db/src/index.ts` re-exports use `.js` extensions — required for NodeNext module resolution
+- Monolith `server.js` stays at repo root during transition — `apps/monolith` is a thin wrapper that points to it
 
 ### Research Flags (for `/gsd:plan-phase` to note)
 
+- **Phase 5 (Gateway):** Hono proxy middleware patterns; feature flag DB schema in `gateway` PostgreSQL schema; JWT verification middleware without auth service being live yet
 - **Phase 6 (Auth):** RS256 public key distribution to Hono services; Railway secret manager integration; refresh token rotation; dual-auth window edge cases
 - **Phase 9 (Channels):** opossum v9 per-user Redis-backed circuit breaker isolation against v9 API
 - **Phase 10 (Scheduler/Broadcaster):** BullMQ worker pool tuning for mixed fast/slow jobs; SSE stream proxy via API gateway
@@ -63,16 +78,16 @@ Progress: ░░░░░░░░░░ 0%
 
 ### Pending Todos
 
-- Plan Phase 4 via `/gsd:plan-phase 4`
+- Plan Phase 5 via `/gsd:plan-phase 5`
 
 ### Blockers/Concerns
 
 - public/app.js is 2231 lines — full replacement planned in Phase 11
 - Google Sheets dependency still present — to be fully retired in Phase 8 (products service)
-- Railway PostgreSQL multi-schema user grants should be verified before Phase 4 DB schema design is finalized
+- Railway PostgreSQL multi-schema user grants should be verified before Phase 5+ DB schema work
 
 ## Session Continuity
 
-Last session: 2026-04-29
-Stopped at: v2.0 roadmap created — 9 phases, 73 requirements mapped
-Resume: Run `/gsd:plan-phase 4` to begin Phase 4 planning
+Last session: 2026-05-13
+Stopped at: Phase 4 complete — 3 plans executed (pnpm workspace, Docker+DB isolation, packages/db+CI)
+Resume: Run `/gsd:plan-phase 5` to plan the API Gateway + Feature Flag System
