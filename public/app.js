@@ -1455,6 +1455,58 @@ document.getElementById('btn-sync-aliexpress-bulk').addEventListener('click', as
   setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">store</span>'; }, 5000);
 });
 
+// ── Clean 404 products ────────────────────────────────────────────────────────
+document.getElementById('btn-clean-404').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+
+  // Scan all products regardless of checkbox selection
+  const allIds = _lastProducts.map(p => p.id);
+  if (!allIds.length) { alert('אין מוצרים לסריקה'); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="animation:spin 1s linear infinite;font-size:17px;">link_off</span>';
+  _syncUI.panel404.style.display = 'none';
+
+  let checked = 0, notFound = 0, failed = 0;
+  const notFoundProducts = [];
+
+  // Reuse the same progress bar
+  syncShowProgress(0, allIds.length, 0, 0, 0);
+
+  for (let i = 0; i < allIds.length; i++) {
+    const id = allIds[i];
+    const product = _lastProducts.find(p => p.id === id);
+    try {
+      const res = await api(`/api/aliexpress/check-url/${id}`, { method: 'POST' });
+      if (res.not_found) {
+        notFound++;
+        notFoundProducts.push({ id, label: product?.Text || product?.title || id, url: product?.long_url || '' });
+      }
+    } catch {
+      failed++;
+    }
+    checked++;
+    // Reuse progress bar — show checked/notFound/failed
+    _syncUI.panel.style.display = '';
+    _syncUI.fill.style.width = `${Math.round((checked / allIds.length) * 100)}%`;
+    const parts = [];
+    if (notFound) parts.push(`⚠ ${notFound} שבורים`);
+    if (failed)   parts.push(`✗ ${failed}`);
+    _syncUI.text.textContent = `בודק ${checked} / ${allIds.length}${parts.length ? ' · ' + parts.join(' · ') : ''}`;
+  }
+
+  if (!notFoundProducts.length) {
+    _syncUI.text.textContent = `✓ כל ${allIds.length} הקישורים תקינים`;
+    btn.innerHTML = '<span style="font-size:12px;font-weight:700;color:#4ade80;">✓ הכל תקין</span>';
+  } else {
+    _syncUI.text.textContent = `נמצאו ${notFoundProducts.length} קישורים שבורים`;
+    syncShow404Panel(notFoundProducts);
+    btn.innerHTML = `<span style="font-size:11px;font-weight:700;">⚠ ${notFoundProducts.length}</span>`;
+  }
+
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">link_off</span>'; }, 5000);
+});
+
 // ── Schedules ─────────────────────────────────────────────────────────────────
 async function loadSchedules() {
   const container = document.getElementById('schedules-list');
