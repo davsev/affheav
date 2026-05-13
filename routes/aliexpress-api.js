@@ -4,7 +4,7 @@ const googleSheets = require('../services/googleSheets');
 const workflow = require('../services/workflow');
 const { query } = require('../db');
 const { signAndCall } = require('../services/aliexpressApi');
-const { syncProduct, syncProducts } = require('../services/aliexpressSync');
+const { syncProduct, syncProducts, resolveUrl } = require('../services/aliexpressSync');
 
 const DEFAULT_TRACKING_ID = process.env.ALIEXPRESS_TRACKING_ID || 'TechSalebuy';
 
@@ -122,6 +122,24 @@ router.post('/add', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     workflow.log(`✗ Failed to add product: ${err.message}`, 'error');
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/aliexpress/check-url/:id — lightweight 404 check (no scraping)
+router.post('/check-url/:id', async (req, res) => {
+  try {
+    const { rows } = await query(
+      'SELECT id, long_url, text FROM products WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ success: false, error: 'Product not found' });
+    const product = rows[0];
+    if (!product.long_url) return res.json({ success: true, not_found: false, skipped: true });
+
+    const { status } = await resolveUrl(product.long_url);
+    res.json({ success: true, not_found: status === 404 });
+  } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
