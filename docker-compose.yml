@@ -4,7 +4,18 @@ services:
     environment:
       POSTGRES_DB: affiliate_heaven
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Per-service passwords — read by docker/postgres/01-init.sh
+      MONOLITH_DB_PASSWORD: ${MONOLITH_DB_PASSWORD}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
+      USERS_DB_PASSWORD: ${USERS_DB_PASSWORD}
+      SUBJECTS_DB_PASSWORD: ${SUBJECTS_DB_PASSWORD}
+      PRODUCTS_DB_PASSWORD: ${PRODUCTS_DB_PASSWORD}
+      AI_WRITER_DB_PASSWORD: ${AI_WRITER_DB_PASSWORD}
+      CHANNELS_DB_PASSWORD: ${CHANNELS_DB_PASSWORD}
+      SCHEDULER_DB_PASSWORD: ${SCHEDULER_DB_PASSWORD}
+      BROADCASTER_DB_PASSWORD: ${BROADCASTER_DB_PASSWORD}
+      GATEWAY_DB_PASSWORD: ${GATEWAY_DB_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
@@ -33,7 +44,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://monolith_svc:monolith_password@postgres:5432/affiliate_heaven
+      DATABASE_URL: postgresql://monolith_svc:${MONOLITH_DB_PASSWORD}@postgres:5432/affiliate_heaven
       REDIS_URL: redis://redis:6379
       NODE_ENV: development
     depends_on:

@@ -57,7 +57,6 @@ jobs:
   e2e:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
-    # Run after typecheck/lint pass — no point running E2E if the build is broken
     needs: ci
 
     steps:
@@ -82,17 +81,31 @@ jobs:
         working-directory: apps/e2e
         run: npx playwright install --with-deps chromium
 
-      - name: Start monolith stack (Docker Compose)
+      - name: Start postgres + redis
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
+          MONOLITH_DB_PASSWORD: ${{ secrets.CI_MONOLITH_DB_PASSWORD }}
+          AUTH_DB_PASSWORD: ${{ secrets.CI_AUTH_DB_PASSWORD }}
+          USERS_DB_PASSWORD: ${{ secrets.CI_USERS_DB_PASSWORD }}
+          SUBJECTS_DB_PASSWORD: ${{ secrets.CI_SUBJECTS_DB_PASSWORD }}
+          PRODUCTS_DB_PASSWORD: ${{ secrets.CI_PRODUCTS_DB_PASSWORD }}
+          AI_WRITER_DB_PASSWORD: ${{ secrets.CI_AI_WRITER_DB_PASSWORD }}
+          CHANNELS_DB_PASSWORD: ${{ secrets.CI_CHANNELS_DB_PASSWORD }}
+          SCHEDULER_DB_PASSWORD: ${{ secrets.CI_SCHEDULER_DB_PASSWORD }}
+          BROADCASTER_DB_PASSWORD: ${{ secrets.CI_BROADCASTER_DB_PASSWORD }}
+          GATEWAY_DB_PASSWORD: ${{ secrets.CI_GATEWAY_DB_PASSWORD }}
         run: |
           docker compose up -d postgres redis
-          # Wait for postgres health
           timeout 60 bash -c 'until docker compose exec -T postgres pg_isready -U postgres; do sleep 2; done'
-          # Start monolith with test env vars
+
+      - name: Start monolith
+        env:
+          MONOLITH_DB_PASSWORD: ${{ secrets.CI_MONOLITH_DB_PASSWORD }}
+        run: |
           NODE_ENV=test \
-          SESSION_SECRET=ci-test-secret \
-          DATABASE_URL=postgresql://monolith_svc:monolith_password@localhost:5432/affiliate_heaven \
+          SESSION_SECRET=${{ secrets.CI_SESSION_SECRET }} \
+          DATABASE_URL=postgresql://monolith_svc:${MONOLITH_DB_PASSWORD}@localhost:5432/affiliate_heaven \
           npm start &
-          # Wait for monolith to be ready
           timeout 60 bash -c 'until curl -sf http://localhost:3000/; do sleep 2; done'
 
       - name: Run Playwright baseline tests
