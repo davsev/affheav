@@ -113,7 +113,7 @@ jobs:
         env:
           BASE_URL: http://localhost:3000
           CI: true
-        run: npx playwright test
+        run: pnpm e2e
 
       - name: Upload Playwright report on failure
         if: failure()
