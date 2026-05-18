@@ -4,6 +4,7 @@ const whatsapp = require('./whatsapp');
 const facebook = require('./facebook');
 const instagram = require('./instagram');
 const { getSubjectById, getGroupsBySubject } = require('./subjectService');
+const { resolveUrl } = require('./aliexpressSync');
 
 const WA_GROUP_DELAY_MS = 2 * 60 * 1000; // 2 minutes between WhatsApp groups
 
@@ -25,6 +26,14 @@ function log(msg, level = 'info') {
   const entry = { ts: new Date().toISOString(), level, msg };
   console.log(`[${level.toUpperCase()}] ${msg}`);
   if (_emit) _emit(entry);
+}
+
+async function getUserSetting(userId, key) {
+  const { rows } = await query(
+    'SELECT value FROM settings WHERE user_id = $1 AND key = $2',
+    [userId, key]
+  );
+  return rows[0]?.value ?? null;
 }
 
 // Get next unsent product for a user from Postgres
@@ -61,6 +70,44 @@ async function getNextUnsent({ userId, subject } = {}) {
     subject:   r.subject_id  || '',
     skip_ai:   r.skip_ai     || false,
   };
+}
+
+// Find oldest-sent product that is still live (not 404) — used as fallback when queue is empty
+async function getFallbackProduct({ userId, subject } = {}) {
+  const args = [userId];
+  const subjectClause = subject ? `AND subject_id = $${args.push(subject)}` : '';
+  const { rows } = await query(
+    `SELECT * FROM products
+     WHERE user_id = $1 ${subjectClause}
+       AND sent_at IS NOT NULL
+       AND short_link IS NOT NULL AND short_link != ''
+       AND long_url   IS NOT NULL AND long_url   != ''
+     ORDER BY sent_at ASC
+     LIMIT 20`,
+    args
+  );
+
+  for (const r of rows) {
+    const { status } = await resolveUrl(r.long_url);
+    if (status === 404) {
+      log(`⚠ Fallback candidate "${(r.text || '').slice(0, 50)}" returned 404 — skipping`, 'warn');
+      continue;
+    }
+    log(`Recycling product sent on ${new Date(r.sent_at).toLocaleDateString('he-IL')}: "${(r.text || '').slice(0, 50)}"`);
+    return {
+      id:        r.id,
+      long_url:  r.long_url    || '',
+      Link:      r.short_link  || '',
+      image:     r.image       || '',
+      Text:      r.text        || '',
+      join_link: r.join_link   || '',
+      wa_group:  r.wa_group    || '',
+      sent:      new Date(r.sent_at).toISOString(),
+      subject:   r.subject_id  || '',
+      skip_ai:   r.skip_ai     || false,
+    };
+  }
+  return null;
 }
 
 // Mark product as sent in Postgres
@@ -129,8 +176,18 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
     log('Fetching next unsent product from DB...');
     product = await getNextUnsent({ userId, subject });
     if (!product) {
-      log('No unsent products found. Workflow complete.', 'warn');
-      return { success: false, reason: 'no_unsent_products' };
+      const recycle = userId && await getUserSetting(userId, 'recycle_products');
+      if (recycle === 'true') {
+        log('No unsent products — searching for oldest sent product to recycle...');
+        product = await getFallbackProduct({ userId, subject });
+        if (!product) {
+          log('No recyclable products available (all returned 404).', 'warn');
+          return { success: false, reason: 'no_products' };
+        }
+      } else {
+        log('No unsent products found. Workflow complete.', 'warn');
+        return { success: false, reason: 'no_unsent_products' };
+      }
     }
     log(`Found product: "${product.Text}" → ${product.Link}`);
   }
@@ -196,11 +253,9 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
         try {
           log(`Sending to WhatsApp group: ${group.name} (${group.waGroup})`);
           const waResult = await whatsapp.send({
-            text:       message,
-            image:      product.image,
-            wa_group:   group.waGroup,
-            webhookUrl: subjectConfig?.macrodroidUrl || null,
-            provider:   subjectConfig?.waProvider,
+            text:     message,
+            image:    product.image,
+            wa_group: group.waGroup,
           });
           results.whatsapp.push({ group: group.name, ...waResult });
           if (waResult.success) {
@@ -223,11 +278,9 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
       try {
         log(`Sending to WhatsApp group: ${waGroup}`);
         const waResult = await whatsapp.send({
-          text:       message,
-          image:      product.image,
-          wa_group:   waGroup,
-          webhookUrl: subjectConfig?.macrodroidUrl || null,
-          provider:   subjectConfig?.waProvider,
+          text:     message,
+          image:    product.image,
+          wa_group: waGroup,
         });
         results.whatsapp = waResult;
         if (waResult.success) {

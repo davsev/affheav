@@ -27,5 +27,6 @@ async function proxyGet(path, res) {
 
 router.get('/status', (req, res) => proxyGet('/status', res));
 router.get('/groups', (req, res) => proxyGet('/groups', res));
+router.get('/debug',  (req, res) => proxyGet('/debug',  res));
 
 module.exports = router;

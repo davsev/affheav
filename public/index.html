@@ -204,11 +204,11 @@
       Affiliate Heaven / <span id="topbar-section">מוצרים</span>
     </div>
     <div class="execute-row">
-      <span class="execute-label">הרצה ידנית:</span>
-      <button class="btn-execute" id="btn-execute">
-        <span class="material-symbols-outlined" style="font-size:15px;">play_arrow</span>
-        הרץ עכשיו
-      </button>
+      <label class="toggle" id="recycle-toggle-label" title="שלח מוצר ישן אם אין מוצרים חדשים">
+        <input type="checkbox" id="chk-recycle-products" />
+        <span class="slider"></span>
+      </label>
+      <span style="font-size:11.5px;color:var(--on-surface-var);">חזור על מוצרים</span>
     </div>
   </div>
 
@@ -310,6 +310,12 @@
               </button>
             </div>
             <!-- Actions -->
+            <button class="icon-btn" id="btn-sync-aliexpress-bulk" title="סנכרן נתוני מוצרים מ-AliExpress">
+              <span class="material-symbols-outlined">store</span>
+            </button>
+            <button class="icon-btn" id="btn-clean-404" title="מצא ומחק מוצרים עם קישורים שבורים (404)">
+              <span class="material-symbols-outlined">link_off</span>
+            </button>
             <button class="icon-btn" id="btn-shuffle-products" title="ערבב סדר מוצרים אקראית">
               <span class="material-symbols-outlined">shuffle</span>
             </button>
@@ -325,12 +331,33 @@
           </div>
         </div>
 
+        <!-- Sync progress bar -->
+        <div id="sync-progress-panel" style="display:none;margin-bottom:12px;">
+          <div class="sync-progress-bar-wrap">
+            <div id="sync-progress-fill"></div>
+          </div>
+          <div id="sync-progress-text" class="sync-progress-text"></div>
+        </div>
+
+        <!-- 404 results panel -->
+        <div id="sync-404-panel" style="display:none;margin-bottom:14px;">
+          <div class="sync-404-header">
+            <span>⚠ <span id="sync-404-count"></span> מוצרים לא נמצאו ב-AliExpress</span>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-sm" id="btn-delete-all-404" style="background:rgba(239,68,68,0.12);color:#ef4444;border:1px solid rgba(239,68,68,0.2);">מחק הכל</button>
+              <button class="btn btn-sm btn-ghost" id="btn-dismiss-404">סגור</button>
+            </div>
+          </div>
+          <ul id="sync-404-list" class="sync-404-list"></ul>
+        </div>
+
         <!-- Table view -->
         <div id="products-table-view">
           <div class="table-wrap">
             <table id="products-table">
               <thead>
                 <tr>
+                  <th style="width:28px;"><input type="checkbox" id="chk-select-all-products" title="בחר הכל" /></th>
                   <th style="width:32px;"></th>
                   <th>תמונה</th>
                   <th>שם מוצר</th>
@@ -343,7 +370,7 @@
                 </tr>
               </thead>
               <tbody id="products-body">
-                <tr><td colspan="9" class="empty-state">טוען...</td></tr>
+                <tr><td colspan="10" class="empty-state">טוען...</td></tr>
               </tbody>
             </table>
           </div>
@@ -733,12 +760,33 @@
 
       <!-- Orders section -->
       <div id="an-section-orders" style="margin-bottom:24px;">
+        <!-- Daily stats chart -->
+        <div class="card" style="border-radius:0;border-bottom:1px solid rgba(255,255,255,0.06);padding:20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="material-symbols-outlined" style="font-size:18px;color:var(--primary);">calendar_month</span>
+              <span style="font-size:14px;font-weight:700;color:var(--on-surface);">הזמנות והכנסות לפי יום</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <div class="an-day-filters" style="display:flex;gap:4px;">
+                <button class="btn btn-ghost btn-sm an-day-btn active" data-days="7">7 ימים</button>
+                <button class="btn btn-ghost btn-sm an-day-btn" data-days="30">30 ימים</button>
+                <button class="btn btn-ghost btn-sm an-day-btn" data-days="90">90 ימים</button>
+                <button class="btn btn-ghost btn-sm an-day-btn" data-days="">הכל</button>
+              </div>
+              <select id="analytics-niche-filter" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;">
+                <option value="">כל הנישות</option>
+              </select>
+            </div>
+          </div>
+          <div id="analytics-daily-stats">
+            <div style="padding:20px;text-align:center;color:var(--on-surface-var);">לחץ "עדכן עמלות" לטעינת נתונים</div>
+          </div>
+        </div>
+        <!-- Orders table -->
         <div class="card" id="analytics-orders-card" style="border-radius:0 0 16px 16px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
             <div class="card-title" style="margin:0;">פירוט הזמנות</div>
-            <select id="analytics-niche-filter" class="form-input" style="width:auto;font-size:13px;padding:6px 10px;">
-              <option value="">כל הנישות</option>
-            </select>
           </div>
           <div id="analytics-orders-table">
             <div style="padding:20px;text-align:center;color:var(--on-surface-var);">לחץ "עדכן עמלות" לטעינת נתונים</div>
@@ -958,6 +1006,10 @@
         </div>
         <div id="wwebjs-no-config" style="display:none;font-size:12px;color:#f59e0b;">
           ⚠ WHATSAPP_SERVICE_URL לא מוגדר בהגדרות השרת
+        </div>
+        <!-- Debug info (shown when not connected) -->
+        <div id="wwebjs-debug-wrap" style="display:none;margin-top:12px;">
+          <pre id="wwebjs-debug-pre" style="font-size:10px;background:rgba(0,0,0,0.3);border-radius:8px;padding:10px;overflow-x:auto;color:#94a3b8;white-space:pre-wrap;word-break:break-all;"></pre>
         </div>
       </div>
 
@@ -1377,6 +1429,11 @@
         <!-- Live preview -->
         <div style="font-size:13px;color:var(--primary);font-weight:600;min-height:20px;" id="bcast-recurrence-preview"></div>
       </div>
+      <!-- Platforms -->
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 0 2px;">
+        <div class="ios-toggle active" id="bcast-send-facebook" role="switch" aria-label="שלח לפייסבוק" onclick="this.classList.toggle('active')"></div>
+        <label style="font-size:14px;cursor:pointer;" onclick="document.getElementById('bcast-send-facebook').classList.toggle('active')">שלח לפייסבוק</label>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeBroadcastModal()">ביטול</button>
@@ -1387,6 +1444,10 @@
   </div>
 </div>
 
+
+<button id="btn-back-to-top" title="חזור לראש הדף">
+  <span class="material-symbols-outlined">arrow_upward</span>
+</button>
 
 <script type="module" src="app.js"></script>
 <script type="module" src="broadcast-modal.js"></script>

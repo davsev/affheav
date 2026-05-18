@@ -111,6 +111,7 @@ async function migrate() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS send_count INTEGER NOT NULL DEFAULT 0`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS sale_price      NUMERIC(10,2)`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS commission_rate NUMERIC(5,4)`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS title TEXT`);
 
   // ── Schedules ─────────────────────────────────────────────────────────────
   await query(`
@@ -167,6 +168,7 @@ async function migrate() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS bcast_user_id    ON broadcast_messages(user_id)`);
   await query(`CREATE INDEX IF NOT EXISTS bcast_subject_id ON broadcast_messages(subject_id)`);
+  await query(`ALTER TABLE broadcast_messages ADD COLUMN IF NOT EXISTS send_facebook BOOLEAN NOT NULL DEFAULT true`);
 
   // ── Commission Snapshots (AliExpress affiliate orders) ───────────────────────
   await query(`

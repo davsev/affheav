@@ -223,6 +223,7 @@ process.on('SIGTERM', async () => {
 });
 
 workflow.setEmitter(emitLog);
+require('./services/broadcastDelivery').setEmitter(emitLog);
 
 // ── Protected API Routes ──────────────────────────────────────────────────────
 app.use('/api/products',  isAuthenticated, require('./routes/products'));
@@ -238,6 +239,7 @@ app.use('/api/users',             isAuthenticated, require('./routes/users'));
 app.use('/api/broadcasts',        isAuthenticated, require('./routes/broadcasts'));
 app.use('/api/analytics',         isAuthenticated, require('./routes/analytics'));
 app.use('/api/whatsapp-service',  isAuthenticated, require('./routes/whatsapp-service'));
+app.use('/api/settings',          isAuthenticated, require('./routes/settings'));
 
 // ── Static + SPA Fallback ─────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));

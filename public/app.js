@@ -86,6 +86,7 @@ window.doLogout = async () => {
         if (navUsers) navUsers.style.display = '';
       }
       hideLoginPage();
+      loadUserSettings();
     } else {
       showLoginPage();
     }
@@ -93,6 +94,23 @@ window.doLogout = async () => {
     showLoginPage();
   }
 })();
+
+async function loadUserSettings() {
+  try {
+    const { settings } = await api('/api/settings');
+    const chk = document.getElementById('chk-recycle-products');
+    if (chk) chk.checked = settings.recycle_products === 'true';
+  } catch { /* non-critical */ }
+}
+
+document.getElementById('chk-recycle-products').addEventListener('change', async function () {
+  try {
+    await api('/api/settings', { method: 'PATCH', body: { key: 'recycle_products', value: String(this.checked) } });
+  } catch (err) {
+    alert('שגיאה בשמירת הגדרה: ' + err.message);
+    this.checked = !this.checked; // revert
+  }
+});
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -517,50 +535,44 @@ function renderActiveNicheCard() {
                 <summary class="niche-cred-summary">
                   <span class="material-symbols-outlined" style="color:#16a34a;">forum</span>
                   <span>הגדרות WhatsApp</span>
-                  ${credBadge(!!s.macrodroidUrl)}
                   <span class="material-symbols-outlined niche-cred-chevron">expand_more</span>
                 </summary>
                 <div class="niche-cred-body">
                   <div class="form-group" style="margin-bottom:16px;">
-                    <label class="form-label" style="margin-bottom:6px;display:block;">ספק שליחה</label>
-                    <input type="hidden" id="wa-provider-${s.id}" value="${waProvider}" />
-                    <div style="display:flex;gap:0;background:var(--surface-low);border-radius:10px;padding:3px;">
-                      <button id="wa-provider-btn-macrodroid-${s.id}" onclick="window.setWaProvider('${s.id}', 'macrodroid')"
-                        style="flex:1;padding:7px 10px;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.2s;
-                               background:${waProvider === 'macrodroid' ? 'var(--primary)' : 'transparent'};
-                               color:${waProvider === 'macrodroid' ? 'white' : 'var(--on-surface-var)'};">
-                        MacroDroid
-                      </button>
-                      <button id="wa-provider-btn-webjs-${s.id}" onclick="window.setWaProvider('${s.id}', 'webjs')"
-                        style="flex:1;padding:7px 10px;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.2s;
-                               background:${waProvider === 'webjs' ? 'var(--primary)' : 'transparent'};
-                               color:${waProvider === 'webjs' ? 'white' : 'var(--on-surface-var)'};">
-                        WhatsApp Web JS
-                      </button>
-                    </div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:16px;">
-                    <label class="form-label">Webhook URL (MacroDroid)</label>
-                    ${passField(`niche-wa-url-${s.id}`, !!s.macrodroidUrl, 'הזן Webhook URL')}
+                    <label class="form-label" style="margin-bottom:6px;display:block;">קבוצה ראשית <span style="font-size:11px;color:var(--on-surface-var);">(שידורים)</span></label>
+                    <select class="form-input" id="niche-wa-group-${s.id}" onchange="scheduleNicheSave('${s.id}')">
+                      <option value="">טוען קבוצות...</option>
+                    </select>
                   </div>
                   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
                     <label class="form-label" style="margin:0;">קבוצות WhatsApp</label>
-                    <button class="btn btn-ghost btn-sm" onclick="showAddWaGroup('${s.id}')" style="font-size:11px;padding:4px 10px;">
-                      <span class="material-symbols-outlined" style="font-size:13px;">add</span>הוסף קבוצה
-                    </button>
+                    <div style="display:flex;gap:6px;">
+                      <button class="btn btn-ghost btn-sm" onclick="cleanupInvalidWaGroups('${s.id}')" style="font-size:11px;padding:4px 10px;color:#dc2626;" title="מחק קבוצות עם מזהה לא תקין">
+                        <span class="material-symbols-outlined" style="font-size:13px;">delete_sweep</span>
+                      </button>
+                      <button class="btn btn-ghost btn-sm" onclick="showAddWaGroup('${s.id}')" style="font-size:11px;padding:4px 10px;">
+                        <span class="material-symbols-outlined" style="font-size:13px;">add</span>הוסף קבוצה
+                      </button>
+                    </div>
                   </div>
                   <div id="wa-groups-list-${s.id}" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;">
                     <div style="font-size:12px;color:var(--on-surface-var);">טוען קבוצות...</div>
                   </div>
                   <div id="add-wa-group-form-${s.id}" style="display:none;margin-top:12px;padding:14px;background:var(--surface-low);border-radius:1rem;border:1px solid var(--outline-var);">
+                    <div class="form-group" style="margin-bottom:10px;">
+                      <label class="form-label">בחר מקבוצות מחוברות</label>
+                      <select class="form-input" id="wa-service-pick-${s.id}" style="font-size:13px;">
+                        <option value="">טוען קבוצות...</option>
+                      </select>
+                    </div>
                     <div class="form-grid">
                       <div class="form-group">
                         <label class="form-label">שם לתצוגה</label>
                         <input class="form-input" id="new-wa-name-${s.id}" placeholder="קבוצת דיג צפון" style="font-size:13px;" />
                       </div>
                       <div class="form-group">
-                        <label class="form-label">מזהה קבוצה (MacroDroid)</label>
-                        <input class="form-input" id="new-wa-group-id-${s.id}" placeholder="fishing_north" dir="ltr" style="font-size:13px;" />
+                        <label class="form-label">מזהה קבוצה</label>
+                        <input class="form-input" id="new-wa-group-id-${s.id}" placeholder="120363...@g.us" dir="ltr" style="font-size:13px;" />
                       </div>
                       <div class="form-group form-full">
                         <label class="form-label">קישור הצטרפות</label>
@@ -669,6 +681,7 @@ function renderActiveNicheCard() {
 
   // Load WA groups for this niche after rendering
   loadAndRenderWaGroups(s.id);
+  loadWaServiceGroupsIntoSelect(`niche-wa-group-${s.id}`, null, null, s.waGroup || '');
   attachNicheAutoSave(s.id);
 }
 
@@ -794,17 +807,6 @@ document.getElementById('gen-token-modal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeGenerateTokenModal();
 });
 
-window.setWaProvider = (id, provider) => {
-  const hidden = document.getElementById(`wa-provider-${id}`);
-  if (hidden) hidden.value = provider;
-  ['macrodroid', 'webjs'].forEach(p => {
-    const btn = document.getElementById(`wa-provider-btn-${p}-${id}`);
-    if (!btn) return;
-    btn.style.background = p === provider ? 'var(--primary)' : 'transparent';
-    btn.style.color = p === provider ? 'white' : 'var(--on-surface-var)';
-  });
-  scheduleNicheSave(id);
-};
 
 const _nicheDebounceTimers = {};
 function scheduleNicheSave(id) {
@@ -815,7 +817,6 @@ function scheduleNicheSave(id) {
 function attachNicheAutoSave(id) {
   const inputIds = [
     `niche-prompt-${id}`,
-    `niche-wa-url-${id}`,
     `niche-fb-page-${id}`,
     `niche-fb-token-${id}`,
     `niche-fb-app-id-${id}`,
@@ -842,14 +843,13 @@ window.saveNiche = async (id) => {
         waEnabled:           document.getElementById(`wa-toggle-${id}`)?.classList.contains('active') ?? true,
         fbEnabled:           document.getElementById(`fb-toggle-${id}`)?.classList.contains('active') ?? true,
         instagramEnabled:    document.getElementById(`ig-toggle-${id}`)?.classList.contains('active') ?? true,
-        waProvider:          document.getElementById(`wa-provider-${id}`)?.value || 'macrodroid',
-        macrodroidUrl:       document.getElementById(`niche-wa-url-${id}`)?.value.trim() || '',
         facebookPageId:      document.getElementById(`niche-fb-page-${id}`)?.value.trim() || '',
         facebookToken:       document.getElementById(`niche-fb-token-${id}`)?.value.trim() || '',
         facebookAppId:       document.getElementById(`niche-fb-app-id-${id}`)?.value.trim() || '',
         facebookAppSecret:   document.getElementById(`niche-fb-app-secret-${id}`)?.value.trim() || '',
         instagramAccountId:      document.getElementById(`niche-ig-account-${id}`)?.value.trim() || '',
         aliexpressTrackingId:    document.getElementById(`niche-ali-tracking-${id}`)?.value.trim() || '',
+        waGroup:                 document.getElementById(`niche-wa-group-${id}`)?.value || '',
       },
     });
     if (result) { result.style.color = '#16a34a'; result.textContent = '✓ נשמר'; }
@@ -998,7 +998,7 @@ function renderProducts(products) {
   }
 
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${_currentFilter === 'unsent' ? 'כל המוצרים נשלחו ✓' : 'אין מוצרים'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" class="empty-state">${_currentFilter === 'unsent' ? 'כל המוצרים נשלחו ✓' : 'אין מוצרים'}</td></tr>`;
     return;
   }
 
@@ -1011,9 +1011,13 @@ function renderProducts(products) {
       : '';
     return `
     <tr draggable="true" data-id="${p.id}">
+      <td><input type="checkbox" class="product-chk" data-id="${p.id}" /></td>
       <td><span class="drag-handle" title="גרור לסידור מחדש">⠿</span></td>
       <td>${p.image ? `<img class="img-thumb" src="${escHtml(p.image)}" onerror="this.style.display='none'" />` : '—'}</td>
-      <td style="max-width:200px;word-break:break-word;">${escHtml(p.Text)}</td>
+      <td style="max-width:200px;word-break:break-word;">
+        ${escHtml(p.Text)}
+        ${p.title && p.title !== p.Text ? `<div style="font-size:10px;color:var(--on-surface-var);margin-top:2px;line-height:1.3;" dir="ltr">${escHtml(p.title)}</div>` : ''}
+      </td>
       <td><a href="${escHtml(p.Link)}" target="_blank" style="color:var(--blue);font-size:12px;" dir="ltr">🔗 קישור</a></td>
       <td>${escHtml(p.wa_group)}</td>
       <td>${sendCountBadge}${p.sent ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>` : '<span class="badge badge-unsent">טרם נשלח</span>'}</td>
@@ -1023,6 +1027,7 @@ function renderProducts(products) {
         <button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct('${p.id}', this)" title="${p.sent ? 'שלח שוב' : 'שלח'}">▶ שלח</button>
         <button class="btn btn-sm btn-ghost" onclick="editProduct('${p.id}')" title="ערוך טקסט">✏</button>
         ${p.sent ? `<button class="btn btn-sm btn-ghost" onclick="unsendProduct('${p.id}', this)" title="החזר למוצרים שלא נשלחו" style="font-size:11px;">↩</button>` : ''}
+        <button class="btn btn-sm btn-ghost" onclick="syncProductData('${p.id}', this)" title="סנכרן מ-AliExpress"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">store</span></button>
         <button class="btn btn-sm btn-ghost" onclick="deleteProduct('${p.id}', this)" title="מחק מוצר" style="color:#f87171;">✕</button>
       </td>
     </tr>`;
@@ -1048,6 +1053,7 @@ function renderProducts(products) {
           : '';
         return `
         <div class="product-card">
+          <input type="checkbox" class="product-chk product-card-chk" data-id="${p.id}" />
           ${p.image
             ? `<img class="product-card-img" src="${escHtml(p.image)}" onerror="this.style.display='none'" loading="lazy" />`
             : `<div class="product-card-img-placeholder">📦</div>`}
@@ -1122,18 +1128,18 @@ function initDragAndDrop(tbody) {
 
 async function loadProducts() {
   const tbody = document.getElementById('products-body');
-  tbody.innerHTML = '<tr><td colspan="9" class="empty-state">טוען...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="10" class="empty-state">טוען...</td></tr>';
 
   try {
     const url = _currentSubject ? `/api/products?subject=${encodeURIComponent(_currentSubject)}` : '/api/products';
     const { products } = await api(url);
     if (!products.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="empty-state">אין מוצרים בגיליון</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="empty-state">אין מוצרים בגיליון</td></tr>';
       return;
     }
     renderProducts(products);
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-state" style="color:#f87171;">${escHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" class="empty-state" style="color:#f87171;">${escHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -1159,6 +1165,25 @@ window.unsendProduct = async (id, btn) => {
     alert('שגיאה: ' + err.message);
     btn.disabled = false;
   }
+};
+
+window.syncProductData = async (id, btn) => {
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;animation:spin 1s linear infinite;">sync</span>';
+  try {
+    const res = await api(`/api/aliexpress/sync/${id}`, { method: 'POST' });
+    if (res.not_found) {
+      btn.innerHTML = '<span style="font-size:11px;color:#f87171;" title="המוצר לא נמצא ב-AliExpress (404)">⚠ 404</span>';
+    } else {
+      btn.innerHTML = '<span style="font-size:12px;color:#4ade80;">✓</span>';
+    }
+    await loadProducts();
+  } catch (err) {
+    btn.innerHTML = '<span style="font-size:12px;color:#f87171;">✗</span>';
+    console.error('Sync failed:', err.message);
+  }
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = orig; }, 2500);
 };
 
 window.editProduct = (id) => {
@@ -1259,6 +1284,17 @@ window.sendProduct = async (rowNumber, btn) => {
 
 document.getElementById('btn-refresh-products').addEventListener('click', loadProducts);
 
+// Back to top
+(function () {
+  const btn     = document.getElementById('btn-back-to-top');
+  const content = document.querySelector('.content');
+  if (!btn || !content) return;
+  content.addEventListener('scroll', () => {
+    btn.style.display = content.scrollTop > 400 ? 'flex' : 'none';
+  });
+  btn.addEventListener('click', () => content.scrollTo({ top: 0, behavior: 'smooth' }));
+})();
+
 document.getElementById('btn-shuffle-products').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   btn.disabled = true;
@@ -1319,25 +1355,157 @@ document.getElementById('btn-shorten-all').addEventListener('click', async (e) =
   setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">link</span>'; }, 3000);
 });
 
-document.getElementById('btn-execute').addEventListener('click', async (e) => {
-  const btn = e.target;
-  btn.disabled = true;
-  btn.textContent = '...מריץ';
-  showLogTab();
+// Select-all checkbox wires up after each render
+document.getElementById('chk-select-all-products').addEventListener('change', function () {
+  document.querySelectorAll('.product-chk').forEach(chk => { chk.checked = this.checked; });
+});
+
+// ── Bulk AliExpress sync with progress bar ────────────────────────────────
+const _syncUI = {
+  panel:    document.getElementById('sync-progress-panel'),
+  fill:     document.getElementById('sync-progress-fill'),
+  text:     document.getElementById('sync-progress-text'),
+  panel404: document.getElementById('sync-404-panel'),
+  count404: document.getElementById('sync-404-count'),
+  list404:  document.getElementById('sync-404-list'),
+};
+
+function syncShowProgress(done, total, succeeded, notFound, failed) {
+  _syncUI.panel.style.display = '';
+  _syncUI.fill.style.width    = `${Math.round((done / total) * 100)}%`;
+  const parts = [];
+  if (succeeded) parts.push(`✓ ${succeeded}`);
+  if (notFound)  parts.push(`⚠ ${notFound} לא נמצאו`);
+  if (failed)    parts.push(`✗ ${failed}`);
+  _syncUI.text.textContent = `${done} / ${total}${parts.length ? ' · ' + parts.join(' · ') : ''}`;
+}
+
+function syncShow404Panel(notFoundProducts) {
+  if (!notFoundProducts.length) { _syncUI.panel404.style.display = 'none'; return; }
+  _syncUI.count404.textContent = notFoundProducts.length;
+  _syncUI.list404.innerHTML = notFoundProducts.map(p => `
+    <li>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(p.label)}</span>
+      <a href="${escHtml(p.url)}" target="_blank" dir="ltr" style="flex-shrink:0;">🔗</a>
+    </li>`).join('');
+  _syncUI.panel404.style.display = '';
+  _syncUI.panel404.dataset.ids = JSON.stringify(notFoundProducts.map(p => p.id));
+}
+
+document.getElementById('btn-dismiss-404').addEventListener('click', () => {
+  _syncUI.panel404.style.display = 'none';
+});
+
+document.getElementById('btn-delete-all-404').addEventListener('click', async function () {
+  const ids = JSON.parse(_syncUI.panel404.dataset.ids || '[]');
+  if (!ids.length) return;
+  this.disabled = true;
+  this.textContent = '...';
   try {
-    const body = _currentSubject ? { subject: _currentSubject } : {};
-    const result = await api('/api/send/execute', { method: 'POST', body });
-    if (!result.success && result.reason === 'no_unsent_products') {
-      alert('אין מוצרים שלא נשלחו');
-    } else {
-      await loadProducts();
-    }
+    await api('/api/products/batch', { method: 'DELETE', body: { ids } });
+    _syncUI.panel404.style.display = 'none';
+    await loadProducts();
   } catch (err) {
     alert('שגיאה: ' + err.message);
   } finally {
-    btn.disabled = false;
-    btn.textContent = '▶ הרץ עכשיו';
+    this.disabled = false;
+    this.textContent = 'מחק הכל';
   }
+});
+
+document.getElementById('btn-sync-aliexpress-bulk').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const ids = [...document.querySelectorAll('.product-chk:checked')].map(el => el.dataset.id);
+  if (!ids.length) { alert('יש לבחור לפחות מוצר אחד לסנכרון'); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="animation:spin 1s linear infinite;font-size:17px;">sync</span>';
+  _syncUI.panel404.style.display = 'none';
+
+  let succeeded = 0, notFound = 0, failed = 0;
+  const notFoundProducts = [];
+
+  syncShowProgress(0, ids.length, 0, 0, 0);
+
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i];
+    const product = _lastProducts.find(p => p.id === id);
+    try {
+      const res = await api(`/api/aliexpress/sync/${id}`, { method: 'POST' });
+      if (res.not_found) {
+        notFound++;
+        notFoundProducts.push({ id, label: product?.Text || product?.title || id, url: product?.long_url || '' });
+      } else {
+        succeeded++;
+      }
+    } catch {
+      failed++;
+    }
+    syncShowProgress(i + 1, ids.length, succeeded, notFound, failed);
+  }
+
+  _syncUI.text.textContent += ' · סנכרון הסתיים';
+  syncShow404Panel(notFoundProducts);
+  await loadProducts();
+
+  const parts = [];
+  if (succeeded) parts.push(`✓ ${succeeded}`);
+  if (notFound)  parts.push(`⚠ ${notFound}`);
+  if (failed)    parts.push(`✗ ${failed}`);
+  btn.innerHTML = `<span style="font-size:11px;font-weight:700;">${parts.join(' ')}</span>`;
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">store</span>'; }, 5000);
+});
+
+// ── Clean 404 products ────────────────────────────────────────────────────────
+document.getElementById('btn-clean-404').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+
+  // Scan all products regardless of checkbox selection
+  const allIds = _lastProducts.map(p => p.id);
+  if (!allIds.length) { alert('אין מוצרים לסריקה'); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="animation:spin 1s linear infinite;font-size:17px;">link_off</span>';
+  _syncUI.panel404.style.display = 'none';
+
+  let checked = 0, notFound = 0, failed = 0;
+  const notFoundProducts = [];
+
+  // Reuse the same progress bar
+  syncShowProgress(0, allIds.length, 0, 0, 0);
+
+  for (let i = 0; i < allIds.length; i++) {
+    const id = allIds[i];
+    const product = _lastProducts.find(p => p.id === id);
+    try {
+      const res = await api(`/api/aliexpress/check-url/${id}`, { method: 'POST' });
+      if (res.not_found) {
+        notFound++;
+        notFoundProducts.push({ id, label: product?.Text || product?.title || id, url: product?.long_url || '' });
+      }
+    } catch {
+      failed++;
+    }
+    checked++;
+    // Reuse progress bar — show checked/notFound/failed
+    _syncUI.panel.style.display = '';
+    _syncUI.fill.style.width = `${Math.round((checked / allIds.length) * 100)}%`;
+    const parts = [];
+    if (notFound) parts.push(`⚠ ${notFound} שבורים`);
+    if (failed)   parts.push(`✗ ${failed}`);
+    _syncUI.text.textContent = `בודק ${checked} / ${allIds.length}${parts.length ? ' · ' + parts.join(' · ') : ''}`;
+  }
+
+  if (!notFoundProducts.length) {
+    _syncUI.text.textContent = `✓ כל ${allIds.length} הקישורים תקינים`;
+    btn.innerHTML = '<span style="font-size:12px;font-weight:700;color:#4ade80;">✓ הכל תקין</span>';
+  } else {
+    _syncUI.text.textContent = `נמצאו ${notFoundProducts.length} קישורים שבורים`;
+    syncShow404Panel(notFoundProducts);
+    btn.innerHTML = `<span style="font-size:11px;font-weight:700;">⚠ ${notFoundProducts.length}</span>`;
+  }
+
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">link_off</span>'; }, 5000);
 });
 
 // ── Schedules ─────────────────────────────────────────────────────────────────
@@ -1522,8 +1690,15 @@ async function loadBroadcasts() {
 
 window.fireBroadcastNow = async (id) => {
   try {
-    await api(`/api/broadcasts/${id}/fire-now`, { method: 'POST' });
-    alert('ההודעה נשלחת!');
+    const data = await api(`/api/broadcasts/${id}/fire-now`, { method: 'POST' });
+    const wa = data.result?.whatsapp;
+    if (wa?.success === false) {
+      alert(`שגיאה בוואטסאפ: ${wa.error}`);
+    } else if (wa?.success) {
+      alert(`✓ נשלח (${wa.chatName || wa.group || ''})`);
+    } else {
+      alert('ההודעה נשלחה!');
+    }
   } catch (err) {
     alert('שגיאה: ' + err.message);
   }
@@ -1769,6 +1944,8 @@ async function loadWWebjsStatus() {
   const qrImg      = document.getElementById('wwebjs-qr-img');
   const groupsWrap = document.getElementById('wwebjs-groups-wrap');
   const noConfig   = document.getElementById('wwebjs-no-config');
+  const debugWrap  = document.getElementById('wwebjs-debug-wrap');
+  const debugPre   = document.getElementById('wwebjs-debug-pre');
   if (!dot) return;
 
   try {
@@ -1777,6 +1954,7 @@ async function loadWWebjsStatus() {
     qrWrap.style.display     = 'none';
     groupsWrap.style.display = 'none';
     noConfig.style.display   = 'none';
+    if (debugWrap) debugWrap.style.display = 'none';
 
     if (status.state === 'CONNECTED') {
       dot.style.background = '#22c55e';
@@ -1790,11 +1968,15 @@ async function loadWWebjsStatus() {
         qrImg.src = status.qr;
         qrWrap.style.display = 'block';
       }
-      // Auto-refresh every 20s while waiting for scan
       setTimeout(loadWWebjsStatus, 20000);
     } else {
-      dot.style.background = '#94a3b8';
-      label.textContent    = 'מאתחל...';
+      const isDisconnected = status.state === 'DISCONNECTED';
+      dot.style.background = isDisconnected ? '#ef4444' : '#94a3b8';
+      label.textContent    = isDisconnected
+        ? (status.error ? `שגיאה: ${status.error}` : 'מנותק — מנסה להתחבר מחדש...')
+        : 'מאתחל...';
+      // Fetch debug info to show exactly what Chrome is doing
+      loadWWebjsDebug();
       setTimeout(loadWWebjsStatus, 5000);
     }
   } catch (err) {
@@ -1805,6 +1987,17 @@ async function loadWWebjsStatus() {
       label.textContent      = 'שירות לא מוגדר';
     }
   }
+}
+
+async function loadWWebjsDebug() {
+  const debugWrap = document.getElementById('wwebjs-debug-wrap');
+  const debugPre  = document.getElementById('wwebjs-debug-pre');
+  if (!debugWrap || !debugPre) return;
+  try {
+    const info = await api('/api/whatsapp-service/debug');
+    debugWrap.style.display = 'block';
+    debugPre.textContent = JSON.stringify(info, null, 2);
+  } catch (_) {}
 }
 
 async function loadWWebjsGroups() {
@@ -2246,6 +2439,7 @@ function renderWaGroupsList(subjectId, groups) {
       </div>
       <div id="wa-group-edit-${g.id}" style="display:none;padding:8px 12px;border-top:1px solid rgba(255,255,255,0.07);">
         <div style="display:flex;flex-direction:column;gap:6px;">
+          <select class="form-input" id="wa-service-pick-edit-${g.id}" style="font-size:12px;"><option value="">טוען קבוצות...</option></select>
           <input class="form-input" id="edit-wa-name-${g.id}" value="${escHtml(g.name)}" placeholder="שם הקבוצה" style="font-size:13px;" />
           <input class="form-input" id="edit-wa-group-id-${g.id}" value="${escHtml(g.waGroup)}" placeholder="מזהה קבוצה" dir="ltr" style="font-size:13px;" />
           <input class="form-input" id="edit-wa-join-${g.id}" value="${escHtml(g.joinLink || '')}" placeholder="https://chat.whatsapp.com/..." dir="ltr" style="font-size:13px;" />
@@ -2258,8 +2452,35 @@ function renderWaGroupsList(subjectId, groups) {
     </div>`).join('');
 }
 
+async function loadWaServiceGroupsIntoSelect(selectId, nameFieldId, idFieldId, selectedValue = '') {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  try {
+    const groups = await api('/api/whatsapp-service/groups');
+    if (!groups.length) {
+      sel.innerHTML = '<option value="">אין קבוצות מחוברות</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">-- בחר קבוצה מחוברת --</option>' +
+      groups.map(g => `<option value="${escHtml(g.id)}" data-name="${escHtml(g.name)}" ${g.id === selectedValue ? 'selected' : ''}>${escHtml(g.name)}</option>`).join('');
+    if (nameFieldId || idFieldId) {
+      sel.onchange = () => {
+        const opt = sel.options[sel.selectedIndex];
+        if (!opt.value) return;
+        const nameEl = document.getElementById(nameFieldId);
+        const idEl   = document.getElementById(idFieldId);
+        if (nameEl && !nameEl.value) nameEl.value = opt.dataset.name || opt.text;
+        if (idEl) idEl.value = opt.value;
+      };
+    }
+  } catch {
+    sel.innerHTML = '<option value="">שגיאה בטעינת קבוצות (WA לא מחובר?)</option>';
+  }
+}
+
 window.showAddWaGroup = (subjectId) => {
   document.getElementById(`add-wa-group-form-${subjectId}`).style.display = '';
+  loadWaServiceGroupsIntoSelect(`wa-service-pick-${subjectId}`, `new-wa-name-${subjectId}`, `new-wa-group-id-${subjectId}`);
 };
 window.hideAddWaGroup = (subjectId) => {
   document.getElementById(`add-wa-group-form-${subjectId}`).style.display = 'none';
@@ -2285,6 +2506,17 @@ window.saveNewWaGroup = async (subjectId) => {
   }
 };
 
+window.cleanupInvalidWaGroups = async (subjectId) => {
+  if (!confirm('למחוק את כל הקבוצות עם מזהה לא תקין (לא מסתיים ב-@g.us)?')) return;
+  try {
+    const data = await api('/api/subjects/whatsapp-groups-invalid', { method: 'DELETE' });
+    await loadAndRenderWaGroups(subjectId);
+    alert(`נמחקו ${data.deleted} קבוצות לא תקינות`);
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
+
 window.deleteWaGroup = async (groupId, subjectId) => {
   if (!confirm('למחוק את הקבוצה?')) return;
   try {
@@ -2297,6 +2529,7 @@ window.deleteWaGroup = async (groupId, subjectId) => {
 
 window.showEditWaGroup = (groupId) => {
   document.getElementById(`wa-group-edit-${groupId}`).style.display = '';
+  loadWaServiceGroupsIntoSelect(`wa-service-pick-edit-${groupId}`, `edit-wa-name-${groupId}`, `edit-wa-group-id-${groupId}`);
 };
 window.hideEditWaGroup = (groupId) => {
   document.getElementById(`wa-group-edit-${groupId}`).style.display = 'none';
@@ -2632,6 +2865,8 @@ async function renderAnalyticsSummary() {
     if (roasSel) roasSel.innerHTML = '<option value="">בחר נישה</option>' +
       niches.map(n => `<option value="${escHtml(n.id)}">${escHtml(n.name)}</option>`).join('');
 
+    loadDailyStats();
+    loadAnalyticsOrders();
     loadTopProducts();
     loadRealProductOrders();
     loadTimingHeatmap();
@@ -3012,6 +3247,7 @@ document.getElementById('btn-sync-commissions').addEventListener('click', async 
 
     // Refresh summary cards and orders
     await renderAnalyticsSummary();
+    await loadDailyStats();
     await loadAnalyticsOrders();
   } catch (err) {
     status.style.color = '#f87171';
@@ -3032,14 +3268,22 @@ document.querySelectorAll('.an-tab').forEach(btn => {
   });
 });
 
-async function loadAnalyticsOrders(subjectId = '') {
+// Shared state for orders section filters
+const _ordersFilter = { days: '7', subjectId: '' };
+
+async function loadAnalyticsOrders(subjectId = _ordersFilter.subjectId, days = _ordersFilter.days) {
+  _ordersFilter.subjectId = subjectId;
+  _ordersFilter.days      = days;
+
   const el = document.getElementById('analytics-orders-table');
   if (!el) return;
   el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
 
   try {
-    const qs   = subjectId ? `?subjectId=${encodeURIComponent(subjectId)}` : '';
-    const data = await api(`/api/analytics/orders${qs}`);
+    const qs = new URLSearchParams();
+    if (subjectId) qs.set('subjectId', subjectId);
+    if (days)      qs.set('days', days);
+    const data   = await api(`/api/analytics/orders${qs.toString() ? '?' + qs : ''}`);
     const orders = data.orders || [];
 
     if (!orders.length) {
@@ -3086,9 +3330,117 @@ async function loadAnalyticsOrders(subjectId = '') {
   }
 }
 
-// Niche filter for orders table
+async function loadDailyStats(subjectId = _ordersFilter.subjectId, days = _ordersFilter.days) {
+  const el = document.getElementById('analytics-daily-stats');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const qs = new URLSearchParams();
+    if (subjectId) qs.set('subjectId', subjectId);
+    if (days)      qs.set('days', days);
+    const data = await api(`/api/analytics/daily-stats${qs.toString() ? '?' + qs : ''}`);
+    const dayRows = (data.days || []).slice().reverse(); // oldest first for chart
+
+    if (!dayRows.length) {
+      el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">אין נתונים לתקופה הנבחרת</div>';
+      return;
+    }
+
+    const maxOrders     = Math.max(...dayRows.map(d => parseInt(d.orders_count, 10)));
+    const maxCommission = Math.max(...dayRows.map(d => parseFloat(d.total_commission)));
+
+    const totalOrders     = dayRows.reduce((s, d) => s + parseInt(d.orders_count, 10), 0);
+    const totalCommission = dayRows.reduce((s, d) => s + parseFloat(d.total_commission), 0);
+    const avgOrders       = (totalOrders / dayRows.length).toFixed(1);
+    const avgCommission   = (totalCommission / dayRows.length).toFixed(2);
+
+    el.innerHTML = `
+      <!-- Summary row -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px;">
+        ${[
+          { label:'סה"כ הזמנות',    value: totalOrders.toLocaleString(),       color:'var(--on-surface)', icon:'shopping_bag' },
+          { label:'סה"כ עמלה',      value: `$${totalCommission.toFixed(2)}`,   color:'#16a34a',            icon:'paid' },
+          { label:'ממוצע הזמנות/יום', value: avgOrders,                        color:'#702ae1',            icon:'trending_up' },
+          { label:'ממוצע עמלה/יום',  value: `$${avgCommission}`,              color:'#059669',            icon:'show_chart' },
+        ].map(k => `
+          <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;">
+            <span class="material-symbols-outlined" style="font-size:20px;color:${k.color};">${k.icon}</span>
+            <div>
+              <div style="font-size:16px;font-weight:800;color:${k.color};">${k.value}</div>
+              <div style="font-size:11px;color:var(--on-surface-var);">${k.label}</div>
+            </div>
+          </div>`).join('')}
+      </div>
+
+      <!-- Bars -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <!-- Orders per day -->
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--on-surface-var);margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+            <span class="material-symbols-outlined" style="font-size:14px;color:#702ae1;">shopping_bag</span>הזמנות לפי יום
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            ${dayRows.map(d => {
+              const cnt  = parseInt(d.orders_count, 10);
+              const pct  = maxOrders > 0 ? (cnt / maxOrders * 100).toFixed(1) : 0;
+              const date = d.day ? d.day.toString().slice(0, 10) : '—';
+              return `<div style="display:flex;align-items:center;gap:8px;">
+                <div style="width:70px;font-size:10px;color:var(--on-surface-var);text-align:left;flex-shrink:0;">${date.slice(5)}</div>
+                <div style="flex:1;background:rgba(255,255,255,0.05);border-radius:4px;height:18px;overflow:hidden;">
+                  <div style="width:${pct}%;background:#702ae1;height:100%;border-radius:4px;transition:width 0.3s;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;">
+                    ${cnt > 0 ? `<span style="font-size:10px;color:#fff;font-weight:700;">${cnt}</span>` : ''}
+                  </div>
+                </div>
+                ${cnt === 0 ? `<span style="font-size:10px;color:var(--on-surface-var);">0</span>` : ''}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- Commission per day -->
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--on-surface-var);margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+            <span class="material-symbols-outlined" style="font-size:14px;color:#16a34a;">paid</span>עמלה לפי יום
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            ${dayRows.map(d => {
+              const comm = parseFloat(d.total_commission);
+              const pct  = maxCommission > 0 ? (comm / maxCommission * 100).toFixed(1) : 0;
+              const date = d.day ? d.day.toString().slice(0, 10) : '—';
+              return `<div style="display:flex;align-items:center;gap:8px;">
+                <div style="width:70px;font-size:10px;color:var(--on-surface-var);text-align:left;flex-shrink:0;">${date.slice(5)}</div>
+                <div style="flex:1;background:rgba(255,255,255,0.05);border-radius:4px;height:18px;overflow:hidden;">
+                  <div style="width:${pct}%;background:#16a34a;height:100%;border-radius:4px;transition:width 0.3s;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;">
+                    ${comm > 0 ? `<span style="font-size:10px;color:#fff;font-weight:700;">$${comm.toFixed(2)}</span>` : ''}
+                  </div>
+                </div>
+                ${comm === 0 ? `<span style="font-size:10px;color:var(--on-surface-var);">$0</span>` : ''}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>`;
+  } catch (err) {
+    el.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+// Niche filter for orders section
 document.getElementById('analytics-niche-filter').addEventListener('change', function () {
   loadAnalyticsOrders(this.value);
+  loadDailyStats(this.value);
+});
+
+// Day filter quick-buttons
+document.querySelectorAll('.an-day-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.an-day-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const days = btn.dataset.days;
+    loadDailyStats(_ordersFilter.subjectId, days);
+    loadAnalyticsOrders(_ordersFilter.subjectId, days);
+  });
 });
 
 // ── Analytics: Top Products (real attribution) ───────────────────────────────

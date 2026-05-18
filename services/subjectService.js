@@ -98,6 +98,7 @@ async function updateSubject(id, userId, fields) {
     fbEnabled:              'fb_enabled',
     instagramEnabled:       'instagram_enabled',
     aliexpressTrackingId:   'aliexpress_tracking_id',
+    waGroup:                'wa_group',
     waProvider:             'wa_provider',
   };
 
@@ -216,6 +217,16 @@ async function deleteGroup(id, userId) {
   );
 }
 
+// Delete all groups whose wa_group is not a valid WhatsApp JID (must end with @g.us or @c.us)
+async function deleteInvalidGroups(userId) {
+  const { rowCount } = await query(
+    `DELETE FROM whatsapp_groups
+     WHERE user_id = $1 AND wa_group NOT LIKE '%@g.us' AND wa_group NOT LIKE '%@c.us'`,
+    [userId]
+  );
+  return rowCount;
+}
+
 module.exports = {
   getSubjectsByUser,
   getSubjectById,
@@ -227,5 +238,6 @@ module.exports = {
   getAllGroupsByUser,
   createGroup,
   updateGroup,
+  deleteInvalidGroups,
   deleteGroup,
 };

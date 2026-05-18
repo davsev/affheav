@@ -302,17 +302,21 @@ router.get('/summary', async (req, res) => {
   }
 });
 
-// GET /api/analytics/orders?subjectId=
-// Returns raw commission_snapshots rows for a niche (or all)
+// GET /api/analytics/orders?subjectId=&days=30
+// Returns raw commission_snapshots rows for a niche (or all), optionally filtered by last N days
 router.get('/orders', async (req, res) => {
   try {
-    const { subjectId } = req.query;
+    const { subjectId, days } = req.query;
     const params = [req.user.id];
-    let subjectFilter = '';
+    const filters = [];
     if (subjectId) {
       params.push(subjectId);
-      subjectFilter = 'AND cs.subject_id = $2';
+      filters.push(`cs.subject_id = $${params.length}`);
     }
+    if (days && /^\d+$/.test(days)) {
+      filters.push(`cs.order_time >= NOW() - INTERVAL '${parseInt(days, 10)} days'`);
+    }
+    const where = filters.length ? 'AND ' + filters.join(' AND ') : '';
 
     const { rows } = await query(
       `SELECT
@@ -322,12 +326,47 @@ router.get('/orders', async (req, res) => {
          s.name AS subject_name, s.color AS subject_color
        FROM commission_snapshots cs
        JOIN subjects s ON s.id = cs.subject_id
-       WHERE cs.user_id = $1 ${subjectFilter}
+       WHERE cs.user_id = $1 ${where}
        ORDER BY cs.order_time DESC NULLS LAST
-       LIMIT 200`,
+       LIMIT 500`,
       params
     );
     res.json({ success: true, orders: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/analytics/daily-stats?subjectId=&days=30
+// Returns orders count and commission grouped by day
+router.get('/daily-stats', async (req, res) => {
+  try {
+    const { subjectId, days } = req.query;
+    const params = [req.user.id];
+    const filters = [];
+    if (subjectId) {
+      params.push(subjectId);
+      filters.push(`subject_id = $${params.length}`);
+    }
+    if (days && /^\d+$/.test(days)) {
+      filters.push(`order_time >= NOW() - INTERVAL '${parseInt(days, 10)} days'`);
+    }
+    const where = filters.length ? 'AND ' + filters.join(' AND ') : '';
+
+    const { rows } = await query(
+      `SELECT
+         DATE(order_time AT TIME ZONE 'Asia/Jerusalem') AS day,
+         COUNT(DISTINCT order_id)                        AS orders_count,
+         COALESCE(SUM(commission_usd), 0)                AS total_commission,
+         COALESCE(SUM(order_amount), 0)                  AS total_order_value
+       FROM commission_snapshots
+       WHERE user_id = $1 AND order_time IS NOT NULL ${where}
+       GROUP BY DATE(order_time AT TIME ZONE 'Asia/Jerusalem')
+       ORDER BY day DESC
+       LIMIT 90`,
+      params
+    );
+    res.json({ success: true, days: rows });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
