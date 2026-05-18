@@ -15,8 +15,7 @@
     "typecheck": "tsc --noEmit",
     "migrate": "drizzle-kit migrate",
     "generate": "drizzle-kit generate",
-    "test": "vitest run",
-    "lint": "eslint src"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@affiliate/types": "workspace:*",

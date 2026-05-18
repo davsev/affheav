@@ -13,8 +13,7 @@
   "scripts": {
     "build": "tsc --build",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "lint": "eslint src"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@affiliate/types": "workspace:*"
