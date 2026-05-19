@@ -1,4 +1,15 @@
 node_modules/
 .env
+.env.docker
 .history/
 config/*.json
+
+# Playwright — auth state contains session cookies, must not be committed
+apps/e2e/playwright/.auth/*.json
+apps/e2e/playwright-report/
+apps/e2e/test-results/
+
+# TypeScript build artifacts
+**/dist/
+**/*.tsbuildinfo
+

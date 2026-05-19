@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      MONOLITH_DB_PASSWORD: ${MONOLITH_DB_PASSWORD}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
+      USERS_DB_PASSWORD: ${USERS_DB_PASSWORD}
+      SUBJECTS_DB_PASSWORD: ${SUBJECTS_DB_PASSWORD}
+      PRODUCTS_DB_PASSWORD: ${PRODUCTS_DB_PASSWORD}
+      AI_WRITER_DB_PASSWORD: ${AI_WRITER_DB_PASSWORD}
+      CHANNELS_DB_PASSWORD: ${CHANNELS_DB_PASSWORD}
+      SCHEDULER_DB_PASSWORD: ${SCHEDULER_DB_PASSWORD}
+      BROADCASTER_DB_PASSWORD: ${BROADCASTER_DB_PASSWORD}
+      GATEWAY_DB_PASSWORD: ${GATEWAY_DB_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  monolith:
+    build:
+      context: .
+      dockerfile: apps/monolith/Dockerfile
+    ports:
+      - "${MONOLITH_PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: postgresql://ah_mono:${MONOLITH_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

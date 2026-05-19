@@ -1,0 +1,14 @@
+{
+  "name": "@affiliate/e2e",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "test": "echo 'E2E tests run in the dedicated e2e CI job, not here'",
+    "e2e": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0"
+  }
+}

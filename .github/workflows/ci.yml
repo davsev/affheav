@@ -1,0 +1,138 @@
+name: CI
+
+
+on:
+  pull_request:
+
+jobs:
+  lint-pr-title:
+    name: Lint PR title (Conventional Commits)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            refactor
+            chore
+            test
+            docs
+            ci
+            perf
+            build
+
+  ci:
+    name: Typecheck / Unit Tests / Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (tsc --noEmit)
+        run: pnpm -r run typecheck
+
+      - name: Unit tests (Vitest)
+        run: pnpm -r run test --passWithNoTests
+
+      - name: Lint (ESLint)
+        run: pnpm -r run lint --pass-with-no-files
+
+  e2e:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    needs: ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: apps/e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Start postgres + redis
+        env:
+          POSTGRES_DB: affiliate_heaven
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
+          MONOLITH_DB_PASSWORD: ${{ secrets.CI_MONOLITH_DB_PASSWORD }}
+          AUTH_DB_PASSWORD: ${{ secrets.CI_AUTH_DB_PASSWORD }}
+          USERS_DB_PASSWORD: ${{ secrets.CI_USERS_DB_PASSWORD }}
+          SUBJECTS_DB_PASSWORD: ${{ secrets.CI_SUBJECTS_DB_PASSWORD }}
+          PRODUCTS_DB_PASSWORD: ${{ secrets.CI_PRODUCTS_DB_PASSWORD }}
+          AI_WRITER_DB_PASSWORD: ${{ secrets.CI_AI_WRITER_DB_PASSWORD }}
+          CHANNELS_DB_PASSWORD: ${{ secrets.CI_CHANNELS_DB_PASSWORD }}
+          SCHEDULER_DB_PASSWORD: ${{ secrets.CI_SCHEDULER_DB_PASSWORD }}
+          BROADCASTER_DB_PASSWORD: ${{ secrets.CI_BROADCASTER_DB_PASSWORD }}
+          GATEWAY_DB_PASSWORD: ${{ secrets.CI_GATEWAY_DB_PASSWORD }}
+        run: |
+          docker compose up -d postgres redis
+          timeout 60 bash -c 'until docker compose exec -T postgres pg_isready -U postgres; do sleep 2; done'
+
+      - name: Start monolith
+        env:
+          MONOLITH_DB_PASSWORD: ${{ secrets.CI_MONOLITH_DB_PASSWORD }}
+        run: |
+          NODE_ENV=test \
+          SESSION_SECRET=${{ secrets.CI_SESSION_SECRET }} \
+          DATABASE_URL=postgresql://ah_mono:${MONOLITH_DB_PASSWORD}@localhost:5432/affiliate_heaven \
+          npm start &
+          timeout 60 bash -c 'until curl -sf http://localhost:3000/; do sleep 2; done'
+
+      - name: Run Playwright baseline tests
+        working-directory: apps/e2e
+        env:
+          BASE_URL: http://localhost:3000
+          CI: true
+        # --update-snapshots: creates missing baselines on first run (tests pass).
+        # Once baselines are committed to the repo, remove this flag so CI will
+        # fail on visual regressions instead of silently updating them.
+        run: pnpm e2e --update-snapshots
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/e2e/playwright-report/
+          retention-days: 7
+
+      - name: Upload screenshot snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-snapshots
+          path: apps/e2e/tests/06-screenshots.spec.ts-snapshots/
+          retention-days: 30

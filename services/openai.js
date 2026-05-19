@@ -1,7 +1,7 @@
 const OpenAI = require('openai');
 require('dotenv').config();
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'missing-in-ci' });
 
 function getDayContext() {
   const now = new Date();

@@ -2,84 +2,92 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-15)
+See: .planning/PROJECT.md (updated 2026-04-29)
 
-**Core value:** Niche owners can schedule evergreen messages to reach their audiences at the right time — without touching the product pipeline.
-**Current focus:** Phase 3 — Frontend UI
+**Core value:** Niche owners can run multiple affiliate channels — each with its own audience, accounts, and schedule — from a single platform, without manual intervention.
+**Current focus:** Milestone v2.0 — Microservices Rebuild (Phase 4 complete, ready for Phase 5)
 
 ## Current Position
 
-Phase: 3 of 3 (Frontend UI)
-Plan: 2 of 2 in current phase
-Status: Complete
-Last activity: 2026-04-15 — Completed plan 03-02: broadcast add/edit modal
+Phase: Phase 5 — API Gateway + Feature Flag System (not started)
+Plan: —
+Status: Phase 4 complete — awaiting `/gsd:plan-phase 5`
+Last activity: 2026-05-13 — Phase 4 executed (3 plans: monorepo scaffold, Docker/DB isolation, packages/db + CI)
 
-Progress: [██████████] 100%
+Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 
-## Performance Metrics
+## Performance Metrics (v1.0 Reference)
 
-**Velocity:**
-- Total plans completed: 5
+**v1.0 Velocity:**
+- Total plans completed: 7
 - Average duration: 5 min
-- Total execution time: 24 min
-
-**By Phase:**
+- Total execution time: ~35 min
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-backend-foundation | 3 | 15 min | 5 min |
 | 02-scheduler-delivery | 2 | 9 min | 4.5 min |
+| 03-frontend-ui | 2 | 11 min | 5.5 min |
 
-**Recent Trend:**
-- Last 5 plans: 01-02 (2 min), 01-03 (5 min), 02-01 (4 min), 02-02 (5 min), 03-01 (7 min)
-- Trend: consistent
+**v2.0 Velocity (so far):**
 
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 03-frontend-ui | 1 (of 2) | 7 min | 7 min |
-
-*Updated after each plan completion*
+| Phase | Plans | Status |
+|-------|-------|--------|
+| 04-monorepo-scaffold-infrastructure | 3 | ✅ Complete |
 
 ## Accumulated Context
 
-### Decisions
+### Key Decisions (v2.0)
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
+- Strangler Fig migration — monolith stays live, one service extracted at a time on feature branches
+- Feature branch experiments — service goes live only when stable, monolith fallback otherwise
+- pnpm workspaces monorepo — single repo, shared tooling, cross-service TypeScript types
+- Hono 4.12.14 chosen over Fastify — faster, built-in JWT middleware, first-class TypeScript
+- Drizzle ORM 0.45.2 (stable, not 1.0.0-beta) — schema-as-code, type-safe migrations
+- BullMQ 5.75.2 + Redis — async job queue replaces cron-to-workflow coupling
+- jose 5.x for JWT — async, ESM-compatible, RS256 asymmetric; auth-service holds private key
+- AES-256-GCM for credential encryption — Node.js built-in crypto, per-record IV, `key_version` column required from day one
+- Mantine 9.0.2 + React 19 for frontend — best RTL support, dark mode built-in, no custom CSS
+- Vitest 4.1.5 — unit tests required per service before merge
+- JWT `kid` key registry required from day one in auth service — costly to retrofit
+- Separate PostgreSQL DB user per service — enforced from Phase 4; cross-boundary writes must fail with `permission denied`
+- BullMQ idempotency requires BOTH deterministic job ID AND DB sent-flag check — neither guard alone is sufficient
+- Drizzle migrations gated behind `RUN_MIGRATIONS=true` — never auto-run on startup
+- NodeNext module resolution requires `.js` extensions in import paths (not `.ts`) — even inside TypeScript source files
 
-- New broadcast_messages table (not extending schedules) — avoids nulls and branching in workflow.js
-- BCAST-03 (image upload) assigned to Phase 1 (backend concern: multer + filesystem storage) not Phase 2
-- Human-friendly recurrence builder (daily/weekly/every-N-days) — raw cron hidden from user
-- WhatsApp + Facebook only (no Instagram) for this milestone
-- Local image upload to public/uploads/broadcasts/ — no cloud storage
-- [01-01] subject_id is NOT NULL on broadcast_messages — no all-niches option (satisfies BCAST-02)
-- [01-01] recurrence (JSONB) + cron (VARCHAR) stored as a pair — JSONB for edit-modal pre-population, VARCHAR for scheduler use
-- [Phase 01-backend-foundation]: computeNextRun uses toLocaleString Asia/Jerusalem for display-only next-run; precision within minutes acceptable
-- [Phase 01-backend-foundation]: recurrence JSONB JSON.stringify'd before pg INSERT — pg driver needs string for JSONB params
-- [01-03]: Multer diskStorage with uuid filenames — avoids collisions, no cloud dependency
-- [01-03]: fire-now stubbed in Phase 1 — returns whatsapp/facebook stubbed:true; Phase 2 wires real delivery
-- [02-01]: _normalize() accepts both camelCase (broadcastService) and snake_case (DB row) — fire-now and scheduler pass different shapes
-- [02-01]: postText() routes to /feed, postPhoto() routes to /photos — text-only broadcasts must use postText() or Facebook rejects null URL
-- [02-01]: WA_GROUP_DELAY_MS = 2 minutes — matches workflow.js convention for sequential group sends
-- [02-02]: broadcastDelivery lazy-required inside runBroadcastJob() — avoids circular dep risk at startup, Node.js caches require() so no perf penalty
-- [02-02]: startBroadcasts() outer try-catch returns 0 on DB error — broadcast startup never blocks product schedule loading
-- [02-02]: fire-now returns { success: true, fired: true } immediately, delivery runs async — consistent with schedules.js pattern
-- [02-02]: PATCH /enabled triggers full startBroadcasts() reload — keeps in-memory cron jobs in sync with DB state on every toggle
-- [Phase 03-frontend-ui]: PATCH /api/broadcasts/:id/enabled confirmed as correct endpoint
-- [03-02]: window._subjects and window._broadcasts exposed at data-load time (not module init) so cross-module access always gets fresh data
-- [03-02]: Raw fetch() used for all FormData/multipart; api() only for JSON payloads — browser must set Content-Type boundary automatically
+### Phase 4 Decisions (locked)
+
+- `pnpm -r run typecheck` (not `pnpm -r tsc --noEmit`) — the latter looks for a script named `tsc`; each package exposes a `typecheck` script
+- All packages expose `test` and `lint` scripts so `pnpm -r run test/lint` recurse cleanly in CI
+- `packages/db/src/index.ts` re-exports use `.js` extensions — required for NodeNext module resolution
+- Monolith `server.js` stays at repo root during transition — `apps/monolith` is a thin wrapper that points to it
+
+### Research Flags (for `/gsd:plan-phase` to note)
+
+- **Phase 5 (Gateway):** Hono proxy middleware patterns; feature flag DB schema in `gateway` PostgreSQL schema; JWT verification middleware without auth service being live yet
+- **Phase 6 (Auth):** RS256 public key distribution to Hono services; Railway secret manager integration; refresh token rotation; dual-auth window edge cases
+- **Phase 9 (Channels):** opossum v9 per-user Redis-backed circuit breaker isolation against v9 API
+- **Phase 10 (Scheduler/Broadcaster):** BullMQ worker pool tuning for mixed fast/slow jobs; SSE stream proxy via API gateway
+
+### v1.0 Decisions (preserved for reference)
+
+- broadcast_messages table separate from schedules — different pipelines, avoids nulls
+- recurrence JSONB + cron VARCHAR stored as pair — JSONB for UI pre-population
+- WhatsApp + Facebook only (v1.0) — Instagram added in v2.0 channels service
+- Local image upload to public/uploads/ — cloud storage deferred
 
 ### Pending Todos
 
-None yet.
+- Plan Phase 5 via `/gsd:plan-phase 5`
 
 ### Blockers/Concerns
 
-- app.js is 2254+ lines — Phase 3 UI additions should use a new public/broadcast-modal.js file (follow schedule-modal.js pattern) rather than expanding app.js further
-- localhost images not fetchable by Facebook Graph API in dev — only works in production with public URL
+- public/app.js is 2231 lines — full replacement planned in Phase 11
+- Google Sheets dependency still present — to be fully retired in Phase 8 (products service)
+- Railway PostgreSQL multi-schema user grants should be verified before Phase 5+ DB schema work
 
 ## Session Continuity
 
-Last session: 2026-04-15
-Stopped at: Completed 03-02-PLAN.md (broadcast add/edit modal — all phases complete)
-Resume file: None
+Last session: 2026-05-13
+Stopped at: Phase 4 complete — 3 plans executed (pnpm workspace, Docker+DB isolation, packages/db+CI)
+Resume: Run `/gsd:plan-phase 5` to plan the API Gateway + Feature Flag System

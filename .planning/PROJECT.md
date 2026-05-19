@@ -1,81 +1,109 @@
-# Affiliate Heaven — Broadcast Messages Milestone
+# Affiliate Heaven
 
 ## What This Is
 
-Affiliate Heaven is a Node.js/Express dashboard that automates affiliate product broadcasting to WhatsApp groups and Facebook pages on a cron schedule, organized by niche (subject). This milestone adds a **Broadcast Messages** system: pre-written messages (text + optional image) that owners can schedule to send to WhatsApp groups and Facebook pages on a recurring basis, independent of the product pipeline.
+Affiliate Heaven is an affiliate product broadcasting platform that automates sending products and messages to WhatsApp groups, Facebook pages, and Instagram accounts on a cron schedule, organized by niche (subject). The platform is being rebuilt as a microservices architecture — each service extracted one at a time (Strangler Fig) behind a stable API surface, with per-user encrypted credential storage, multi-user support, and full test coverage.
 
 ## Core Value
 
-Niche owners can schedule evergreen messages (greetings, announcements, deals) to reach their audiences at the right time — without touching the product pipeline.
+Niche owners can run multiple affiliate channels — each with its own audience, accounts, and schedule — from a single platform, without manual intervention.
+
+## Current Milestone: v2.0 — Microservices Rebuild
+
+**Goal:** Decompose the Node.js/Express monolith into independent microservices using the Strangler Fig pattern, with a redesigned DB schema, per-user encrypted credential storage, multi-user support, and a modern React + Mantine frontend.
+
+**Strategy:** Each service is extracted as a feature branch experiment. If the microservice is stable, it goes live. If not, the monolith fallback stays active. No downtime, no big-bang risk.
+
+**Target features:**
+- Monorepo with shared TypeScript config, ESLint, Prettier, Docker Compose
+- Auth service (Google OAuth → JWT stateless, invite flow)
+- User service with per-user encrypted credentials (Facebook, AliExpress, WhatsApp, Instagram)
+- Redesigned normalized PostgreSQL schema (Drizzle ORM)
+- Subjects (niches) service
+- Products service (CRUD + AliExpress import)
+- AI Writer service (OpenAI, Hebrew, Shabbat logic)
+- Channels service (WhatsApp, Facebook, Instagram, AliExpress adapters with circuit breaker)
+- Scheduler service (cron from DB → BullMQ jobs)
+- Broadcaster service (consumes queue → orchestrates pipeline)
+- API Gateway (JWT validation, rate limiting, routing)
+- Frontend rebuild (React + Mantine, Hebrew RTL dark theme, PWA-ready)
+- Vitest unit tests per service + GitHub Actions CI
 
 ## Requirements
 
-### Validated
+### Validated (v1.0 — Broadcast Messages Milestone)
 
-- ✓ Multi-niche (subject) system with per-niche WhatsApp group, Facebook page, and MacroDroid webhook — existing
-- ✓ Product broadcasting pipeline (AI-generated Hebrew messages → WhatsApp + Facebook) — existing
-- ✓ Cron-based scheduler with enable/disable, fire-now, edit — existing
-- ✓ PostgreSQL data store with idempotent migrations — existing
-- ✓ Google OAuth authentication, invite-only, role-based (admin/user) — existing
-- ✓ Hebrew RTL dark-theme dashboard UI with Material Symbols icons — existing
+- ✓ Multi-niche (subject) system with per-niche WhatsApp group, Facebook page, and MacroDroid webhook
+- ✓ Product broadcasting pipeline (AI-generated Hebrew messages → WhatsApp + Facebook)
+- ✓ Broadcast Messages system (pre-written, scheduled, WhatsApp + Facebook)
+- ✓ Cron-based scheduler with enable/disable, fire-now, edit
+- ✓ PostgreSQL data store with idempotent migrations
+- ✓ Google OAuth authentication, invite-only, role-based (admin/user)
+- ✓ Hebrew RTL dark-theme dashboard UI
 
-### Active
+### Active (v2.0)
 
-- [ ] User can create a broadcast message with label, text content, and optional image
-- [ ] User can assign a broadcast message to a specific niche (required — no "all niches")
-- [ ] User can set a recurring schedule: daily at hour / weekly on day+hour / every N days at hour
-- [ ] Broadcast messages are sent to both WhatsApp (MacroDroid webhook) and Facebook page for the niche
-- [ ] User can upload an image to attach to a broadcast message
-- [ ] User can enable/disable individual broadcast messages
-- [ ] User can fire a broadcast message immediately (fire-now)
-- [ ] User can edit and delete broadcast messages
-- [ ] Broadcast message list shows human-readable schedule + next run time
+- [ ] Monorepo scaffolded with pnpm workspaces, shared TS config, ESLint, Prettier
+- [ ] Docker Compose runs all services locally
+- [ ] GitHub Actions CI runs tsc + Vitest on every PR
+- [ ] Auth service: Google OAuth → JWT (stateless), invite flow
+- [ ] User service: per-user credential storage, AES-256 encrypted
+- [ ] DB schema redesigned: normalized, Drizzle ORM, no redundant columns
+- [ ] Subjects service: CRUD, linked to user credentials
+- [ ] Products service: CRUD + AliExpress affiliate API import
+- [ ] AI Writer service: OpenAI, Hebrew, Shabbat/Motzei Shabbat logic
+- [ ] Channels service: WhatsApp, Facebook, Instagram adapters, circuit breaker, retry
+- [ ] Scheduler service: cron from DB → BullMQ, hot reload
+- [ ] Broadcaster service: queue consumer → full pipeline orchestration
+- [ ] API Gateway: JWT validation, rate limiting, service routing
+- [ ] Frontend: React + Mantine, Hebrew RTL dark theme, all dashboard sections
 
 ### Out of Scope
 
-- Instagram — not requested; WhatsApp + Facebook only
-- AI-generated content — messages are pre-written by the user
-- "All niches" broadcast — messages are niche-specific by design
 - Raw cron expression editing — human-friendly recurrence builder only
-- Per-send analytics / click tracking — out of scope for this milestone
+- Cloud image storage (S3/Cloudinary) — local filesystem for this milestone
+- Per-send click analytics — future milestone
+- Real-time chat — not part of product vision
+- Mobile app — PWA is sufficient for this user base
 
 ## Context
 
-**Existing architecture:**
-- `services/workflow.js` — product pipeline (AI → WhatsApp + Facebook + Instagram)
-- `scheduler/index.js` — node-cron manager, loads schedules from DB on startup
-- `routes/` — one file per resource, all require auth
-- `db/migrate.js` — idempotent `CREATE TABLE IF NOT EXISTS`, called on startup
-- `public/app.js` (2231 lines) — vanilla JS SPA, Hebrew RTL
-- `public/index.html` — tab-based layout, "לוחות זמנים" tab houses existing schedules
-- MacroDroid webhook sends WhatsApp messages per subject
-- Facebook Graph API posts to pages per subject
+**Previous milestone:** v1.0 completed all 3 phases (Backend Foundation, Scheduler & Delivery, Frontend UI) for Broadcast Messages feature. All phases complete as of 2026-04-16.
 
-**UI context:**
-- Dark theme, RTL Hebrew, Material Symbols Outlined icons
-- Tab navigation: products / schedules / scraper / add-product / logs / settings / users
-- Broadcast messages will live as a new section within the "לוחות זמנים" tab
-- Existing schedule cards as design reference
+**Existing codebase:**
+- `server.js` — Express entry point, Passport OAuth, SSE log streaming
+- `services/workflow.js` — product pipeline orchestrator (→ broadcaster-service)
+- `services/googleSheets.js` — legacy data bridge (to be retired)
+- `scheduler/index.js` — node-cron manager (→ scheduler-service)
+- `routes/` — one file per resource (→ per-service endpoints)
+- `public/app.js` — 2231-line vanilla JS SPA (→ React + Mantine)
+- `db/migrate.js` — idempotent schema (→ Drizzle ORM migrations)
 
-**Codebase map:** `.planning/codebase/` (7 documents, 1473 lines)
+**Codebase maps:** `.planning/codebase/` (7 documents)
 
 ## Constraints
 
-- **Tech stack**: Node.js/Express + vanilla JS + PostgreSQL — no new frameworks
-- **UI**: Must match existing dark RTL Hebrew theme (no design system changes)
-- **DB**: Extend via `db/migrate.js` idempotent migrations only
-- **Auth**: All `/api/*` routes require existing session auth middleware
-- **Image storage**: Upload to `public/uploads/broadcasts/` (local filesystem, served statically) — no cloud storage for this milestone
+- **Migration:** Strangler Fig — monolith stays live during extraction; no downtime
+- **Feature branches:** Each service extracted on its own branch; merged only when stable
+- **Auth:** JWT stateless in new services; session-based removed
+- **Credentials:** Per-user, AES-256 encrypted in DB — no per-user env vars
+- **Testing:** No phase ships without unit tests passing in CI
+- **Commits:** All PRs follow Conventional Commits format
+- **Frontend:** Mantine design system — no custom CSS from scratch
+- **RTL:** Hebrew RTL support required; Mantine has first-class RTL
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| New `broadcast_messages` table (not extend `schedules`) | Product schedules and broadcast messages are fundamentally different pipelines; avoids nulls, branching in workflow.js, and tight coupling | — Pending |
-| Human-friendly recurrence builder (daily/weekly/every-N-days) | Covers all stated use cases; raw cron hidden from user | — Pending |
-| WhatsApp + Facebook only (no Instagram) | User requirement; Instagram uses different Content Publishing API flow | — Pending |
-| Subject required (no "all niches") | Broadcast content is niche-specific; messages reference niche audience | — Pending |
-| Local image upload to public/uploads/ | Simplest approach; no cloud storage dependency for this milestone | — Pending |
+| Strangler Fig migration | Zero downtime, rollback-safe, lower risk than big-bang | — Pending |
+| pnpm workspaces monorepo | Shared tooling, single repo, easier cross-service types | — Pending |
+| Fastify or Hono (TBD) | Faster than Express, built-in schema validation | — Pending |
+| Drizzle ORM | Type-safe queries, lightweight, good migration support | — Pending |
+| BullMQ + Redis | Replaces cron-to-workflow coupling with async jobs | — Pending |
+| Mantine UI | Best RTL support, dark mode, data components, no custom CSS | — Pending |
+| Vitest | Fast, ESM-native, good mocking, works in monorepo | — Pending |
+| AES-256 credential encryption | User API keys encrypted at rest, only ENCRYPTION_KEY in env | — Pending |
 
 ---
-*Last updated: 2026-04-15 after initialization*
+*Last updated: 2026-04-29 — Milestone v2.0 started (Microservices Rebuild)*

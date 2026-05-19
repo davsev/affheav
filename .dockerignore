@@ -1,0 +1,27 @@
+# Secrets — never bake these into a Docker image
+.env
+.env.docker
+config/*.json
+
+# Git and tooling
+.git
+.github
+.claude
+.planning
+
+# Dependencies (reinstalled inside the image)
+node_modules
+**/node_modules
+
+# Test output
+apps/e2e/playwright/.auth
+apps/e2e/playwright-report
+apps/e2e/test-results
+
+# Build artifacts
+**/dist
+**/*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*

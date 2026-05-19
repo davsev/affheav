@@ -4,6 +4,7 @@ const googleSheets = require('../services/googleSheets');
 const workflow = require('../services/workflow');
 const { query } = require('../db');
 const { signAndCall } = require('../services/aliexpressApi');
+const { passesFilters } = require('../services/aliexpressFilters');
 const { syncProduct, syncProducts, resolveUrl } = require('../services/aliexpressSync');
 
 const DEFAULT_TRACKING_ID = process.env.ALIEXPRESS_TRACKING_ID || 'TechSalebuy';
@@ -20,16 +21,6 @@ async function searchProducts(keywords, pageNo = 1, trackingId = DEFAULT_TRACKIN
     page_size:       '50',
     fields:          'product_id,product_title,product_main_image_url,promotion_link,app_sale_price,evaluate_rate,lastest_volume,available_stock',
   });
-}
-
-function passesFilters(product) {
-  const rateStr = product.evaluate_rate || '0';
-  const rate = parseFloat(rateStr.replace('%', '')) || 0;
-  const volume = Number(product.lastest_volume || 0);
-  // available_stock may be absent — only filter if present
-  const stockRaw = product.available_stock;
-  const stockOk = stockRaw === undefined || stockRaw === null || stockRaw === '' || Number(stockRaw) > 100;
-  return rate > 80 && volume > 50 && stockOk;
 }
 
 // POST /api/aliexpress/search

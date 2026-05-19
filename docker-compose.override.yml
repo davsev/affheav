@@ -1,0 +1,14 @@
+services:
+  monolith:
+    develop:
+      watch:
+        - action: sync
+          path: ./apps/monolith
+          target: /app/apps/monolith
+          ignore:
+            - node_modules/
+            - dist/
+        - action: rebuild
+          path: ./apps/monolith/package.json
+        - action: rebuild
+          path: ./pnpm-lock.yaml

@@ -125,6 +125,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     // Load dashboard when switching to it
     if (btn.dataset.tab === 'dashboard') renderDashboard();
     if (btn.dataset.tab === 'analytics') renderAnalyticsSummary();
+    if (btn.dataset.tab === 'discover') renderDiscoverTab();
   });
 });
 
@@ -2874,9 +2875,298 @@ async function renderAnalyticsSummary() {
     loadInsights();
     loadSalesDashboard();
     loadJoinLinkStats();
+    renderTrendCharts(niches);
   } catch (err) {
     grid.innerHTML = `<div style="padding:40px;text-align:center;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
   }
+}
+
+// ── Analytics: Trend Charts ───────────────────────────────────────────────────
+
+let _trendChart = null;
+let _nicheChart = null;
+
+async function renderTrendCharts(niches) {
+  const section = document.getElementById('analytics-trend-section');
+  if (!section) return;
+
+  // Fetch all orders for trend analysis
+  let orders = [];
+  try {
+    const data = await api('/api/analytics/orders');
+    orders = data.orders || [];
+  } catch (_) { /* silent – charts stay hidden */ }
+
+  if (!orders.length && !niches.length) return;
+
+  section.style.display = '';
+
+  // ── 1. Daily commission trend ──────────────────────────────────────────────
+  const dayMap = {};
+  for (const o of orders) {
+    if (!o.order_time) continue;
+    const day = o.order_time.slice(0, 10);
+    dayMap[day] = (dayMap[day] || 0) + parseFloat(o.commission_usd || 0);
+  }
+  const sortedDays  = Object.keys(dayMap).sort();
+  const dayLabels   = sortedDays.map(d => {
+    const [, m, dd] = d.split('-');
+    return `${dd}/${m}`;
+  });
+  const dayValues   = sortedDays.map(d => +dayMap[d].toFixed(2));
+
+  // 7-day moving average
+  const movAvg = dayValues.map((_, i) => {
+    const slice = dayValues.slice(Math.max(0, i - 6), i + 1);
+    return +(slice.reduce((a, b) => a + b, 0) / slice.length).toFixed(2);
+  });
+
+  // Delta badge: last 7 vs prev 7
+  const last7sum = dayValues.slice(-7).reduce((a, b) => a + b, 0);
+  const prev7sum = dayValues.slice(-14, -7).reduce((a, b) => a + b, 0);
+  const badge = document.getElementById('trend-delta-badge');
+  if (badge && prev7sum > 0) {
+    const pct = ((last7sum - prev7sum) / prev7sum * 100).toFixed(0);
+    const up  = parseFloat(pct) >= 0;
+    badge.textContent = `${up ? '▲' : '▼'} ${Math.abs(pct)}% vs שבוע קודם`;
+    badge.className   = `an-delta-badge ${up ? 'up' : 'down'}`;
+  }
+
+  // Destroy old instance
+  if (_trendChart) { _trendChart.destroy(); _trendChart = null; }
+  const trendCtx = document.getElementById('chart-commission-trend');
+  if (trendCtx && sortedDays.length) {
+    _trendChart = new Chart(trendCtx, {
+      type: 'line',
+      data: {
+        labels: dayLabels,
+        datasets: [
+          {
+            label: 'עמלה יומית ($)',
+            data: dayValues,
+            borderColor: '#702ae1',
+            backgroundColor: 'rgba(112,42,225,0.07)',
+            borderWidth: 2,
+            pointRadius: dayValues.length > 30 ? 0 : 3,
+            pointHoverRadius: 5,
+            fill: true,
+            tension: 0.35,
+          },
+          {
+            label: 'ממוצע 7 ימים',
+            data: movAvg,
+            borderColor: '#16a34a',
+            backgroundColor: 'transparent',
+            borderWidth: 1.5,
+            borderDash: [5, 3],
+            pointRadius: 0,
+            fill: false,
+            tension: 0.35,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { font: { size: 11 }, color: '#595c5e', boxWidth: 14, padding: 10 },
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` $${ctx.parsed.y.toFixed(2)}`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: '#595c5e', font: { size: 10 },
+              maxTicksLimit: 10,
+            },
+            grid: { color: 'rgba(0,0,0,0.05)' },
+          },
+          y: {
+            ticks: {
+              color: '#595c5e', font: { size: 10 },
+              callback: v => `$${v}`,
+            },
+            grid: { color: 'rgba(0,0,0,0.05)' },
+            beginAtZero: true,
+          },
+        },
+      },
+    });
+  } else if (trendCtx) {
+    const ctx2d = trendCtx.getContext('2d');
+    ctx2d.clearRect(0, 0, trendCtx.width, trendCtx.height);
+    ctx2d.fillStyle = '#595c5e';
+    ctx2d.font = '13px sans-serif';
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText('אין נתונים — לחץ "עדכן עמלות"', trendCtx.width / 2, 100);
+  }
+
+  // ── 2. Niche comparison horizontal bar chart ───────────────────────────────
+  if (_nicheChart) { _nicheChart.destroy(); _nicheChart = null; }
+  const nicheCtx = document.getElementById('chart-niche-comparison');
+  if (nicheCtx && niches.length) {
+    const sorted    = [...niches].sort((a, b) => parseFloat(b.total_commission || 0) - parseFloat(a.total_commission || 0));
+    const nLabels   = sorted.map(n => n.name);
+    const nComm     = sorted.map(n => +parseFloat(n.total_commission || 0).toFixed(2));
+    const nClicks   = sorted.map(n => parseInt(n.total_clicks || 0, 10));
+    const nColors   = sorted.map(n => n.color || '#702ae1');
+
+    _nicheChart = new Chart(nicheCtx, {
+      type: 'bar',
+      data: {
+        labels: nLabels,
+        datasets: [
+          {
+            label: 'עמלה ($)',
+            data: nComm,
+            backgroundColor: nColors.map(c => c + '99'),
+            borderColor: nColors,
+            borderWidth: 1.5,
+            borderRadius: 5,
+            yAxisID: 'yComm',
+          },
+          {
+            label: 'קליקים',
+            data: nClicks,
+            type: 'line',
+            borderColor: '#3b82f6',
+            backgroundColor: 'transparent',
+            borderWidth: 1.5,
+            pointRadius: 4,
+            tension: 0.3,
+            yAxisID: 'yClicks',
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { font: { size: 11 }, color: '#595c5e', boxWidth: 14, padding: 10 },
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ctx.datasetIndex === 0
+                ? ` $${ctx.parsed.y.toFixed(2)}`
+                : ` ${ctx.parsed.y.toLocaleString()} קליקים`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            ticks: { color: '#595c5e', font: { size: 10 } },
+            grid: { color: 'rgba(0,0,0,0.05)' },
+          },
+          yComm: {
+            position: 'left',
+            ticks: { color: '#595c5e', font: { size: 10 }, callback: v => `$${v}` },
+            grid: { color: 'rgba(0,0,0,0.05)' },
+            beginAtZero: true,
+          },
+          yClicks: {
+            position: 'right',
+            ticks: { color: '#3b82f6', font: { size: 10 } },
+            grid: { drawOnChartArea: false },
+            beginAtZero: true,
+          },
+        },
+      },
+    });
+  }
+
+  // ── 3. Insight conclusions ────────────────────────────────────────────────
+  const conclusions = buildConclusions(niches, orders, dayValues, last7sum, prev7sum);
+  const conclusEl = document.getElementById('analytics-conclusions');
+  if (conclusEl) conclusEl.innerHTML = conclusions;
+}
+
+function buildConclusions(niches, orders, dayValues, last7sum, prev7sum) {
+  const cards = [];
+
+  // Trend direction
+  if (prev7sum > 0) {
+    const pct = ((last7sum - prev7sum) / prev7sum * 100).toFixed(0);
+    const up  = parseFloat(pct) >= 0;
+    cards.push({
+      icon: up ? '📈' : '📉',
+      title: up ? 'מגמה חיובית' : 'ירידה בהכנסות',
+      body: up
+        ? `העמלות עלו ב-${Math.abs(pct)}% בשבוע האחרון לעומת השבוע הקודם.`
+        : `העמלות ירדו ב-${Math.abs(pct)}% — כדאי לבדוק מה השתנה.`,
+    });
+  }
+
+  // Best niche
+  const bestNiche = [...niches].sort((a, b) => parseFloat(b.total_commission || 0) - parseFloat(a.total_commission || 0))[0];
+  if (bestNiche && parseFloat(bestNiche.total_commission || 0) > 0) {
+    cards.push({
+      icon: '🏆',
+      title: `נישה מובילה: ${bestNiche.name}`,
+      body: `$${parseFloat(bestNiche.total_commission).toFixed(2)} עמלה. תעדף שליחת מוצרים מנישה זו.`,
+    });
+  }
+
+  // Best conversion niche
+  const withConv = niches
+    .filter(n => parseInt(n.total_clicks || 0) > 50 && parseInt(n.total_orders || 0) > 0)
+    .map(n => ({ ...n, conv: parseInt(n.total_orders) / parseInt(n.total_clicks) }))
+    .sort((a, b) => b.conv - a.conv);
+  if (withConv.length) {
+    const best = withConv[0];
+    cards.push({
+      icon: '🎯',
+      title: `המרה מצוינת: ${best.name}`,
+      body: `${(best.conv * 100).toFixed(2)}% המרה — הכי גבוה מבין הנישות עם מספיק נתונים.`,
+    });
+  }
+
+  // Peak day of week
+  const dowSums = Array(7).fill(0);
+  const DOW = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  for (const o of orders) {
+    if (!o.order_time) continue;
+    const d = new Date(o.order_time);
+    dowSums[d.getDay()] += parseFloat(o.commission_usd || 0);
+  }
+  const peakDow = dowSums.indexOf(Math.max(...dowSums));
+  if (dowSums[peakDow] > 0) {
+    cards.push({
+      icon: '📅',
+      title: `יום שיא: ${DOW[peakDow]}`,
+      body: `יום ${DOW[peakDow]} מייצר הכי הרבה עמלות. שקול להגביר שליחות ביום זה.`,
+    });
+  }
+
+  // Active niches without orders
+  const missingNiches = niches.filter(n => n.tracking_id && parseInt(n.total_orders || 0) === 0);
+  if (missingNiches.length) {
+    cards.push({
+      icon: '⚠️',
+      title: 'נישות ללא הזמנות',
+      body: `${missingNiches.map(n => n.name).join(', ')} — מחוברות ל-AliExpress אך ללא הזמנות. בדוק Tracking ID.`,
+    });
+  }
+
+  if (!cards.length) return '';
+
+  return cards.map(c => `
+    <div class="an-conclusion-card">
+      <div class="an-conclusion-icon">${c.icon}</div>
+      <div>
+        <div class="an-conclusion-title">${escHtml(c.title)}</div>
+        <div class="an-conclusion-body">${escHtml(c.body)}</div>
+      </div>
+    </div>`).join('');
 }
 
 function renderNicheRow(n) {
@@ -4445,4 +4735,127 @@ async function loadSalesDashboard() {
       `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
   }
 }
+
+// ── AI Product Discovery ──────────────────────────────────────────────────
+
+async function renderDiscoverTab() {
+  const grid = document.getElementById('discover-grid');
+  const status = document.getElementById('discover-status');
+  if (!grid) return;
+  grid.innerHTML = '<div style="color:var(--on-surface-var);font-size:13px;">טוען הצעות...</div>';
+  try {
+    const { suggestions } = await api('/api/discover');
+    if (!suggestions || suggestions.length === 0) {
+      grid.innerHTML = '<div style="color:var(--on-surface-var);font-size:13px;padding:20px 0;">אין הצעות כרגע. לחץ על "רענן הצעות" כדי לחפש מוצרים.</div>';
+      if (status) status.textContent = '';
+      return;
+    }
+    grid.innerHTML = suggestions.map(s => renderSuggestionCard(s)).join('');
+    if (status) status.textContent = `${suggestions.length} הצעות ממתינות`;
+  } catch (err) {
+    grid.innerHTML = `<div style="color:#ef4444;font-size:13px;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+function renderSuggestionCard(s) {
+  const price = s.sale_price ? `₪${parseFloat(s.sale_price).toFixed(2)}` : '';
+  const rating = s.evaluate_rate ? `${s.evaluate_rate}` : '';
+  const volume = s.lastest_volume ? `${s.lastest_volume.toLocaleString()} מכירות` : '';
+  const subject = s.subject_name ? `<span class="suggestion-subject-badge">${escHtml(s.subject_name)}</span>` : '';
+  const img = s.image_url
+    ? `<img src="${escHtml(s.image_url)}" alt="" style="width:100%;height:160px;object-fit:cover;border-radius:8px 8px 0 0;">`
+    : `<div style="width:100%;height:160px;background:var(--surface-2);border-radius:8px 8px 0 0;"></div>`;
+
+  const productData = JSON.stringify({
+    promotion_link: s.promotion_link,
+    product_main_image_url: s.image_url,
+    product_title: s.title,
+    app_sale_price: s.sale_price,
+  });
+
+  return `
+    <div class="suggestion-card" data-id="${escHtml(String(s.id))}" data-product="${escHtml(productData)}">
+      ${img}
+      <div style="padding:12px;">
+        ${subject}
+        <div class="suggestion-title" title="${escHtml(s.title)}">${escHtml(s.title)}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0;font-size:12px;color:var(--on-surface-var);">
+          ${price ? `<span>${price}</span>` : ''}
+          ${rating ? `<span>⭐ ${escHtml(String(rating))}</span>` : ''}
+          ${volume ? `<span>${escHtml(volume)}</span>` : ''}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn btn-primary btn-sm" style="flex:1;font-size:12px;"
+            onclick="addSuggestion(this)">
+            הוסף
+          </button>
+          <button class="btn btn-sm" style="flex:1;font-size:12px;background:var(--surface-2);color:var(--on-surface-var);"
+            onclick="dismissSuggestion(this)">
+            דחה
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function runDiscovery() {
+  const runBtn = document.getElementById('btn-run-discovery');
+  const status = document.getElementById('discover-status');
+  if (runBtn) {
+    runBtn.disabled = true;
+    runBtn.textContent = 'מחפש...';
+  }
+  if (status) status.textContent = 'מחפש מוצרים ב-AliExpress...';
+  try {
+    const result = await api('/api/discover/run', { method: 'POST' });
+    if (status) status.textContent = result.newCount > 0
+      ? `נמצאו ${result.newCount} מוצרים חדשים`
+      : 'לא נמצאו מוצרים חדשים';
+    await renderDiscoverTab();
+  } catch (err) {
+    if (status) status.textContent = 'שגיאה: ' + err.message;
+  } finally {
+    if (runBtn) {
+      runBtn.disabled = false;
+      runBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;">refresh</span> רענן הצעות';
+    }
+  }
+}
+
+async function addSuggestion(btn) {
+  btn.disabled = true;
+  const card = btn.closest('.suggestion-card');
+  const suggestionId = card.dataset.id;
+  const product = JSON.parse(card.dataset.product);
+  try {
+    await api('/api/aliexpress/add', { method: 'POST', body: JSON.stringify({ product }) });
+    await api(`/api/discover/${suggestionId}`, { method: 'PATCH', body: JSON.stringify({ status: 'added' }) });
+    if (card) card.style.animation = 'fadeOut 0.3s ease forwards';
+    setTimeout(() => card && card.remove(), 320);
+  } catch (err) {
+    alert('שגיאה בהוספת מוצר: ' + err.message);
+    btn.disabled = false;
+  }
+}
+
+async function dismissSuggestion(btn) {
+  btn.disabled = true;
+  const card = btn.closest('.suggestion-card');
+  const suggestionId = card.dataset.id;
+  try {
+    await api(`/api/discover/${suggestionId}`, { method: 'PATCH', body: JSON.stringify({ status: 'dismissed' }) });
+    if (card) card.style.animation = 'fadeOut 0.3s ease forwards';
+    setTimeout(() => card && card.remove(), 320);
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+    btn.disabled = false;
+  }
+}
+
+// Wire up Refresh button
+document.addEventListener('DOMContentLoaded', () => {
+  const runBtn = document.getElementById('btn-run-discovery');
+  if (runBtn) runBtn.addEventListener('click', runDiscovery);
+});
 
