@@ -3,6 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000';
 
 export default defineConfig({
+  globalSetup: './global-setup.ts',
   testDir: './tests',
   fullyParallel: false, // Sequential — shared server state (DB, session)
   forbidOnly: !!process.env.CI,
