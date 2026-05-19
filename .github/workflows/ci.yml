@@ -116,7 +116,10 @@ jobs:
         env:
           BASE_URL: http://localhost:3000
           CI: true
-        run: pnpm e2e
+        # --update-snapshots: creates missing baselines on first run (tests pass).
+        # Once baselines are committed to the repo, remove this flag so CI will
+        # fail on visual regressions instead of silently updating them.
+        run: pnpm e2e --update-snapshots
 
       - name: Upload Playwright report on failure
         if: failure()
