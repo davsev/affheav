@@ -10,9 +10,10 @@ const AUTH_FILE = path.join(__dirname, '../playwright/.auth/admin.json');
  *
  * Requires NODE_ENV=test on the server.
  */
-setup('authenticate as admin', async ({ request, page }) => {
-  // Hit the test login endpoint — creates a DB user + session
-  const res = await request.post('/auth/test-login', {
+setup('authenticate as admin', async ({ page }) => {
+  // Hit the test login endpoint via page.request so the session cookie
+  // is stored in the browser context and picked up by subsequent page.goto().
+  const res = await page.request.post('/auth/test-login', {
     data: { role: 'admin' },
   });
 
