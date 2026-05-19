@@ -125,3 +125,11 @@ jobs:
           name: playwright-report
           path: apps/e2e/playwright-report/
           retention-days: 7
+
+      - name: Upload screenshot snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-snapshots
+          path: apps/e2e/tests/06-screenshots.spec.ts-snapshots/
+          retention-days: 30

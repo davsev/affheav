@@ -11,6 +11,10 @@ export default defineConfig({
   workers: 1,
   reporter: process.env.CI ? 'github' : 'list',
 
+  // Create missing snapshots instead of failing — commit the generated PNGs
+  // as baselines; subsequent runs will compare and catch regressions.
+  updateSnapshots: 'missing',
+
   use: {
     baseURL: BASE_URL,
     // Reuse the authenticated session across tests in the same file
