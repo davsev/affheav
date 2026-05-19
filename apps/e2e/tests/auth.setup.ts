@@ -1,7 +1,9 @@
 import { test as setup, expect } from '@playwright/test';
+import fs from 'fs';
 import path from 'path';
 
 const AUTH_FILE = path.join(__dirname, '../playwright/.auth/admin.json');
+fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true });
 
 /**
  * Runs once before all baseline tests.
