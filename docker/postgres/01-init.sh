@@ -13,6 +13,9 @@ set -e
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
 
+  -- Extensions (must be created by superuser)
+  CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
   -- Monolith
   CREATE SCHEMA IF NOT EXISTS public;
   CREATE USER ah_mono WITH PASSWORD '${MONOLITH_DB_PASSWORD}';

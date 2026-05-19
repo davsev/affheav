@@ -5,9 +5,6 @@
 const { query } = require('./index');
 
 async function migrate() {
-  // Enable pgcrypto for gen_random_uuid()
-  await query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
-
   // ── Users ─────────────────────────────────────────────────────────────────
   await query(`
     CREATE TABLE IF NOT EXISTS users (
