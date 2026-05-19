@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000';
+
 /**
  * Baseline: authenticated session works correctly.
  * Uses the admin session saved by auth.setup.ts.
@@ -24,9 +26,9 @@ test.describe('Auth', () => {
     expect(session, 'session cookie must be set after auth setup').toBeTruthy();
   });
 
-  test('logout clears the session', async ({ request }) => {
+  test('logout clears the session', async ({ playwright }) => {
     // Logout with a standalone request context so we do not poison the shared session
-    const standalone = await request.newContext();
+    const standalone = await playwright.request.newContext({ baseURL: BASE_URL });
     // First login
     const loginRes = await standalone.post('/auth/test-login', { data: { role: 'user' } });
     expect(loginRes.status()).toBe(200);

@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000';
+
 /**
  * Baseline: schedules API is reachable and returns expected shape.
  */
@@ -13,8 +15,8 @@ test.describe('Schedules API', () => {
     expect(Array.isArray(body.schedules)).toBe(true);
   });
 
-  test('GET /api/schedules without auth returns 401', async ({ request }) => {
-    const anon = await request.newContext();
+  test('GET /api/schedules without auth returns 401', async ({ playwright }) => {
+    const anon = await playwright.request.newContext({ baseURL: BASE_URL });
     const res = await anon.get('/api/schedules');
     expect(res.status()).toBe(401);
     await anon.dispose();

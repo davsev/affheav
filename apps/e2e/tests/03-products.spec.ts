@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000';
+
 /**
  * Baseline: products API is reachable and returns expected shape.
  * Does not assert specific product data — only that the endpoint
@@ -15,8 +17,8 @@ test.describe('Products API', () => {
     expect(Array.isArray(body.products)).toBe(true);
   });
 
-  test('GET /api/products without auth returns 401', async ({ request }) => {
-    const anon = await request.newContext();
+  test('GET /api/products without auth returns 401', async ({ playwright }) => {
+    const anon = await playwright.request.newContext({ baseURL: BASE_URL });
     const res = await anon.get('/api/products');
     expect(res.status()).toBe(401);
     await anon.dispose();

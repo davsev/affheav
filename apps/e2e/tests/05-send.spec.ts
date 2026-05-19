@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000';
+
 /**
  * Baseline: /api/send pipeline entry point is reachable and auth-gated.
  *
@@ -12,8 +14,8 @@ import { test, expect } from '@playwright/test';
  * This protects against routing regressions without causing side-effects.
  */
 test.describe('Send API', () => {
-  test('POST /api/send without auth returns 401', async ({ request }) => {
-    const anon = await request.newContext();
+  test('POST /api/send without auth returns 401', async ({ playwright }) => {
+    const anon = await playwright.request.newContext({ baseURL: BASE_URL });
     const res = await anon.post('/api/send', { data: {} });
     expect(res.status()).toBe(401);
     await anon.dispose();
@@ -26,8 +28,9 @@ test.describe('Send API', () => {
       },
     });
 
-    // Any structured response is acceptable; a crash (500) is not
+    // Must be authenticated (not redirected to login page) and must not crash
     expect(res.status()).not.toBe(500);
+    expect(res.status()).not.toBe(401);
 
     const body = await res.json();
     // Must always return { success: boolean }
