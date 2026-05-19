@@ -83,6 +83,8 @@ jobs:
 
       - name: Start postgres + redis
         env:
+          POSTGRES_DB: affiliate_heaven
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
           MONOLITH_DB_PASSWORD: ${{ secrets.CI_MONOLITH_DB_PASSWORD }}
           AUTH_DB_PASSWORD: ${{ secrets.CI_AUTH_DB_PASSWORD }}
@@ -104,7 +106,7 @@ jobs:
         run: |
           NODE_ENV=test \
           SESSION_SECRET=${{ secrets.CI_SESSION_SECRET }} \
-          DATABASE_URL=postgresql://monolith_svc:${MONOLITH_DB_PASSWORD}@localhost:5432/affiliate_heaven \
+          DATABASE_URL=postgresql://ah_mono:${MONOLITH_DB_PASSWORD}@localhost:5432/affiliate_heaven \
           npm start &
           timeout 60 bash -c 'until curl -sf http://localhost:3000/; do sleep 2; done'
 
