@@ -16,14 +16,14 @@ const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000';
 test.describe('Send API', () => {
   test('POST /api/send without auth returns 401', async ({ playwright }) => {
     const anon = await playwright.request.newContext({ baseURL: BASE_URL });
-    const res = await anon.post('/api/send', { data: {} });
+    const res = await anon.post('/api/send/execute', { data: {} });
     expect(res.status()).toBe(401);
     await anon.dispose();
   });
 
   test('POST /api/send with auth returns JSON (not a 500)', async ({ page }) => {
     await page.request.post('/auth/test-login', { data: { role: 'admin' } });
-    const res = await page.request.post('/api/send', {
+    const res = await page.request.post('/api/send/execute', {
       data: {
         // No subjectId — may result in "no unsent products" but must not 500
       },
