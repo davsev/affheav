@@ -21,8 +21,8 @@ test.describe('Send API', () => {
     await anon.dispose();
   });
 
-  test('POST /api/send with auth returns JSON (not a 500)', async ({ request }) => {
-    const res = await request.post('/api/send', {
+  test('POST /api/send with auth returns JSON (not a 500)', async ({ page }) => {
+    const res = await page.request.post('/api/send', {
       data: {
         // No subjectId — may result in "no unsent products" but must not 500
       },

@@ -8,8 +8,8 @@ const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000';
  * responds correctly so regressions in routing/auth are caught.
  */
 test.describe('Products API', () => {
-  test('GET /api/products returns 200 with success flag', async ({ request }) => {
-    const res = await request.get('/api/products');
+  test('GET /api/products returns 200 with success flag', async ({ page }) => {
+    const res = await page.request.get('/api/products');
     expect(res.status()).toBe(200);
 
     const body = await res.json();
@@ -24,8 +24,8 @@ test.describe('Products API', () => {
     await anon.dispose();
   });
 
-  test('GET /api/subjects returns 200 with success flag', async ({ request }) => {
-    const res = await request.get('/api/subjects');
+  test('GET /api/subjects returns 200 with success flag', async ({ page }) => {
+    const res = await page.request.get('/api/subjects');
     expect(res.status()).toBe(200);
 
     const body = await res.json();
