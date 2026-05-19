@@ -22,6 +22,7 @@ test.describe('Send API', () => {
   });
 
   test('POST /api/send with auth returns JSON (not a 500)', async ({ page }) => {
+    await page.request.post('/auth/test-login', { data: { role: 'admin' } });
     const res = await page.request.post('/api/send', {
       data: {
         // No subjectId — may result in "no unsent products" but must not 500

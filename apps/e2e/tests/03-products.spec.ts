@@ -9,6 +9,7 @@ const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000';
  */
 test.describe('Products API', () => {
   test('GET /api/products returns 200 with success flag', async ({ page }) => {
+    await page.request.post('/auth/test-login', { data: { role: 'admin' } });
     const res = await page.request.get('/api/products');
     expect(res.status()).toBe(200);
 
@@ -25,6 +26,7 @@ test.describe('Products API', () => {
   });
 
   test('GET /api/subjects returns 200 with success flag', async ({ page }) => {
+    await page.request.post('/auth/test-login', { data: { role: 'admin' } });
     const res = await page.request.get('/api/subjects');
     expect(res.status()).toBe(200);
 

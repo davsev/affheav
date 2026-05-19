@@ -7,6 +7,7 @@ const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3000';
  */
 test.describe('Schedules API', () => {
   test('GET /api/schedules returns 200 with success flag', async ({ page }) => {
+    await page.request.post('/auth/test-login', { data: { role: 'admin' } });
     const res = await page.request.get('/api/schedules');
     expect(res.status()).toBe(200);
 
@@ -23,6 +24,7 @@ test.describe('Schedules API', () => {
   });
 
   test('POST /api/schedules with invalid body returns 400', async ({ page }) => {
+    await page.request.post('/auth/test-login', { data: { role: 'admin' } });
     const res = await page.request.post('/api/schedules', {
       data: {}, // missing required fields
     });
