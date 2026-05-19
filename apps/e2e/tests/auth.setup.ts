@@ -26,7 +26,7 @@ setup('authenticate as admin', async ({ page }) => {
 
   // Load the app page so the browser picks up the session cookie
   await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
 
   // Verify /api/me returns our test admin
   const me = await page.evaluate(async () => {
