@@ -450,7 +450,13 @@ td { padding: 12px 14px; vertical-align: middle; color: var(--on-surface); }
   padding: 12px 16px;
   background: rgba(238,241,243,0.6);
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  flex-wrap: wrap;
 }
+.product-card-actions { display: flex; gap: 4px; align-items: center; }
+.product-card-send-count { font-size: 10px; color: var(--on-surface-var); }
+.product-card-link { color: var(--accent); font-size: 12px; }
+.btn-unsend { font-size: 11px; }
+.btn-delete { color: #f87171; }
 
 #btn-back-to-top {
   position: fixed;
@@ -1242,6 +1248,15 @@ tr[draggable].drag-over td { border-top: 2px solid var(--primary); background: r
   .sidebar-toggle { display: flex; }
   .form-grid { grid-template-columns: 1fr; }
   .page-title { font-size: 26px; }
+
+  /* Product grid: single column on mobile so cards have room to breathe */
+  .products-grid { grid-template-columns: 1fr; gap: 12px; }
+
+  /* Footer: on narrow cards, push buttons to a full-width second row */
+  .product-card-actions {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
 }
 
 /* ── Broadcast Messages ─────────────────────────────────────────────────── */

@@ -1049,7 +1049,7 @@ function renderProducts(products) {
           ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>`
           : `<span class="badge badge-unsent">ממתין</span>`;
         const sendCountBadge = p.send_count > 1
-          ? `<span style="font-size:10px;color:var(--on-surface-var);" title="נשלח ${p.send_count} פעמים">×${p.send_count}</span>`
+          ? `<span class="product-card-send-count" title="נשלח ${p.send_count} פעמים">×${p.send_count}</span>`
           : '';
         return `
         <div class="product-card">
@@ -1066,12 +1066,12 @@ function renderProducts(products) {
             </div>
           </div>
           <div class="product-card-footer">
-            <a href="${escHtml(p.Link)}" target="_blank" style="color:var(--accent);font-size:12px;" dir="ltr">🔗 קישור</a>
-            <div style="display:flex;gap:4px;">
+            <a href="${escHtml(p.Link)}" target="_blank" class="product-card-link" dir="ltr">🔗 קישור</a>
+            <div class="product-card-actions">
               <button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct('${p.id}', this)">▶ שלח</button>
               <button class="btn btn-sm btn-ghost" onclick="editProduct('${p.id}')" title="ערוך טקסט">✏</button>
-              ${p.sent ? `<button class="btn btn-sm btn-ghost" onclick="unsendProduct('${p.id}', this)" title="החזר למוצרים שלא נשלחו" style="font-size:11px;">↩</button>` : ''}
-              <button class="btn btn-sm btn-ghost" onclick="deleteProduct('${p.id}', this)" title="מחק מוצר" style="color:#f87171;">✕</button>
+              ${p.sent ? `<button class="btn btn-sm btn-ghost btn-unsend" onclick="unsendProduct('${p.id}', this)" title="החזר למוצרים שלא נשלחו">↩</button>` : ''}
+              <button class="btn btn-sm btn-ghost btn-delete" onclick="deleteProduct('${p.id}', this)" title="מחק מוצר">✕</button>
             </div>
           </div>
         </div>`;
