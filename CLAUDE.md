@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Pull Request Rules
+
+- PR titles must follow Conventional Commits format: `fix: ...`, `feat: ...`, `chore: ...`, etc.
+- After creating a PR, always wait for **all CI checks to pass** before merging.
+
 ## Commands
 
 ```bash
