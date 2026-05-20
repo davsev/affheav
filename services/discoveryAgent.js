@@ -34,7 +34,6 @@ async function runDiscovery(userId) {
       COALESCE(oi.product_title, '') AS english_title
     FROM products p
     JOIN subjects s ON s.id = p.subject_id AND s.user_id = $1
-    LEFT JOIN commission_snapshots cs ON cs.product_id = p.id
     LEFT JOIN LATERAL (
       SELECT product_title FROM order_items
       WHERE user_id = $1 AND product_title IS NOT NULL
@@ -42,7 +41,15 @@ async function runDiscovery(userId) {
     ) oi ON true
     WHERE p.user_id = $1
       AND p.created_at > NOW() - INTERVAL '90 days'
-      AND (p.clicks > 3 OR cs.id IS NOT NULL)
+      AND (
+        p.clicks > 3
+        OR EXISTS (
+          SELECT 1 FROM commission_snapshots cs
+          WHERE cs.user_id = $1
+            AND cs.aliexpress_product_id IS NOT NULL
+            AND p.long_url LIKE '%' || cs.aliexpress_product_id || '%'
+        )
+      )
     ORDER BY p.clicks DESC
     LIMIT 20
   `, [userId]);
