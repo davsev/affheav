@@ -453,6 +453,10 @@ td { padding: 12px 14px; vertical-align: middle; color: var(--on-surface); }
   flex-wrap: wrap;
 }
 .product-card-actions { display: flex; gap: 4px; align-items: center; }
+.product-card-send-count { font-size: 10px; color: var(--on-surface-var); }
+.product-card-link { color: var(--accent); font-size: 12px; }
+.btn-unsend { font-size: 11px; }
+.btn-delete { color: #f87171; }
 
 #btn-back-to-top {
   position: fixed;
