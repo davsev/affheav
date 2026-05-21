@@ -12,7 +12,7 @@ Nine phases decompose the Node.js/Express monolith into independently deployable
 - Decimal phases (e.g. 4.1): urgent insertions created via `/gsd:insert-phase`
 
 - [ ] **Phase 4: Monorepo Scaffold + Infrastructure** - pnpm workspaces, Docker Compose, CI pipeline, Drizzle schema, per-service DB credentials
-- [ ] **Phase 5: API Gateway + Feature Flag System** - JWT-validated gateway routing 100% to monolith, feature flag DB + admin toggle
+- [ ] **Phase 5: API Gateway + Feature Flag System** - JWT-validated gateway routing 100% to monolith, feature flag DB + admin toggle (2/3 plans complete)
 - [ ] **Phase 6: Auth Service** - Google OAuth → RS256 JWT with `kid` registry, dual-auth window in monolith, invite flow
 - [ ] **Phase 7: User Service + Permissions + Credential Storage** - user CRUD, RBAC roles, AES-256-GCM encrypted credentials with `key_version`
 - [ ] **Phase 8: Subjects + Products Services** - niche CRUD, product CRUD, AliExpress import, both gated behind feature flags
@@ -45,7 +45,11 @@ Nine phases decompose the Node.js/Express monolith into independently deployable
   3. Rate limiting rejects a single user exceeding the configured request threshold within a time window with `429 Too Many Requests`
   4. Super admin can toggle a feature flag via API (and later the UI screen in Phase 11) with immediate effect — no service restart; toggling `auth-service` flag routes `/api/v1/auth/*` to the new auth service within one request cycle
   5. Each microservice extraction (Phases 6–10) has a corresponding named flag in the flags table before that phase begins
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [x] 05-01-PLAN.md — Feature flags Drizzle schema, SQL migrations (9 flags pre-seeded), gateway package dependencies
+- [x] 05-02-PLAN.md — Flag cache/service (5s TTL + cache eviction), admin flags API, rate limiter middleware
+- [ ] 05-03-PLAN.md — Proxy/router (path rewrite + Strangler Fig switch), JWT middleware scaffold, app wiring, Docker service, Vitest tests
 
 ### Phase 6: Auth Service
 **Goal**: Users authenticate via the new auth service and receive RS256 JWTs; the monolith accepts both session cookies and JWT Bearer tokens so no active user is logged out during migration
@@ -139,7 +143,7 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 �
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 4. Monorepo Scaffold + Infrastructure | 0/? | Not started | - |
-| 5. API Gateway + Feature Flag System | 0/? | Not started | - |
+| 5. API Gateway + Feature Flag System | 2/3 | In Progress|  |
 | 6. Auth Service | 0/? | Not started | - |
 | 7. User Service + Permissions + Credential Storage | 0/? | Not started | - |
 | 8. Subjects + Products Services | 0/? | Not started | - |

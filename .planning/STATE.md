@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-04-29)
 
 ## Current Position
 
-Phase: Phase 5 — API Gateway + Feature Flag System (not started)
-Plan: —
-Status: Phase 4 complete — awaiting `/gsd:plan-phase 5`
-Last activity: 2026-05-13 — Phase 4 executed (3 plans: monorepo scaffold, Docker/DB isolation, packages/db + CI)
+Phase: Phase 5 — API Gateway + Feature Flag System (complete)
+Plan: 05-03 complete (Phase 5 fully done — Phase 6 next)
+Status: All 3 plans executed — proxy router, JWT middleware, Hono app, Docker service, 6 Vitest tests passing
+Last activity: 2026-05-21 — Phase 5 Plan 03 executed (proxy/upstream.ts, middleware/jwtEnforce.ts, app.ts, index.ts, Dockerfile, docker-compose gateway service, Vitest tests)
 
-Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
+Progress: ███░░░░░░░ 22% (2/9 v2.0 phases complete — Phase 5 complete: 3/3 plans done)
 
 ## Performance Metrics (v1.0 Reference)
 
@@ -34,6 +34,7 @@ Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 | Phase | Plans | Status |
 |-------|-------|--------|
 | 04-monorepo-scaffold-infrastructure | 3 | ✅ Complete |
+| Phase 05 P03 | 12 | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -76,9 +77,17 @@ Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 - WhatsApp + Facebook only (v1.0) — Instagram added in v2.0 channels service
 - Local image upload to public/uploads/ — cloud storage deferred
 
+### Key Decisions (Phase 5)
+
+- @hono-rate-limiter/redis@0.1.4 (latest) uses client object interface (scriptLoad/evalsha/decr/del) not sendCommand — adapted rateLimit.ts accordingly
+- Plan 01 executed as part of Plan 02 run (schema and deps were absent)
+- drizzle-orm + NodeNext module resolution dual instance type conflict resolved by casting drizzle() return to any in service.ts
+- Vitest downgraded to 2.1.x for Node 20.10 compatibility (v4 requires Node 20.12+)
+- jwtEnforce.ts is a pure no-op in Phase 5 (JWKS URI not set) — zero startup cost, activated in Phase 6
+
 ### Pending Todos
 
-- Plan Phase 5 via `/gsd:plan-phase 5`
+- Begin Phase 6 (Auth Service)
 
 ### Blockers/Concerns
 
@@ -88,6 +97,6 @@ Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 
 ## Session Continuity
 
-Last session: 2026-05-13
-Stopped at: Phase 4 complete — 3 plans executed (pnpm workspace, Docker+DB isolation, packages/db+CI)
-Resume: Run `/gsd:plan-phase 5` to plan the API Gateway + Feature Flag System
+Last session: 2026-05-21
+Stopped at: Phase 5 Plan 03 complete — proxy router, JWT middleware, app entrypoint, Docker service, 6 tests
+Resume: Begin Phase 6 (Auth Service)
