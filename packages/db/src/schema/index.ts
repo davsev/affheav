@@ -6,4 +6,4 @@
 //   export const authSchema = pgSchema('auth');
 //   export const sessions = authSchema.table('sessions', { ... });
 
-export {};
+export * from './gateway.js';
