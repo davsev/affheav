@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-04-29)
 
 ## Current Position
 
-Phase: Phase 5 — API Gateway + Feature Flag System (in progress)
-Plan: 05-02 complete (05-03 next)
-Status: Plans 01 and 02 executed — flag cache, service, admin API, rate limiter built
-Last activity: 2026-05-21 — Phase 5 Plans 01+02 executed (featureFlags schema, flag service, admin routes, rate limiter)
+Phase: Phase 5 — API Gateway + Feature Flag System (complete)
+Plan: 05-03 complete (Phase 5 fully done — Phase 6 next)
+Status: All 3 plans executed — proxy router, JWT middleware, Hono app, Docker service, 6 Vitest tests passing
+Last activity: 2026-05-21 — Phase 5 Plan 03 executed (proxy/upstream.ts, middleware/jwtEnforce.ts, app.ts, index.ts, Dockerfile, docker-compose gateway service, Vitest tests)
 
-Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete — Phase 5 in progress: 2/3 plans done)
+Progress: ███░░░░░░░ 22% (2/9 v2.0 phases complete — Phase 5 complete: 3/3 plans done)
 
 ## Performance Metrics (v1.0 Reference)
 
@@ -34,6 +34,7 @@ Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete — Phase
 | Phase | Plans | Status |
 |-------|-------|--------|
 | 04-monorepo-scaffold-infrastructure | 3 | ✅ Complete |
+| Phase 05 P03 | 12 | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -80,10 +81,13 @@ Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete — Phase
 
 - @hono-rate-limiter/redis@0.1.4 (latest) uses client object interface (scriptLoad/evalsha/decr/del) not sendCommand — adapted rateLimit.ts accordingly
 - Plan 01 executed as part of Plan 02 run (schema and deps were absent)
+- drizzle-orm + NodeNext module resolution dual instance type conflict resolved by casting drizzle() return to any in service.ts
+- Vitest downgraded to 2.1.x for Node 20.10 compatibility (v4 requires Node 20.12+)
+- jwtEnforce.ts is a pure no-op in Phase 5 (JWKS URI not set) — zero startup cost, activated in Phase 6
 
 ### Pending Todos
 
-- Execute Phase 5 Plan 03 (proxy layer — wires admin router + rate limiter into Hono app)
+- Begin Phase 6 (Auth Service)
 
 ### Blockers/Concerns
 
@@ -94,5 +98,5 @@ Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete — Phase
 ## Session Continuity
 
 Last session: 2026-05-21
-Stopped at: Phase 5 Plan 02 complete — flag cache, service, admin routes, rate limiter built
-Resume: Execute Phase 5 Plan 03 (proxy layer)
+Stopped at: Phase 5 Plan 03 complete — proxy router, JWT middleware, app entrypoint, Docker service, 6 tests
+Resume: Begin Phase 6 (Auth Service)
