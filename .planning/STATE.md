@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-04-29)
 
 ## Current Position
 
-Phase: Phase 5 — API Gateway + Feature Flag System (not started)
-Plan: —
-Status: Phase 4 complete — awaiting `/gsd:plan-phase 5`
-Last activity: 2026-05-13 — Phase 4 executed (3 plans: monorepo scaffold, Docker/DB isolation, packages/db + CI)
+Phase: Phase 5 — API Gateway + Feature Flag System (in progress)
+Plan: 05-02 complete (05-03 next)
+Status: Plans 01 and 02 executed — flag cache, service, admin API, rate limiter built
+Last activity: 2026-05-21 — Phase 5 Plans 01+02 executed (featureFlags schema, flag service, admin routes, rate limiter)
 
-Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
+Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete — Phase 5 in progress: 2/3 plans done)
 
 ## Performance Metrics (v1.0 Reference)
 
@@ -76,9 +76,14 @@ Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 - WhatsApp + Facebook only (v1.0) — Instagram added in v2.0 channels service
 - Local image upload to public/uploads/ — cloud storage deferred
 
+### Key Decisions (Phase 5)
+
+- @hono-rate-limiter/redis@0.1.4 (latest) uses client object interface (scriptLoad/evalsha/decr/del) not sendCommand — adapted rateLimit.ts accordingly
+- Plan 01 executed as part of Plan 02 run (schema and deps were absent)
+
 ### Pending Todos
 
-- Plan Phase 5 via `/gsd:plan-phase 5`
+- Execute Phase 5 Plan 03 (proxy layer — wires admin router + rate limiter into Hono app)
 
 ### Blockers/Concerns
 
@@ -88,6 +93,6 @@ Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 
 ## Session Continuity
 
-Last session: 2026-05-13
-Stopped at: Phase 4 complete — 3 plans executed (pnpm workspace, Docker+DB isolation, packages/db+CI)
-Resume: Run `/gsd:plan-phase 5` to plan the API Gateway + Feature Flag System
+Last session: 2026-05-21
+Stopped at: Phase 5 Plan 02 complete — flag cache, service, admin routes, rate limiter built
+Resume: Execute Phase 5 Plan 03 (proxy layer)

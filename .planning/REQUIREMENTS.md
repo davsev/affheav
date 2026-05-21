@@ -18,7 +18,7 @@
 
 - [ ] **GW-01**: Gateway routes all `/api/v1/*` traffic — initially 100% proxied to monolith
 - [ ] **GW-02**: Gateway validates JWT Bearer tokens and rejects unauthenticated requests
-- [ ] **GW-03**: Gateway enforces per-user rate limiting
+- [x] **GW-03**: Gateway enforces per-user rate limiting
 - [ ] **GW-04**: Traffic can be switched per-route from monolith to microservice via feature flag without redeployment
 
 ### Authentication
@@ -107,8 +107,8 @@
 
 ### Feature Flags
 
-- [ ] **FLAG-01**: Feature flag system with flags stored in DB — each flag maps to a named capability (e.g. `auth-service`, `products-service`)
-- [ ] **FLAG-02**: Super admin can toggle any feature flag via the Feature Flags screen with immediate effect — no redeployment required
+- [x] **FLAG-01**: Feature flag system with flags stored in DB — each flag maps to a named capability (e.g. `auth-service`, `products-service`)
+- [x] **FLAG-02**: Super admin can toggle any feature flag via the Feature Flags screen with immediate effect — no redeployment required
 - [ ] **FLAG-03**: When a service flag is off, API Gateway routes to monolith fallback; when on, routes to the new microservice
 - [ ] **FLAG-04**: Each extracted microservice is gated behind its own feature flag — Strangler Fig switch per service
 
@@ -174,10 +174,10 @@
 | TEST-05 | Phase 4 | Pending |
 | GW-01 | Phase 5 | Pending |
 | GW-02 | Phase 5 | Pending |
-| GW-03 | Phase 5 | Pending |
+| GW-03 | Phase 5 | Complete |
 | GW-04 | Phase 5 | Pending |
-| FLAG-01 | Phase 5 | Pending |
-| FLAG-02 | Phase 5 | Pending |
+| FLAG-01 | Phase 5 | Complete |
+| FLAG-02 | Phase 5 | Complete |
 | FLAG-03 | Phase 5 | Pending |
 | FLAG-04 | Phase 5 | Pending |
 | AUTH-01 | Phase 6 | Pending |

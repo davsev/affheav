@@ -12,7 +12,7 @@ Nine phases decompose the Node.js/Express monolith into independently deployable
 - Decimal phases (e.g. 4.1): urgent insertions created via `/gsd:insert-phase`
 
 - [ ] **Phase 4: Monorepo Scaffold + Infrastructure** - pnpm workspaces, Docker Compose, CI pipeline, Drizzle schema, per-service DB credentials
-- [ ] **Phase 5: API Gateway + Feature Flag System** - JWT-validated gateway routing 100% to monolith, feature flag DB + admin toggle
+- [ ] **Phase 5: API Gateway + Feature Flag System** - JWT-validated gateway routing 100% to monolith, feature flag DB + admin toggle (2/3 plans complete)
 - [ ] **Phase 6: Auth Service** - Google OAuth → RS256 JWT with `kid` registry, dual-auth window in monolith, invite flow
 - [ ] **Phase 7: User Service + Permissions + Credential Storage** - user CRUD, RBAC roles, AES-256-GCM encrypted credentials with `key_version`
 - [ ] **Phase 8: Subjects + Products Services** - niche CRUD, product CRUD, AliExpress import, both gated behind feature flags
@@ -47,8 +47,8 @@ Nine phases decompose the Node.js/Express monolith into independently deployable
   5. Each microservice extraction (Phases 6–10) has a corresponding named flag in the flags table before that phase begins
 **Plans**: 3 plans
 Plans:
-- [ ] 05-01-PLAN.md — Feature flags Drizzle schema, SQL migrations (9 flags pre-seeded), gateway package dependencies
-- [ ] 05-02-PLAN.md — Flag cache/service (5s TTL + cache eviction), admin flags API, rate limiter middleware
+- [x] 05-01-PLAN.md — Feature flags Drizzle schema, SQL migrations (9 flags pre-seeded), gateway package dependencies
+- [x] 05-02-PLAN.md — Flag cache/service (5s TTL + cache eviction), admin flags API, rate limiter middleware
 - [ ] 05-03-PLAN.md — Proxy/router (path rewrite + Strangler Fig switch), JWT middleware scaffold, app wiring, Docker service, Vitest tests
 
 ### Phase 6: Auth Service
