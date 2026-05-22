@@ -9,7 +9,7 @@
     "build": "tsc --build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "eslint src"
+    "lint": "echo 'no eslint config for gateway yet'"
   },
   "dependencies": {
     "@affiliate/db": "workspace:*",

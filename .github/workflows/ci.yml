@@ -56,7 +56,7 @@ jobs:
         run: pnpm -r run test --passWithNoTests
 
       - name: Lint (ESLint)
-        run: pnpm -r run lint --if-present
+        run: pnpm -r run lint
 
   e2e:
     name: E2E Tests (Playwright)
