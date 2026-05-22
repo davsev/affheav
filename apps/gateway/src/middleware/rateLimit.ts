@@ -1,5 +1,6 @@
 // Redis-backed rate limiter — fail-open if Redis is unavailable.
-// Phase 5 keys by x-real-ip (set by load balancer) with x-forwarded-for fallback.
+// Keys by x-real-ip only (set by a trusted load balancer).
+// x-forwarded-for is intentionally NOT used — it is client-controlled and spoofable.
 // Phase 6+: switch keyGenerator to use JWT `sub` claim when jwt-enforcement is ON.
 
 import { rateLimiter } from 'hono-rate-limiter';
@@ -34,13 +35,7 @@ const store = new RedisStore({ client: redisClient });
 export const rateLimitMiddleware = rateLimiter({
   windowMs: 60 * 1000,  // 1-minute window
   limit: 120,           // 120 requests per minute per key
-  keyGenerator: (c) => {
-    return (
-      c.req.header('x-real-ip') ??
-      c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
-      'anonymous'
-    );
-  },
+  keyGenerator: (c) => c.req.header('x-real-ip') ?? 'anonymous',
   store,
   handler: (c) => c.json({ error: 'Too Many Requests' }, 429),
 });

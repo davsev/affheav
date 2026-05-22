@@ -4,6 +4,9 @@ export const config = {
   redisUrl:       process.env.REDIS_URL ?? 'redis://redis:6379',
   dbUrl:          process.env.GATEWAY_DATABASE_URL ?? '',
 
+  // Required: shared secret protecting /api/v1/admin/* endpoints
+  adminToken:     process.env.GATEWAY_ADMIN_TOKEN ?? '',
+
   // Phase 6+: set AUTH_SERVICE_JWKS_URI to activate JWT enforcement capability
   jwksUri:        process.env.AUTH_SERVICE_JWKS_URI ?? '',
 
