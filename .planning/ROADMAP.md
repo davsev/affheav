@@ -12,7 +12,7 @@ Nine phases decompose the Node.js/Express monolith into independently deployable
 - Decimal phases (e.g. 4.1): urgent insertions created via `/gsd:insert-phase`
 
 - [ ] **Phase 4: Monorepo Scaffold + Infrastructure** - pnpm workspaces, Docker Compose, CI pipeline, Drizzle schema, per-service DB credentials
-- [ ] **Phase 5: API Gateway + Feature Flag System** - JWT-validated gateway routing 100% to monolith, feature flag DB + admin toggle
+- [x] **Phase 5: API Gateway + Feature Flag System** - JWT-validated gateway routing 100% to monolith, feature flag DB + admin toggle (completed 2026-05-22)
 - [ ] **Phase 6: Auth Service** - Google OAuth → RS256 JWT with `kid` registry, dual-auth window in monolith, invite flow
 - [ ] **Phase 7: User Service + Permissions + Credential Storage** - user CRUD, RBAC roles, AES-256-GCM encrypted credentials with `key_version`
 - [ ] **Phase 8: Subjects + Products Services** - niche CRUD, product CRUD, AliExpress import, both gated behind feature flags
@@ -143,7 +143,7 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 �
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 4. Monorepo Scaffold + Infrastructure | 0/? | Not started | - |
-| 5. API Gateway + Feature Flag System | 2/3 | In Progress|  |
+| 5. API Gateway + Feature Flag System | 3/3 | Complete   | 2026-05-22 |
 | 6. Auth Service | 0/? | Not started | - |
 | 7. User Service + Permissions + Credential Storage | 0/? | Not started | - |
 | 8. Subjects + Products Services | 0/? | Not started | - |
