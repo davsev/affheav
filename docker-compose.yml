@@ -52,5 +52,25 @@ services:
       redis:
         condition: service_healthy
 
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    environment:
+      PORT: "8080"
+      MONOLITH_URL: "http://monolith:3000"
+      REDIS_URL: "redis://redis:6379"
+      GATEWAY_DATABASE_URL: "postgresql://ah_gateway:${GATEWAY_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      # AUTH_SERVICE_JWKS_URI: not set in Phase 5 — JWT enforcement inactive
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      monolith:
+        condition: service_started
+
 volumes:
   postgres_data:

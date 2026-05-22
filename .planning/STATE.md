@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-04-29)
 
 ## Current Position
 
-Phase: Phase 5 — API Gateway + Feature Flag System (not started)
-Plan: —
-Status: Phase 4 complete — awaiting `/gsd:plan-phase 5`
-Last activity: 2026-05-13 — Phase 4 executed (3 plans: monorepo scaffold, Docker/DB isolation, packages/db + CI)
+Phase: Phase 5 — API Gateway + Feature Flag System (in progress)
+Plan: 05-03 complete
+Status: Plan 05-03 complete — proxy router, JWT middleware, app entrypoint, Vitest tests, Docker service
+Last activity: 2026-05-22 — Plan 05-03 executed (proxy upstream, app wired, 6 tests passing)
 
 Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 
@@ -34,6 +34,8 @@ Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 | Phase | Plans | Status |
 |-------|-------|--------|
 | 04-monorepo-scaffold-infrastructure | 3 | ✅ Complete |
+| 05-api-gateway-feature-flag-system P01 | 5 min | 3 tasks | 6 files |
+| Phase 05-api-gateway-feature-flag-system P02 | 15 | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -54,6 +56,12 @@ Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 - BullMQ idempotency requires BOTH deterministic job ID AND DB sent-flag check — neither guard alone is sufficient
 - Drizzle migrations gated behind `RUN_MIGRATIONS=true` — never auto-run on startup
 - NodeNext module resolution requires `.js` extensions in import paths (not `.ts`) — even inside TypeScript source files
+- @hono-rate-limiter/redis pinned to ^0.1.4 (latest on npm as of 2026-05-21); plan spec ^0.5.0 does not exist
+- All drizzle ORM queries centralized in packages/db — no drizzle-orm imports in app packages; prevents TypeScript dual-instance error with NodeNext composite project references
+- @hono-rate-limiter/redis v0.1.4 uses client interface (scriptLoad/evalsha/decr/del) not sendCommand — ioredis adapter wraps each method with catch for fail-open behavior
+- applyJwtMiddleware() uses early-return guard when jwksUri empty; hono 4.12.14 has no jwk() export — enforcement gate reads jwtPayload set by Phase 6 upstream JWT middleware
+- vitest pinned to ^2.1.9 in gateway — v4 requires Node 22; dev env is Node 20.10
+- resolveUpstream() accepts flagOverrides param for unit testing without DB/Redis dependency
 
 ### Phase 4 Decisions (locked)
 
@@ -88,6 +96,6 @@ Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 
 ## Session Continuity
 
-Last session: 2026-05-13
-Stopped at: Phase 4 complete — 3 plans executed (pnpm workspace, Docker+DB isolation, packages/db+CI)
-Resume: Run `/gsd:plan-phase 5` to plan the API Gateway + Feature Flag System
+Last session: 2026-05-22
+Stopped at: Completed 05-03-PLAN.md
+Resume: Run next plan in Phase 5

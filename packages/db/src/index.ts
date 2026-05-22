@@ -3,3 +3,4 @@
 
 export * from './schema/index.js';
 export { runMigrationsIfEnabled } from './migrate.js';
+export { dbGetFlag, dbListFlags, dbSetFlag } from './gateway-db.js';

@@ -2,15 +2,28 @@
   "name": "@affiliate/gateway",
   "version": "0.0.1",
   "private": true,
+  "type": "module",
   "scripts": {
     "start": "node dist/index.js",
-    "dev": "node --watch src/index.ts",
+    "dev": "node --watch --experimental-vm-modules src/index.ts",
     "build": "tsc --build",
     "typecheck": "tsc --noEmit",
-    "test": "echo no tests"
+    "test": "vitest run",
+    "lint": "echo 'no eslint config for gateway yet'"
   },
   "dependencies": {
+    "@affiliate/db": "workspace:*",
     "@affiliate/types": "workspace:*",
-    "@affiliate/config": "workspace:*"
+    "@affiliate/config": "workspace:*",
+    "hono": "4.12.14",
+    "@hono/node-server": "^1.14.0",
+    "hono-rate-limiter": "^0.5.0",
+    "@hono-rate-limiter/redis": "^0.1.4",
+    "ioredis": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.9"
   }
 }
