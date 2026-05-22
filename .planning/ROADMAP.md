@@ -51,6 +51,18 @@ Plans:
 - [ ] 05-02-PLAN.md — Flag cache/service (5s TTL + cache eviction), admin flags API, rate limiter middleware
 - [ ] 05-03-PLAN.md — Proxy/router (path rewrite + Strangler Fig switch), JWT middleware scaffold, app wiring, Docker service, Vitest tests
 
+### Phase 05.1: User Management System (INSERTED)
+
+**Goal:** Extend the monolith with a 3-tier role system (SuperAdmin/Group Admin/Group User), per-user JSONB permission flags, group-scoped data isolation, and a vanilla JS team management UI — without touching the microservices layer
+**Depends on:** Phase 5
+**Plans:** 4 plans
+
+Plans:
+- [ ] 05.1-01-PLAN.md — DB migrations (group_admin_id, permissions, invited_role columns) + middleware/auth.js + middleware/scopeGroup.js
+- [ ] 05.1-02-PLAN.md — userService and inviteService extensions; OAuth callback reads invited_role/group_admin_id
+- [ ] 05.1-03-PLAN.md — routes/users.js: replace local isAdmin, add /group listing, /permissions update, group-aware invite, keep-or-delete removal
+- [ ] 05.1-04-PLAN.md — public/app.js: Team Management section with Hebrew permission toggles and member invite/remove UI
+
 ### Phase 6: Auth Service
 **Goal**: Users authenticate via the new auth service and receive RS256 JWTs; the monolith accepts both session cookies and JWT Bearer tokens so no active user is logged out during migration
 **Depends on**: Phase 5
