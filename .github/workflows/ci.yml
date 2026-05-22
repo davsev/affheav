@@ -46,6 +46,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build packages (required for composite project references)
+        run: pnpm --filter @affiliate/types --filter @affiliate/config --filter @affiliate/db run build
+
       - name: Typecheck (tsc --noEmit)
         run: pnpm -r run typecheck
 
