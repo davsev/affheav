@@ -21,25 +21,25 @@ async function searchAliExpress(keywords, trackingId) {
     ?.resp_result?.result?.products?.product || [];
 }
 
+// Extract a short category-level keyword from a full product title (first 5 words)
+function titleToKeyword(title) {
+  return title.split(/\s+/).slice(0, 5).join(' ');
+}
+
 async function runDiscovery(userId) {
-  // 1. Fetch top-performing products per subject:
-  //    products with clicks > 3 OR products that have a commission record
+  // 1. Fetch top-performing products per subject, ordered by clicks DESC.
+  //    Use p.title (the stored AliExpress product title) as the search keyword.
   const { rows: topProducts } = await query(`
     SELECT
-      p.id,
       p.subject_id,
-      s.name        AS subject_name,
+      s.name                   AS subject_name,
       s.aliexpress_tracking_id,
       p.clicks,
-      COALESCE(oi.product_title, '') AS english_title
+      p.title                  AS product_title
     FROM products p
     JOIN subjects s ON s.id = p.subject_id AND s.user_id = $1
-    LEFT JOIN LATERAL (
-      SELECT product_title FROM order_items
-      WHERE user_id = $1 AND product_title IS NOT NULL
-      LIMIT 1
-    ) oi ON true
     WHERE p.user_id = $1
+      AND p.title IS NOT NULL
       AND p.created_at > NOW() - INTERVAL '90 days'
       AND (
         p.clicks > 3
@@ -51,25 +51,33 @@ async function runDiscovery(userId) {
         )
       )
     ORDER BY p.clicks DESC
-    LIMIT 20
   `, [userId]);
 
-  // 2. Build subject → keyword map; fall back to subject name when no English title
+  // 2. Build subject → { keywords[], trackingId, subjectName } map.
+  //    Collect up to 3 distinct keywords per subject from top-selling products,
+  //    so suggestions reflect what's actually working in each niche.
   const subjectMap = new Map();
+
   for (const row of topProducts) {
+    const keyword = titleToKeyword(row.product_title);
+    // Skip Hebrew keywords (can't search AliExpress with them)
+    if (/[֐-׿]/.test(keyword)) continue;
+
     if (!subjectMap.has(row.subject_id)) {
-      const keyword = row.english_title || row.subject_name;
-      // Only use ASCII/English keywords — skip if Hebrew (contains chars in ֐-׿ range)
-      if (/[֐-׿]/.test(keyword)) continue;
       subjectMap.set(row.subject_id, {
-        keyword,
-        trackingId: row.aliexpress_tracking_id,
+        keywords:    [],
+        trackingId:  row.aliexpress_tracking_id,
         subjectName: row.subject_name,
       });
     }
+
+    const entry = subjectMap.get(row.subject_id);
+    if (entry.keywords.length < 3 && !entry.keywords.includes(keyword)) {
+      entry.keywords.push(keyword);
+    }
   }
 
-  // If no high-performing products found, fall back to all subjects' names
+  // Fallback: if no high-performing products found, use subject names
   if (subjectMap.size === 0) {
     const { rows: subjects } = await query(
       `SELECT id, name, aliexpress_tracking_id FROM subjects WHERE user_id = $1`,
@@ -77,67 +85,65 @@ async function runDiscovery(userId) {
     );
     for (const s of subjects) {
       if (!/[֐-׿]/.test(s.name)) {
-        subjectMap.set(s.id, { keyword: s.name, trackingId: s.aliexpress_tracking_id, subjectName: s.name });
+        subjectMap.set(s.id, { keywords: [s.name], trackingId: s.aliexpress_tracking_id, subjectName: s.name });
       }
     }
   }
 
-  // 3. Fetch existing promotion_links to deduplicate
+  // 3. Fetch existing products/suggestions for deduplication
   const { rows: existingRows } = await query(
     `SELECT long_url FROM products WHERE user_id = $1 AND long_url IS NOT NULL`,
     [userId]
   );
   const existingUrls = new Set(existingRows.map(r => r.long_url));
 
-  // 4. Fetch already-known suggestion aliexpress_ids to skip
   const { rows: existingSugRows } = await query(
     `SELECT aliexpress_id FROM product_suggestions WHERE user_id = $1`,
     [userId]
   );
   const existingSugIds = new Set(existingSugRows.map(r => r.aliexpress_id));
 
-  // 5. Search AliExpress sequentially (rate-limit safe), max 5 subjects
+  // 4. Search AliExpress per subject (max 5 subjects, up to 3 keywords each)
   const entries = [...subjectMap.entries()].slice(0, 5);
   let newCount = 0;
 
-  for (const [subjectId, { keyword, trackingId, subjectName }] of entries) {
-    try {
-      const results = await searchAliExpress(keyword, trackingId);
-      const filtered = results.filter(passesFilters);
+  for (const [subjectId, { keywords, trackingId }] of entries) {
+    for (const keyword of keywords) {
+      try {
+        const results = await searchAliExpress(keyword, trackingId);
+        const filtered = results.filter(passesFilters);
 
-      for (const product of filtered) {
-        const pid = String(product.product_id);
-        if (existingSugIds.has(pid)) continue;
-        if (existingUrls.has(product.promotion_link)) continue;
+        for (const product of filtered) {
+          const pid = String(product.product_id);
+          if (existingSugIds.has(pid)) continue;
+          if (existingUrls.has(product.promotion_link)) continue;
 
-        const salePrice = parseFloat(product.app_sale_price) || null;
+          await query(`
+            INSERT INTO product_suggestions
+              (user_id, subject_id, aliexpress_id, title, image_url, promotion_link,
+               sale_price, evaluate_rate, lastest_volume, source_keyword)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+            ON CONFLICT (user_id, aliexpress_id) DO NOTHING
+          `, [
+            userId, subjectId, pid,
+            product.product_title,
+            product.product_main_image_url || '',
+            product.promotion_link,
+            parseFloat(product.app_sale_price) || null,
+            product.evaluate_rate || null,
+            Number(product.lastest_volume) || null,
+            keyword,
+          ]);
 
-        await query(`
-          INSERT INTO product_suggestions
-            (user_id, subject_id, aliexpress_id, title, image_url, promotion_link,
-             sale_price, evaluate_rate, lastest_volume, source_keyword)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-          ON CONFLICT (user_id, aliexpress_id) DO NOTHING
-        `, [
-          userId, subjectId, pid,
-          product.product_title,
-          product.product_main_image_url || '',
-          product.promotion_link,
-          salePrice,
-          product.evaluate_rate || null,
-          Number(product.lastest_volume) || null,
-          keyword,
-        ]);
-
-        existingSugIds.add(pid);
-        newCount++;
+          existingSugIds.add(pid);
+          newCount++;
+        }
+      } catch (err) {
+        console.error(`[discovery] search failed for keyword "${keyword}": ${err.message}`);
       }
-    } catch (err) {
-      console.error(`[discovery] search failed for keyword "${keyword}": ${err.message}`);
-    }
 
-    // Rate-limit: 1s between searches
-    await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 1000));
+    }
   }
 
   return { newCount, subjectsSearched: entries.length };
