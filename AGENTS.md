@@ -23,27 +23,81 @@ Affiliate Heaven automates affiliate product broadcasting to WhatsApp groups, Fa
 
 ## Commit & PR Standards
 
-All commit messages and PR titles **must** follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
+All commit messages **and PR titles** must follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
+**This is enforced by CI** — the "Lint PR title" check will fail and block the merge if the PR title does not conform.
 
-**Format:** `<type>(<scope>): <description>`
+### Format
 
-**Types:**
-- `feat` — new feature
-- `fix` — bug fix
-- `refactor` — code change without behavior change
-- `test` — adding or updating tests
-- `chore` — tooling, deps, config
-- `docs` — documentation only
-- `ci` — CI/CD changes
-- `perf` — performance improvement
-
-**Examples:**
 ```
-feat(user-service): add per-user credential encryption with AES-256
+<type>(<scope>): <description>
+```
+
+- `type` and `scope` are lowercase
+- `description` is lowercase, no trailing period
+- `scope` is optional but strongly recommended — it locates the change in the codebase at a glance
+
+### Types
+
+| Type | When to use |
+|---|---|
+| `feat` | New feature or capability |
+| `fix` | Bug fix |
+| `refactor` | Code change with no behavior change |
+| `perf` | Performance improvement |
+| `test` | Adding or updating tests |
+| `docs` | Documentation only |
+| `chore` | Tooling, deps, config, scripts |
+| `ci` | CI/CD pipeline changes |
+
+### Scopes (use the closest match)
+
+| Scope | Area |
+|---|---|
+| `auth` | Google OAuth, sessions, invite flow |
+| `users` | User CRUD, roles, userService |
+| `subjects` | Niche/subject management |
+| `products` | Product table, sync, CRUD |
+| `discovery` | Product suggestion / discovery agent |
+| `scheduler` | Cron job manager |
+| `workflow` | Broadcast pipeline (workflow.js) |
+| `whatsapp` | WhatsApp / MacroDroid integration |
+| `facebook` | Facebook Graph API integration |
+| `instagram` | Instagram Content Publishing API |
+| `openai` | Message generation, prompts |
+| `aliexpress` | AliExpress API / scraping |
+| `sheets` | Google Sheets sync (legacy) |
+| `db` | Migrations, schema, DB utilities |
+| `ui` | Frontend (public/app.js, index.html) |
+| `logs` | Logging, SSE streaming |
+| `config` | Environment, settings |
+
+### Examples
+
+```
+feat(discovery): use niche sales history to drive product suggestions
 fix(scheduler): prevent duplicate cron jobs on hot reload
 refactor(products): extract DB queries into repository layer
+perf(db): add index on products.subject_id for faster joins
 test(auth): add unit tests for invite token validation
-ci: add GitHub Actions workflow for Vitest on PR
+chore(deps): upgrade express to 4.19.2
+ci: add Vitest step to PR workflow
+docs: update AGENTS.md with PR naming conventions
+```
+
+### Common mistakes that fail CI
+
+```
+# ❌ Missing type prefix
+Use niche sales history to drive product suggestions
+
+# ❌ Type not lowercase
+Feat(discovery): add niche suggestions
+
+# ❌ Colon missing after scope
+feat(discovery) add niche suggestions
+
+# ❌ Trailing period
+feat(discovery): add niche suggestions.
 ```
 
 ---
