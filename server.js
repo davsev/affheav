@@ -71,7 +71,7 @@ passport.use(new GoogleStrategy(
         });
       }
 
-      if (user.status !== 'active') {
+      if (user.status === 'suspended') {
         return done(null, false, { message: 'suspended' });
       }
 
