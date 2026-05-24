@@ -1,14 +1,10 @@
 const express = require('express');
 const router  = express.Router();
-const { listUsers, findUserById, updateUserById, deleteUser } = require('../services/userService');
+const { isSuperAdmin, isGroupAdminOrAbove, requirePermission } = require('../middleware/auth');
+const { listUsers, findUserById, updateUserById, deleteUser, _cacheInvalidate } = require('../services/userService');
 const { createInvitation, listInvitations, deleteInvitation, validateToken } = require('../services/inviteService');
 const { query } = require('../db');
 const { getSubjects, getAllProducts, markMigratedToDb } = require('../services/googleSheets');
-
-const isAdmin = (req, res, next) => {
-  if (req.user?.role === 'admin') return next();
-  res.status(403).json({ success: false, error: 'Forbidden' });
-};
 
 // ── Current user ──────────────────────────────────────────────────────────────
 router.get('/me', (req, res) => {
@@ -16,8 +12,8 @@ router.get('/me', (req, res) => {
   res.json({ success: true, user: { id, email, name, photo, role } });
 });
 
-// ── Admin: list all users ─────────────────────────────────────────────────────
-router.get('/', isAdmin, async (req, res) => {
+// ── SuperAdmin: list all users ────────────────────────────────────────────────
+router.get('/', isSuperAdmin, async (req, res) => {
   try {
     const users = await listUsers();
     res.json({ success: true, users });
@@ -26,19 +22,82 @@ router.get('/', isAdmin, async (req, res) => {
   }
 });
 
-// ── Admin: update user role / status ─────────────────────────────────────────
-router.put('/:id', isAdmin, async (req, res) => {
+// ── SuperAdmin: list pending users ────────────────────────────────────────────
+router.get('/pending', isSuperAdmin, async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT id, email, name, photo, role, status, created_at
+       FROM users WHERE status = 'pending' ORDER BY created_at ASC`
+    );
+    res.json({ success: true, users: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── SuperAdmin: approve a pending user ────────────────────────────────────────
+router.post('/:id/approve', isSuperAdmin, async (req, res) => {
+  try {
+    const { role, maxGroupUsers } = req.body;
+    const validRoles = ['group_admin', 'group_user', 'admin'];
+    if (!role || !validRoles.includes(role)) {
+      return res.status(400).json({ success: false, error: 'Valid role required: group_admin, group_user, admin' });
+    }
+
+    const target = await findUserById(req.params.id);
+    if (!target) return res.status(404).json({ success: false, error: 'User not found' });
+    if (target.status === 'approved') {
+      return res.status(400).json({ success: false, error: 'User already approved' });
+    }
+
+    const updates = { status: 'approved', role };
+    if (role === 'group_admin' && maxGroupUsers !== undefined) {
+      updates.max_group_users = parseInt(maxGroupUsers, 10) || 0;
+    }
+
+    const updated = await updateUserById(req.params.id, updates);
+    res.json({ success: true, user: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── Group Admin: list own group members; SuperAdmin: list all ─────────────────
+router.get('/group', isGroupAdminOrAbove, async (req, res) => {
+  try {
+    const { id, role } = req.user;
+    let rows;
+    if (role === 'admin') {
+      ({ rows } = await query(
+        `SELECT id, email, name, photo, role, permissions, group_admin_id, status, created_at
+         FROM users WHERE status = 'approved' ORDER BY created_at ASC`
+      ));
+    } else {
+      ({ rows } = await query(
+        `SELECT id, email, name, photo, role, permissions, group_admin_id, status, created_at
+         FROM users WHERE group_admin_id = $1 AND status = 'approved' ORDER BY created_at ASC`,
+        [id]
+      ));
+    }
+    res.json({ success: true, users: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── SuperAdmin: update user role / status ─────────────────────────────────────
+router.put('/:id', isSuperAdmin, async (req, res) => {
   try {
     const { role, status } = req.body;
 
-    const validRoles    = ['admin', 'user'];
-    const validStatuses = ['active', 'suspended'];
+    const validRoles    = ['admin', 'group_admin', 'group_user'];
+    const validStatuses = ['approved', 'pending', 'suspended'];
 
     if (role   && !validRoles.includes(role))     return res.status(400).json({ success: false, error: 'Invalid role' });
     if (status && !validStatuses.includes(status)) return res.status(400).json({ success: false, error: 'Invalid status' });
 
     // Prevent admin from demoting themselves
-    if (req.params.id === req.user.id && role === 'user') {
+    if (req.params.id === req.user.id && role !== 'admin') {
       return res.status(400).json({ success: false, error: 'Cannot change your own role' });
     }
 
@@ -51,38 +110,90 @@ router.put('/:id', isAdmin, async (req, res) => {
   }
 });
 
-// ── Admin: delete user ────────────────────────────────────────────────────────
-router.delete('/:id', isAdmin, async (req, res) => {
+// ── Group Admin: update permissions for a group member ────────────────────────
+router.put('/:id/permissions', isGroupAdminOrAbove, async (req, res) => {
   try {
-    if (req.params.id === req.user.id) {
-      return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
+    const { permissions } = req.body;
+    if (!permissions || typeof permissions !== 'object') {
+      return res.status(400).json({ success: false, error: 'permissions object required' });
     }
-    await deleteUser(req.params.id);
+
+    const VALID_PERMS = ['add_products', 'edit_products', 'delete_products',
+                         'view_logs', 'trigger_send', 'manage_schedules', 'view_settings'];
+    const sanitized = {};
+    for (const key of VALID_PERMS) sanitized[key] = permissions[key] === true;
+
+    const target = await findUserById(req.params.id);
+    if (!target) return res.status(404).json({ success: false, error: 'User not found' });
+
+    if (req.user.role === 'group_admin' && target.groupAdminId !== req.user.id) {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+
+    await updateUserById(req.params.id, { permissions: sanitized });
+    if (target.googleId) _cacheInvalidate(target.googleId);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// ── Admin: send invite ────────────────────────────────────────────────────────
-router.post('/invites', isAdmin, async (req, res) => {
+// ── Group Admin / SuperAdmin: send invite (with member cap enforcement) ────────
+router.post('/invites', isGroupAdminOrAbove, async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, invitedRole, groupAdminId: bodyGroupAdminId } = req.body;
     if (!email) return res.status(400).json({ success: false, error: 'Email required' });
 
-    const inv = await createInvitation({ email, invitedBy: req.user.id });
+    const callerRole = req.user.role;
+    let assignedRole         = 'group_user';
+    let assignedGroupAdminId = null;
+
+    if (callerRole === 'admin') {
+      // SuperAdmin can invite group_admin or group_user
+      const allowed = ['group_admin', 'group_user'];
+      assignedRole = allowed.includes(invitedRole) ? invitedRole : 'group_user';
+      if (assignedRole === 'group_user') assignedGroupAdminId = bodyGroupAdminId || null;
+    } else {
+      // Group Admin invites group_user into their own group — check cap first
+      assignedRole         = 'group_user';
+      assignedGroupAdminId = req.user.id;
+
+      const { maxGroupUsers } = req.user;
+      if (maxGroupUsers > 0) {
+        const { rows: countRows } = await query(
+          `SELECT COUNT(*) AS cnt FROM users WHERE group_admin_id = $1 AND status = 'approved'`,
+          [req.user.id]
+        );
+        const currentCount = parseInt(countRows[0].cnt, 10);
+        if (currentCount >= maxGroupUsers) {
+          return res.status(403).json({
+            success: false,
+            error: `Limit reached — your plan allows ${maxGroupUsers} group user(s). You currently have ${currentCount}.`,
+            limitReached: true,
+            current: currentCount,
+            max: maxGroupUsers,
+          });
+        }
+      }
+    }
+
+    const inv = await createInvitation({
+      email,
+      invitedBy:    req.user.id,
+      invitedRole:  assignedRole,
+      groupAdminId: assignedGroupAdminId,
+    });
 
     const baseUrl   = process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`;
     const inviteUrl = `${baseUrl}/auth/invite/${inv.token}`;
-
     res.json({ success: true, invitation: { ...inv, inviteUrl } });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// ── Admin: list invitations ───────────────────────────────────────────────────
-router.get('/invites', isAdmin, async (req, res) => {
+// ── SuperAdmin: list invitations ──────────────────────────────────────────────
+router.get('/invites', isSuperAdmin, async (req, res) => {
   try {
     const invitations = await listInvitations();
     res.json({ success: true, invitations });
@@ -91,8 +202,8 @@ router.get('/invites', isAdmin, async (req, res) => {
   }
 });
 
-// ── Admin: delete invitation ──────────────────────────────────────────────────
-router.delete('/invites/:id', isAdmin, async (req, res) => {
+// ── SuperAdmin: delete invitation ─────────────────────────────────────────────
+router.delete('/invites/:id', isSuperAdmin, async (req, res) => {
   try {
     await deleteInvitation(req.params.id);
     res.json({ success: true });
@@ -101,8 +212,54 @@ router.delete('/invites/:id', isAdmin, async (req, res) => {
   }
 });
 
-// ── Admin: one-time migrate subjects from Google Sheets → PostgreSQL ──────────
-router.post('/migrate-subjects', isAdmin, async (req, res) => {
+// ── Group Admin / SuperAdmin: remove user (group-aware) ───────────────────────
+router.delete('/:id', isGroupAdminOrAbove, async (req, res) => {
+  try {
+    if (req.params.id === req.user.id) {
+      return res.status(400).json({ success: false, error: 'Cannot delete your own account' });
+    }
+
+    const target = await findUserById(req.params.id);
+    if (!target) return res.status(404).json({ success: false, error: 'User not found' });
+
+    // Group Admin can only delete users in their own group
+    if (req.user.role === 'group_admin' && target.groupAdminId !== req.user.id) {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+    if (req.user.role === 'admin' && target.role === 'admin') {
+      return res.status(400).json({ success: false, error: 'Cannot delete another SuperAdmin' });
+    }
+
+    const keepProducts = req.query.keepProducts === 'true';
+
+    if (target.role === 'group_user') {
+      // Products are GROUP-LEVEL (keyed by group_admin_id on products table).
+      // Removing a group_user does NOT affect products — they belong to the group, not the user.
+      // No product reassignment needed.
+    } else if (target.role === 'group_admin') {
+      // Removing a Group Admin removes the whole group.
+      // Products keyed to this group_admin_id need a decision.
+      if (keepProducts) {
+        // Transfer group's products to SuperAdmin (caller)
+        await query(
+          `UPDATE products SET group_admin_id = $1 WHERE group_admin_id = $2`,
+          [req.user.id, target.id]
+        );
+      } else {
+        // Delete all products belonging to this group
+        await query(`DELETE FROM products WHERE group_admin_id = $1`, [target.id]);
+      }
+    }
+
+    await deleteUser(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── SuperAdmin: one-time migrate subjects from Google Sheets → PostgreSQL ──────
+router.post('/migrate-subjects', isSuperAdmin, async (req, res) => {
   try {
     const { rows: adminRows } = await query(
       `SELECT id, email FROM users WHERE id = $1 LIMIT 1`,
@@ -181,8 +338,8 @@ router.post('/migrate-subjects', isAdmin, async (req, res) => {
   }
 });
 
-// ── Admin: one-time migrate products from Google Sheets → PostgreSQL ──────────
-router.post('/migrate-products', isAdmin, async (req, res) => {
+// ── SuperAdmin: one-time migrate products from Google Sheets → PostgreSQL ──────
+router.post('/migrate-products', isSuperAdmin, async (req, res) => {
   try {
     const userId = req.user.id;
 
