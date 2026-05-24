@@ -21,15 +21,18 @@ function _cacheInvalidate(googleId) {
 function _row(r) {
   if (!r) return null;
   return {
-    id:        r.id,
-    googleId:  r.google_id,
-    email:     r.email,
-    name:      r.name,
-    photo:     r.photo,
-    role:      r.role,
-    status:    r.status,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
+    id:            r.id,
+    googleId:      r.google_id,
+    email:         r.email,
+    name:          r.name,
+    photo:         r.photo,
+    role:          r.role,
+    status:        r.status || 'pending',
+    maxGroupUsers: r.max_group_users || 0,
+    groupAdminId:  r.group_admin_id || null,
+    permissions:   r.permissions || {},
+    createdAt:     r.created_at,
+    updatedAt:     r.updated_at,
   };
 }
 
@@ -62,20 +65,24 @@ async function findUserByEmail(email) {
   return _row(rows[0]);
 }
 
-async function createUser({ googleId, email, name, photo }) {
+async function createUser({ googleId, email, name, photo, role, status, groupAdminId }) {
   const adminEmail = process.env.ADMIN_GOOGLE_EMAIL;
-  const isAdmin = adminEmail && email === adminEmail;
+
+  // Bootstrap: if email matches admin env var, always promote to admin + approved
+  let assignedRole   = role   || (adminEmail && email === adminEmail ? 'admin' : 'group_admin');
+  let assignedStatus = status || (adminEmail && email === adminEmail ? 'approved' : 'pending');
+  const assignedGroupAdminId = groupAdminId || null;
 
   const { rows } = await query(
-    `INSERT INTO users (google_id, email, name, photo, role, status)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO users (google_id, email, name, photo, role, status, group_admin_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (google_id) DO UPDATE
-       SET email = EXCLUDED.email,
-           name  = EXCLUDED.name,
-           photo = EXCLUDED.photo,
+       SET email      = EXCLUDED.email,
+           name       = EXCLUDED.name,
+           photo      = EXCLUDED.photo,
            updated_at = NOW()
      RETURNING *`,
-    [googleId, email, name, photo, isAdmin ? 'admin' : 'user', 'active']
+    [googleId, email, name, photo, assignedRole, assignedStatus, assignedGroupAdminId]
   );
   const user = _row(rows[0]);
   _cacheSet(googleId, user);
@@ -111,15 +118,20 @@ async function updateUser(googleId, fields) {
 }
 
 async function updateUserById(id, fields) {
-  const allowed = ['name', 'photo', 'role', 'status'];
+  const allowedKeys = ['name', 'photo', 'role', 'status', 'permissions', 'group_admin_id', 'max_group_users'];
   const updates = [];
   const values  = [];
   let   i       = 1;
 
-  for (const key of allowed) {
+  for (const key of allowedKeys) {
     if (fields[key] !== undefined) {
-      updates.push(`${key} = $${i++}`);
-      values.push(fields[key]);
+      if (key === 'permissions') {
+        updates.push(`permissions = $${i++}::jsonb`);
+        values.push(JSON.stringify(fields[key]));
+      } else {
+        updates.push(`${key} = $${i++}`);
+        values.push(fields[key]);
+      }
     }
   }
   if (updates.length === 0) return findUserById(id);
@@ -132,7 +144,6 @@ async function updateUserById(id, fields) {
     values
   );
   const user = _row(rows[0]);
-  // Invalidate cache by googleId if available
   if (user?.googleId) _cacheInvalidate(user.googleId);
   return user;
 }
@@ -161,4 +172,5 @@ module.exports = {
   updateUserById,
   listUsers,
   deleteUser,
+  _cacheInvalidate,
 };
