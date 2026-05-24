@@ -93,10 +93,17 @@ window.doLogout = async () => {
     const res = await fetch('/api/me');
     if (res.ok) {
       const data = await res.json();
+      window._currentUser = data.user;
       updateSidebarUser(data.user);
       if (data.user.role === 'admin') {
         const navUsers = document.getElementById('nav-users');
         if (navUsers) navUsers.style.display = '';
+        const navPending = document.getElementById('nav-pending-approvals');
+        if (navPending) navPending.style.display = '';
+      }
+      if (data.user.role === 'group_admin') {
+        const navTeam = document.getElementById('nav-my-team');
+        if (navTeam) navTeam.style.display = '';
       }
       hideLoginPage();
       loadUserSettings();
@@ -2583,6 +2590,16 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       loadBroadcasts();
     });
   }
+  if (btn.dataset.tab === 'pending-approvals') {
+    btn.addEventListener('click', () => {
+      renderPendingApprovals();
+    });
+  }
+  if (btn.dataset.tab === 'my-team') {
+    btn.addEventListener('click', () => {
+      renderMyTeam();
+    });
+  }
 });
 
 async function loadUsers() {
@@ -4958,4 +4975,238 @@ document.addEventListener('DOMContentLoaded', () => {
 window.toggleDiscoverAI      = toggleDiscoverAI;
 window.saveDiscoverAISettings = saveDiscoverAISettings;
 window.resetDiscoverAIPrompt  = resetDiscoverAIPrompt;
+
+// ─── PENDING APPROVALS (SuperAdmin) ────────────────────────────────────────
+
+async function renderPendingApprovals() {
+  const container = document.getElementById('pending-approvals-content');
+  if (!container) return;
+  container.innerHTML = '<p>טוען...</p>';
+  try {
+    const res  = await fetch('/api/users/pending');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    if (data.users.length === 0) {
+      container.innerHTML = '<p style="color:var(--on-surface-var)">אין משתמשים הממתינים לאישור</p>';
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="pending-list">
+        ${data.users.map(u => `
+          <div class="card" id="pending-${u.id}" style="margin-bottom:16px;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+              ${u.photo ? `<img src="${escHtml(u.photo)}" width="40" height="40" style="border-radius:50%;object-fit:cover;flex-shrink:0;" alt="">` : ''}
+              <div>
+                <div style="font-weight:700;font-size:15px;">${escHtml(u.name)}</div>
+                <div style="font-size:12px;color:var(--on-surface-var);">${escHtml(u.email)}</div>
+                <div style="font-size:11px;color:var(--on-surface-var);">נרשם: ${new Date(u.created_at).toLocaleDateString('he-IL')}</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+              <select id="role-${u.id}" class="form-input" style="width:auto;" onchange="toggleMaxUsers('${u.id}')">
+                <option value="group_admin">מנהל קבוצה</option>
+                <option value="group_user">משתמש קבוצה</option>
+              </select>
+              <span id="max-users-wrap-${u.id}" style="display:inline-flex;align-items:center;gap:6px;">
+                <label style="font-size:13px;">מקסימום משתמשים:</label>
+                <input type="number" id="max-${u.id}" value="5" min="0" max="100" class="form-input" style="width:70px;">
+              </span>
+              <button class="btn btn-primary btn-sm" onclick="approveUser('${u.id}')">אשר</button>
+              <span id="approve-status-${u.id}" style="font-size:13px;"></span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch (err) {
+    container.innerHTML = `<p style="color:#f87171;">שגיאה: ${escHtml(err.message)}</p>`;
+  }
+}
+
+window.toggleMaxUsers = function toggleMaxUsers(userId) {
+  const role = document.getElementById(`role-${userId}`).value;
+  const wrap = document.getElementById(`max-users-wrap-${userId}`);
+  wrap.style.display = role === 'group_admin' ? 'inline-flex' : 'none';
+};
+
+window.approveUser = async function approveUser(userId) {
+  const role          = document.getElementById(`role-${userId}`).value;
+  const maxGroupUsers = parseInt(document.getElementById(`max-${userId}`)?.value || '0', 10);
+  const statusEl      = document.getElementById(`approve-status-${userId}`);
+  statusEl.textContent = 'שומר...';
+  try {
+    const res  = await fetch(`/api/users/${userId}/approve`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ role, maxGroupUsers }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    document.getElementById(`pending-${userId}`)?.remove();
+  } catch (err) {
+    statusEl.textContent = `שגיאה: ${escHtml(err.message)}`;
+    statusEl.style.color = '#e74c3c';
+  }
+};
+
+// ─── MY TEAM (Group Admin) ──────────────────────────────────────────────────
+
+const PERM_LABELS = {
+  add_products:     'הוספת מוצרים',
+  edit_products:    'עריכת מוצרים',
+  delete_products:  'מחיקת מוצרים',
+  view_logs:        'צפייה ביומן',
+  trigger_send:     'שליחה ידנית',
+  manage_schedules: 'ניהול לוח זמנים',
+  view_settings:    'צפייה בהגדרות',
+};
+
+async function renderMyTeam() {
+  const container = document.getElementById('my-team-content');
+  if (!container) return;
+  container.innerHTML = '<p>טוען...</p>';
+  try {
+    const res  = await fetch('/api/users/group');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    const max      = (window._currentUser || {}).max_group_users || 0;
+    const count    = data.users.length;
+    const capLabel = max > 0 ? `${count} / ${max} משתמשים` : `${count} משתמשים`;
+
+    container.innerHTML = `
+      <div class="card" style="margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:15px;font-weight:700;">${escHtml(capLabel)}</div>
+          <button class="btn btn-primary btn-sm" onclick="showInviteFormTeam()">
+            <span class="material-symbols-outlined" style="font-size:14px;">person_add</span>
+            הזמן משתמש
+          </button>
+        </div>
+        <div id="invite-form-team" style="display:none;margin-bottom:16px;padding:12px;background:rgba(255,255,255,0.04);border-radius:10px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <input type="email" id="invite-email-team" class="form-input" placeholder="כתובת אימייל" style="flex:1;min-width:200px;" dir="ltr">
+            <button class="btn btn-primary btn-sm" onclick="inviteTeamMember()">שלח הזמנה</button>
+          </div>
+          <div id="invite-status-team" style="font-size:13px;margin-top:8px;min-height:18px;"></div>
+        </div>
+        <div class="members-list">
+          ${data.users.length === 0
+            ? '<p style="color:var(--on-surface-var)">אין חברי צוות עדיין</p>'
+            : data.users.map(u => `
+              <div style="border-top:1px solid rgba(255,255,255,0.06);padding:16px 0;" id="member-${u.id}">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    ${u.photo ? `<img src="${escHtml(u.photo)}" width="34" height="34" style="border-radius:50%;object-fit:cover;flex-shrink:0;" alt="">` : ''}
+                    <div>
+                      <div style="font-weight:600;font-size:14px;">${escHtml(u.name)}</div>
+                      <div style="font-size:12px;color:var(--on-surface-var);">${escHtml(u.email)}</div>
+                    </div>
+                  </div>
+                  <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="removeTeamMember('${u.id}', '${escHtml(u.name)}', '${u.role}')">הסר</button>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:6px;">
+                  ${Object.entries(PERM_LABELS).map(([key, label]) => `
+                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+                      <input type="checkbox" id="perm-${u.id}-${key}"
+                        ${u.permissions?.[key] ? 'checked' : ''}
+                        onchange="savePermissions('${u.id}')">
+                      ${escHtml(label)}
+                    </label>
+                  `).join('')}
+                </div>
+                <div id="perm-status-${u.id}" style="font-size:12px;min-height:16px;"></div>
+              </div>
+            `).join('')}
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    container.innerHTML = `<p style="color:#f87171;">שגיאה: ${escHtml(err.message)}</p>`;
+  }
+}
+
+window.showInviteFormTeam = function showInviteFormTeam() {
+  const form = document.getElementById('invite-form-team');
+  if (!form) return;
+  form.style.display = form.style.display === 'none' ? '' : 'none';
+};
+
+window.inviteTeamMember = async function inviteTeamMember() {
+  const email    = document.getElementById('invite-email-team').value.trim();
+  const statusEl = document.getElementById('invite-status-team');
+  if (!email) { statusEl.textContent = 'נא להזין אימייל'; return; }
+  statusEl.textContent = 'שולח...';
+  statusEl.style.color = '';
+  try {
+    const res  = await fetch('/api/users/invites', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email, invitedRole: 'group_user' }),
+    });
+    const data = await res.json();
+    if (!data.success) {
+      statusEl.textContent = data.limitReached
+        ? `הגעת למגבלת המשתמשים (${data.current}/${data.max})`
+        : `שגיאה: ${data.error}`;
+      statusEl.style.color = '#e74c3c';
+      return;
+    }
+    statusEl.textContent = 'ההזמנה נשלחה בהצלחה';
+    statusEl.style.color = '#4ecca3';
+    document.getElementById('invite-email-team').value = '';
+  } catch (err) {
+    statusEl.textContent = `שגיאה: ${escHtml(err.message)}`;
+    statusEl.style.color = '#e74c3c';
+  }
+};
+
+window.savePermissions = async function savePermissions(userId) {
+  const permissions = {};
+  for (const key of Object.keys(PERM_LABELS)) {
+    permissions[key] = document.getElementById(`perm-${userId}-${key}`)?.checked || false;
+  }
+  const statusEl = document.getElementById(`perm-status-${userId}`);
+  statusEl.textContent = 'שומר...';
+  statusEl.style.color = '';
+  try {
+    const res  = await fetch(`/api/users/${userId}/permissions`, {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ permissions }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    statusEl.textContent = 'נשמר';
+    statusEl.style.color = '#4ecca3';
+    setTimeout(() => { statusEl.textContent = ''; }, 2000);
+  } catch (err) {
+    statusEl.textContent = `שגיאה: ${escHtml(err.message)}`;
+    statusEl.style.color = '#e74c3c';
+  }
+};
+
+window.removeTeamMember = async function removeTeamMember(userId, userName, userRole) {
+  let keepProducts = false;
+
+  if (userRole === 'group_admin') {
+    const decision = confirm(
+      `האם להסיר את ${userName}?\n\nהמשתמש הוא מנהל קבוצה.\nלחץ אישור כדי להעביר את המוצרים שלהם אליך.\nלחץ ביטול כדי למחוק את המוצרים.`
+    );
+    keepProducts = decision;
+  } else {
+    if (!confirm(`האם להסיר את ${userName} מהצוות?`)) return;
+  }
+
+  try {
+    const res  = await fetch(`/api/users/${userId}?keepProducts=${keepProducts}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    document.getElementById(`member-${userId}`)?.remove();
+  } catch (err) {
+    alert(`שגיאה בהסרת משתמש: ${err.message}`);
+  }
+};
 
