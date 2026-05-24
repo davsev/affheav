@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { query } = require('../db');
-const { runDiscovery } = require('../services/discoveryAgent');
+const { runDiscovery, DEFAULT_AI_PROMPT } = require('../services/discoveryAgent');
 
 // GET /api/discover — list pending suggestions for authenticated user
 router.get('/', async (req, res) => {
@@ -20,6 +20,49 @@ router.get('/', async (req, res) => {
       LIMIT 50
     `, [req.user.id]);
     res.json({ success: true, suggestions: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/discover/settings — return AI experiment settings
+router.get('/settings', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT key, value FROM settings WHERE user_id = $1 AND key IN ('discovery_ai_enabled', 'discovery_ai_prompt')`,
+      [req.user.id]
+    );
+    const map = Object.fromEntries(rows.map(r => [r.key, r.value]));
+    res.json({
+      success:       true,
+      aiEnabled:     map.discovery_ai_enabled === 'true',
+      aiPrompt:      map.discovery_ai_prompt || '',
+      defaultPrompt: DEFAULT_AI_PROMPT,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PATCH /api/discover/settings — save AI experiment settings
+router.patch('/settings', async (req, res) => {
+  const { aiEnabled, aiPrompt } = req.body || {};
+  try {
+    if (aiEnabled !== undefined) {
+      await query(
+        `INSERT INTO settings (user_id, key, value, updated_at) VALUES ($1, 'discovery_ai_enabled', $2, NOW())
+         ON CONFLICT (user_id, key) DO UPDATE SET value = $2, updated_at = NOW()`,
+        [req.user.id, aiEnabled ? 'true' : 'false']
+      );
+    }
+    if (aiPrompt !== undefined) {
+      await query(
+        `INSERT INTO settings (user_id, key, value, updated_at) VALUES ($1, 'discovery_ai_prompt', $2, NOW())
+         ON CONFLICT (user_id, key) DO UPDATE SET value = $2, updated_at = NOW()`,
+        [req.user.id, aiPrompt]
+      );
+    }
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

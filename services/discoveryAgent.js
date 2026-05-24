@@ -1,8 +1,23 @@
 const { query } = require('../db');
 const { signAndCall } = require('./aliexpressApi');
 const { passesFilters } = require('./aliexpressFilters');
+const OpenAI = require('openai');
 
 const DEFAULT_TRACKING_ID = process.env.ALIEXPRESS_TRACKING_ID || 'TechSalebuy';
+
+const DEFAULT_AI_PROMPT =
+`You are an AliExpress affiliate product researcher.
+
+Niche: {{niche}}
+
+Top-selling products in this niche (sorted by clicks):
+{{products}}
+
+Generate 3 AliExpress search keywords to find similar or complementary products for this niche. Each keyword must be 2–5 English words — specific enough to return relevant products, broad enough to find variety.
+
+Reply with only a valid JSON array of strings. Example:
+["telescopic fishing rod", "spinning reel ultralight", "braided fishing line 100m"]
+No explanation, no extra text — just the JSON array.`;
 
 async function searchAliExpress(keywords, trackingId) {
   const response = await signAndCall({
@@ -26,9 +41,43 @@ function titleToKeyword(title) {
   return title.split(/\s+/).slice(0, 5).join(' ');
 }
 
+async function generateKeywordsWithAI(niche, products, customPrompt) {
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  const productList = products
+    .map((p, i) => `${i + 1}. ${p.title} (${p.clicks} clicks)`)
+    .join('\n');
+
+  const basePrompt = (customPrompt && customPrompt.trim()) ? customPrompt : DEFAULT_AI_PROMPT;
+  const prompt = basePrompt
+    .replace('{{niche}}', niche)
+    .replace('{{products}}', productList);
+
+  const response = await client.chat.completions.create({
+    model:       process.env.OPENAI_MODEL || 'gpt-4.1-mini',
+    messages:    [{ role: 'user', content: prompt }],
+    temperature: 0.7,
+  });
+
+  const content = response.choices[0].message.content.trim();
+  // Strip markdown code fences if the model wrapped the JSON
+  const json = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  const keywords = JSON.parse(json);
+  if (!Array.isArray(keywords)) throw new Error('AI returned non-array response');
+  return keywords.filter(k => typeof k === 'string' && k.trim()).slice(0, 5);
+}
+
 async function runDiscovery(userId) {
-  // 1. Fetch top-performing products per subject, ordered by clicks DESC.
-  //    Use p.title (the stored AliExpress product title) as the search keyword.
+  // Load AI experiment settings
+  const { rows: settingRows } = await query(
+    `SELECT key, value FROM settings WHERE user_id = $1 AND key IN ('discovery_ai_enabled', 'discovery_ai_prompt')`,
+    [userId]
+  );
+  const settingsMap = Object.fromEntries(settingRows.map(r => [r.key, r.value]));
+  const aiEnabled = settingsMap.discovery_ai_enabled === 'true';
+  const aiPrompt  = settingsMap.discovery_ai_prompt || '';
+
+  // 1. Fetch top-performing products per subject, ordered by clicks DESC
   const { rows: topProducts } = await query(`
     SELECT
       p.subject_id,
@@ -53,31 +102,43 @@ async function runDiscovery(userId) {
     ORDER BY p.clicks DESC
   `, [userId]);
 
-  // 2. Build subject → { keywords[], trackingId, subjectName } map.
-  //    Collect up to 3 distinct keywords per subject from top-selling products,
-  //    so suggestions reflect what's actually working in each niche.
-  const subjectMap = new Map();
-
+  // 2. Group products by subject (skip Hebrew titles)
+  const subjectProductsMap = new Map();
   for (const row of topProducts) {
-    const keyword = titleToKeyword(row.product_title);
-    // Skip Hebrew keywords (can't search AliExpress with them)
-    if (/[֐-׿]/.test(keyword)) continue;
-
-    if (!subjectMap.has(row.subject_id)) {
-      subjectMap.set(row.subject_id, {
-        keywords:    [],
-        trackingId:  row.aliexpress_tracking_id,
+    if (/[֐-׿]/.test(row.product_title)) continue;
+    if (!subjectProductsMap.has(row.subject_id)) {
+      subjectProductsMap.set(row.subject_id, {
         subjectName: row.subject_name,
+        trackingId:  row.aliexpress_tracking_id,
+        products:    [],
       });
     }
-
-    const entry = subjectMap.get(row.subject_id);
-    if (entry.keywords.length < 3 && !entry.keywords.includes(keyword)) {
-      entry.keywords.push(keyword);
-    }
+    subjectProductsMap.get(row.subject_id).products.push({
+      title:  row.product_title,
+      clicks: row.clicks,
+    });
   }
 
-  // Fallback: if no high-performing products found, use subject names
+  // 3. Build keyword list per subject — AI or title-extraction
+  const subjectMap = new Map();
+  for (const [subjectId, { subjectName, trackingId, products }] of subjectProductsMap) {
+    let keywords;
+    if (aiEnabled) {
+      try {
+        console.log(`[discovery] AI generating keywords for niche "${subjectName}"...`);
+        keywords = await generateKeywordsWithAI(subjectName, products, aiPrompt);
+        console.log(`[discovery] AI keywords for "${subjectName}": ${keywords.join(', ')}`);
+      } catch (err) {
+        console.error(`[discovery] AI failed for "${subjectName}", falling back to title extraction: ${err.message}`);
+        keywords = [...new Set(products.slice(0, 3).map(p => titleToKeyword(p.title)))];
+      }
+    } else {
+      keywords = [...new Set(products.slice(0, 3).map(p => titleToKeyword(p.title)))];
+    }
+    subjectMap.set(subjectId, { keywords, trackingId, subjectName });
+  }
+
+  // Fallback: no high-performing products yet — use subject names
   if (subjectMap.size === 0) {
     const { rows: subjects } = await query(
       `SELECT id, name, aliexpress_tracking_id FROM subjects WHERE user_id = $1`,
@@ -90,7 +151,7 @@ async function runDiscovery(userId) {
     }
   }
 
-  // 3. Fetch existing products/suggestions for deduplication
+  // 4. Deduplication sets
   const { rows: existingRows } = await query(
     `SELECT long_url FROM products WHERE user_id = $1 AND long_url IS NOT NULL`,
     [userId]
@@ -103,7 +164,7 @@ async function runDiscovery(userId) {
   );
   const existingSugIds = new Set(existingSugRows.map(r => r.aliexpress_id));
 
-  // 4. Search AliExpress per subject (max 5 subjects, up to 3 keywords each)
+  // 5. Search AliExpress per subject (max 5 subjects, up to 5 keywords each)
   const entries = [...subjectMap.entries()].slice(0, 5);
   let newCount = 0;
 
@@ -146,7 +207,7 @@ async function runDiscovery(userId) {
     }
   }
 
-  return { newCount, subjectsSearched: entries.length };
+  return { newCount, subjectsSearched: entries.length, aiEnabled };
 }
 
-module.exports = { runDiscovery };
+module.exports = { runDiscovery, DEFAULT_AI_PROMPT };
