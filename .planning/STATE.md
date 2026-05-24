@@ -7,12 +7,17 @@ See: .planning/PROJECT.md (updated 2026-04-29)
 **Core value:** Niche owners can run multiple affiliate channels — each with its own audience, accounts, and schedule — from a single platform, without manual intervention.
 **Current focus:** Milestone v2.0 — Microservices Rebuild (Phase 4 complete, ready for Phase 5)
 
+## Accumulated Context
+
+### Roadmap Evolution
+- Phase 3.5 added: User Management System — standalone validation phase between v1.0 and v2.0 microservices rebuild
+
 ## Current Position
 
-Phase: Phase 5 — API Gateway + Feature Flag System (in progress)
-Plan: 05-03 complete
-Status: Plan 05-03 complete — proxy router, JWT middleware, app entrypoint, Vitest tests, Docker service
-Last activity: 2026-05-22 — Plan 05-03 executed (proxy upstream, app wired, 6 tests passing)
+Phase: Phase 3.5 — User Management System (in progress)
+Plan: 3.5-01 complete
+Status: Plan 3.5-01 complete — DB schema migrations (status/pending, group hierarchy, product scoping), middleware/auth.js, middleware/scopeGroup.js
+Last activity: 2026-05-24 — Plan 3.5-01 executed (DB columns, approval gate middleware, 2 commits)
 
 Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 
@@ -96,6 +101,6 @@ Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 
 ## Session Continuity
 
-Last session: 2026-05-22
-Stopped at: Completed 05-03-PLAN.md
-Resume: Run next plan in Phase 5
+Last session: 2026-05-24
+Stopped at: Completed 3.5-01-PLAN.md
+Resume: Run next plan in Phase 3.5 (3.5-02)

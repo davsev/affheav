@@ -8,9 +8,11 @@ Nine phases decompose the Node.js/Express monolith into independently deployable
 
 **Phase Numbering:**
 - Phases 1–3 are the completed v1.0 Broadcast Messages milestone
+- Phase 3.5: standalone validation phase (user management, built on monolith before microservices)
 - v2.0 phases begin at 4 and extend through 12
 - Decimal phases (e.g. 4.1): urgent insertions created via `/gsd:insert-phase`
 
+- [ ] **Phase 3.5: User Management System** - SuperAdmin / Group Admin / Group User roles, per-user permissions, team management UI
 - [ ] **Phase 4: Monorepo Scaffold + Infrastructure** - pnpm workspaces, Docker Compose, CI pipeline, Drizzle schema, per-service DB credentials
 - [x] **Phase 5: API Gateway + Feature Flag System** - JWT-validated gateway routing 100% to monolith, feature flag DB + admin toggle (completed 2026-05-22)
 - [ ] **Phase 6: Auth Service** - Google OAuth → RS256 JWT with `kid` registry, dual-auth window in monolith, invite flow
@@ -22,6 +24,17 @@ Nine phases decompose the Node.js/Express monolith into independently deployable
 - [ ] **Phase 12: E2E & Visual Regression Testing** - Playwright flows, visual snapshots, flag-on/flag-off scenarios, merge gate
 
 ## Phase Details
+
+### Phase 3.5: User Management System
+**Goal:** Extend the monolith with a 3-tier role system (SuperAdmin/Group Admin/Group User), per-user JSONB permission flags, group-scoped data isolation, and a vanilla JS team management UI — standalone validation phase before microservices rebuild
+**Depends on:** Phases 1–3 (v1.0 complete)
+**Plans:** 4 plans
+
+Plans:
+- [x] 3.5-01-PLAN.md — DB migrations (group_admin_id, permissions, invited_role columns) + middleware/auth.js + middleware/scopeGroup.js
+- [ ] 3.5-02-PLAN.md — userService and inviteService extensions; OAuth callback reads invited_role/group_admin_id
+- [ ] 3.5-03-PLAN.md — routes/users.js: replace local isAdmin, add /group listing, /permissions update, group-aware invite, keep-or-delete removal
+- [ ] 3.5-04-PLAN.md — public/app.js: Team Management section with Hebrew permission toggles and member invite/remove UI
 
 ### Phase 4: Monorepo Scaffold + Infrastructure
 **Goal**: Every service can be built, type-checked, tested, and run locally from a single pnpm monorepo with Docker Compose — no service ships without this foundation
@@ -50,18 +63,6 @@ Plans:
 - [ ] 05-01-PLAN.md — Feature flags Drizzle schema, SQL migrations (9 flags pre-seeded), gateway package dependencies
 - [ ] 05-02-PLAN.md — Flag cache/service (5s TTL + cache eviction), admin flags API, rate limiter middleware
 - [ ] 05-03-PLAN.md — Proxy/router (path rewrite + Strangler Fig switch), JWT middleware scaffold, app wiring, Docker service, Vitest tests
-
-### Phase 05.1: User Management System (INSERTED)
-
-**Goal:** Extend the monolith with a 3-tier role system (SuperAdmin/Group Admin/Group User), per-user JSONB permission flags, group-scoped data isolation, and a vanilla JS team management UI — without touching the microservices layer
-**Depends on:** Phase 5
-**Plans:** 4 plans
-
-Plans:
-- [ ] 05.1-01-PLAN.md — DB migrations (group_admin_id, permissions, invited_role columns) + middleware/auth.js + middleware/scopeGroup.js
-- [ ] 05.1-02-PLAN.md — userService and inviteService extensions; OAuth callback reads invited_role/group_admin_id
-- [ ] 05.1-03-PLAN.md — routes/users.js: replace local isAdmin, add /group listing, /permissions update, group-aware invite, keep-or-delete removal
-- [ ] 05.1-04-PLAN.md — public/app.js: Team Management section with Hebrew permission toggles and member invite/remove UI
 
 ### Phase 6: Auth Service
 **Goal**: Users authenticate via the new auth service and receive RS256 JWTs; the monolith accepts both session cookies and JWT Bearer tokens so no active user is logged out during migration
