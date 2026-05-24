@@ -15,9 +15,9 @@ See: .planning/PROJECT.md (updated 2026-04-29)
 ## Current Position
 
 Phase: Phase 3.5 — User Management System (in progress)
-Plan: 3.5-02 complete
-Status: Plan 3.5-02 complete — Three-path registration (self/invite/bootstrap) with role/status wired through userService, inviteService, OAuth callback; pending users routed to /pending page
-Last activity: 2026-05-24 — Plan 3.5-02 executed (userService, inviteService, server.js, 2 commits)
+Plan: 3.5-03 complete
+Status: Plan 3.5-03 complete — Canonical middleware replaces local isAdmin; SuperAdmin approval flow, Group Admin-scoped member listing, permission management, invite cap enforcement, and group-aware user removal
+Last activity: 2026-05-24 — Plan 3.5-03 executed (routes/users.js, 1 commit)
 
 Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 
@@ -42,6 +42,7 @@ Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 | 05-api-gateway-feature-flag-system P01 | 5 min | 3 tasks | 6 files |
 | Phase 05-api-gateway-feature-flag-system P02 | 15 | 2 tasks | 8 files |
 | Phase 3.5 P02 | 6 | 2 tasks | 3 files |
+| Phase 3.5 P03 | 5 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
