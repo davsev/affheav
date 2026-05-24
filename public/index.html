@@ -147,6 +147,12 @@
     <button class="tab-btn" data-tab="users" id="nav-users" style="display:none;">
       <span class="material-symbols-outlined nav-icon">manage_accounts</span>משתמשים
     </button>
+    <button class="tab-btn" data-tab="pending-approvals" id="nav-pending-approvals" style="display:none;">
+      <span class="material-symbols-outlined nav-icon">how_to_reg</span>אישור משתמשים
+    </button>
+    <button class="tab-btn" data-tab="my-team" id="nav-my-team" style="display:none;">
+      <span class="material-symbols-outlined nav-icon">group</span>הצוות שלי
+    </button>
   </nav>
 
   <div class="sidebar-footer">
@@ -775,6 +781,28 @@
     </div><!-- /tab-users -->
 
   </div><!-- /content -->
+    <!-- Pending Approvals (SuperAdmin) -->
+    <div class="tab-panel" id="tab-pending-approvals">
+      <section style="margin-bottom:28px;">
+        <div class="page-eyebrow">מערכת</div>
+        <h1 class="page-title">אישור <span class="highlight">משתמשים</span></h1>
+      </section>
+      <div id="pending-approvals-content">
+        <div style="padding:40px;text-align:center;color:var(--on-surface-var);">טוען...</div>
+      </div>
+    </div>
+
+    <!-- My Team (Group Admin) -->
+    <div class="tab-panel" id="tab-my-team">
+      <section style="margin-bottom:28px;">
+        <div class="page-eyebrow">ניהול</div>
+        <h1 class="page-title">הצוות <span class="highlight">שלי</span></h1>
+      </section>
+      <div id="my-team-content">
+        <div style="padding:40px;text-align:center;color:var(--on-surface-var);">טוען...</div>
+      </div>
+    </div>
+
 </div><!-- /main-content -->
 
 <script>

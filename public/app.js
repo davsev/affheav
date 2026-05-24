@@ -72,10 +72,17 @@ window.doLogout = async () => {
     const res = await fetch('/api/me');
     if (res.ok) {
       const data = await res.json();
+      window._currentUser = data.user;
       updateSidebarUser(data.user);
       if (data.user.role === 'admin') {
         const navUsers = document.getElementById('nav-users');
         if (navUsers) navUsers.style.display = '';
+        const navPending = document.getElementById('nav-pending-approvals');
+        if (navPending) navPending.style.display = '';
+      }
+      if (data.user.role === 'group_admin') {
+        const navTeam = document.getElementById('nav-my-team');
+        if (navTeam) navTeam.style.display = '';
       }
       hideLoginPage();
     } else {
@@ -1870,6 +1877,21 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
       loadInvites();
     });
   }
+  if (btn.dataset.tab === 'schedules') {
+    btn.addEventListener('click', () => {
+      loadBroadcasts();
+    });
+  }
+  if (btn.dataset.tab === 'pending-approvals') {
+    btn.addEventListener('click', () => {
+      renderPendingApprovals();
+    });
+  }
+  if (btn.dataset.tab === 'my-team') {
+    btn.addEventListener('click', () => {
+      renderMyTeam();
+    });
+  }
 });
 
 async function loadUsers() {
@@ -2102,3 +2124,2295 @@ document.getElementById('btn-migrate-subjects')?.addEventListener('click', async
     btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">cloud_download</span> הפעל ייבוא';
   }
 });
+
+// ── Analytics (Profitability) ─────────────────────────────────────────────────
+
+// Set default date range (last 30 days) on page load
+(function initAnalyticsDates() {
+  const now   = new Date();
+  const start = new Date(now);
+  start.setDate(start.getDate() - 30);
+  const startEl = document.getElementById('analytics-start-date');
+  const endEl   = document.getElementById('analytics-end-date');
+  if (startEl) startEl.value = start.toISOString().slice(0, 10);
+  if (endEl)   endEl.value   = now.toISOString().slice(0, 10);
+})();
+
+async function renderAnalyticsSummary() {
+  const grid = document.getElementById('analytics-niches-grid');
+  if (!grid) return;
+  grid.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);">טוען נתוני עמלות...</div>';
+
+  try {
+    const data   = await api('/api/analytics/summary');
+    const niches = data.niches || [];
+
+    if (!niches.length) {
+      grid.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);">אין נישות מוגדרות</div>';
+      return;
+    }
+
+    grid.innerHTML = niches.map(n => renderNicheRow(n)).join('');
+
+    // KPI strip totals
+    const totalCommission  = niches.reduce((s, n) => s + parseFloat(n.total_commission || 0), 0);
+    const confirmedTotal   = niches.reduce((s, n) => s + parseFloat(n.confirmed_commission || 0), 0);
+    const totalOrders      = niches.reduce((s, n) => s + parseInt(n.total_orders || 0, 10), 0);
+    const totalClicks      = niches.reduce((s, n) => s + parseInt(n.total_clicks || 0, 10), 0);
+    const strip = document.getElementById('analytics-kpi-strip');
+    if (strip) {
+      strip.innerHTML = [
+        { label: 'עמלה כוללת',   value: `$${totalCommission.toFixed(2)}`, color: '#16a34a', icon: 'paid' },
+        { label: 'עמלה מאושרת', value: `$${confirmedTotal.toFixed(2)}`,  color: '#059669', icon: 'verified' },
+        { label: 'הזמנות',       value: totalOrders.toLocaleString(),      color: 'var(--on-surface)', icon: 'shopping_bag' },
+        { label: 'קליקים',       value: totalClicks.toLocaleString(),      color: '#702ae1', icon: 'ads_click' },
+      ].map(k => `
+        <div class="card an-kpi-card">
+          <span class="material-symbols-outlined an-kpi-icon" style="color:${k.color};">${k.icon}</span>
+          <div>
+            <div class="an-kpi-val" style="color:${k.color};">${k.value}</div>
+            <div class="an-kpi-label">${k.label}</div>
+          </div>
+        </div>`).join('');
+    }
+
+    // Populate niche filters
+    const nicheOptions = '<option value="">כל הנישות</option>' +
+      niches.map(n => `<option value="${escHtml(n.id)}">${escHtml(n.name)}</option>`).join('');
+    ['analytics-niche-filter','analytics-top-niche-filter','analytics-real-orders-niche-filter','analytics-timing-niche-filter'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = nicheOptions;
+    });
+    const roasSel = document.getElementById('roas-form-subject');
+    if (roasSel) roasSel.innerHTML = '<option value="">בחר נישה</option>' +
+      niches.map(n => `<option value="${escHtml(n.id)}">${escHtml(n.name)}</option>`).join('');
+
+    loadDailyStats();
+    loadAnalyticsOrders();
+    loadTopProducts();
+    loadRealProductOrders();
+    loadTimingHeatmap();
+    loadRoas();
+    loadReachSummary().catch(() => {});
+    loadInsights();
+    loadSalesDashboard();
+    loadJoinLinkStats();
+    renderTrendCharts(niches);
+  } catch (err) {
+    grid.innerHTML = `<div style="padding:40px;text-align:center;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+// ── Analytics: Trend Charts ───────────────────────────────────────────────────
+
+let _trendChart = null;
+let _nicheChart = null;
+
+async function renderTrendCharts(niches) {
+  const section = document.getElementById('analytics-trend-section');
+  if (!section) return;
+
+  // Fetch all orders for trend analysis
+  let orders = [];
+  try {
+    const data = await api('/api/analytics/orders');
+    orders = data.orders || [];
+  } catch (_) { /* silent – charts stay hidden */ }
+
+  if (!orders.length && !niches.length) return;
+
+  section.style.display = '';
+
+  // ── 1. Daily commission trend ──────────────────────────────────────────────
+  const dayMap = {};
+  for (const o of orders) {
+    if (!o.order_time) continue;
+    const day = o.order_time.slice(0, 10);
+    dayMap[day] = (dayMap[day] || 0) + parseFloat(o.commission_usd || 0);
+  }
+  const sortedDays  = Object.keys(dayMap).sort();
+  const dayLabels   = sortedDays.map(d => {
+    const [, m, dd] = d.split('-');
+    return `${dd}/${m}`;
+  });
+  const dayValues   = sortedDays.map(d => +dayMap[d].toFixed(2));
+
+  // 7-day moving average
+  const movAvg = dayValues.map((_, i) => {
+    const slice = dayValues.slice(Math.max(0, i - 6), i + 1);
+    return +(slice.reduce((a, b) => a + b, 0) / slice.length).toFixed(2);
+  });
+
+  // Delta badge: last 7 vs prev 7
+  const last7sum = dayValues.slice(-7).reduce((a, b) => a + b, 0);
+  const prev7sum = dayValues.slice(-14, -7).reduce((a, b) => a + b, 0);
+  const badge = document.getElementById('trend-delta-badge');
+  if (badge && prev7sum > 0) {
+    const pct = ((last7sum - prev7sum) / prev7sum * 100).toFixed(0);
+    const up  = parseFloat(pct) >= 0;
+    badge.textContent = `${up ? '▲' : '▼'} ${Math.abs(pct)}% vs שבוע קודם`;
+    badge.className   = `an-delta-badge ${up ? 'up' : 'down'}`;
+  }
+
+  // Destroy old instance
+  if (_trendChart) { _trendChart.destroy(); _trendChart = null; }
+  const trendCtx = document.getElementById('chart-commission-trend');
+  if (trendCtx && sortedDays.length) {
+    _trendChart = new Chart(trendCtx, {
+      type: 'line',
+      data: {
+        labels: dayLabels,
+        datasets: [
+          {
+            label: 'עמלה יומית ($)',
+            data: dayValues,
+            borderColor: '#702ae1',
+            backgroundColor: 'rgba(112,42,225,0.07)',
+            borderWidth: 2,
+            pointRadius: dayValues.length > 30 ? 0 : 3,
+            pointHoverRadius: 5,
+            fill: true,
+            tension: 0.35,
+          },
+          {
+            label: 'ממוצע 7 ימים',
+            data: movAvg,
+            borderColor: '#16a34a',
+            backgroundColor: 'transparent',
+            borderWidth: 1.5,
+            borderDash: [5, 3],
+            pointRadius: 0,
+            fill: false,
+            tension: 0.35,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { font: { size: 11 }, color: '#595c5e', boxWidth: 14, padding: 10 },
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` $${ctx.parsed.y.toFixed(2)}`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: '#595c5e', font: { size: 10 },
+              maxTicksLimit: 10,
+            },
+            grid: { color: 'rgba(0,0,0,0.05)' },
+          },
+          y: {
+            ticks: {
+              color: '#595c5e', font: { size: 10 },
+              callback: v => `$${v}`,
+            },
+            grid: { color: 'rgba(0,0,0,0.05)' },
+            beginAtZero: true,
+          },
+        },
+      },
+    });
+  } else if (trendCtx) {
+    const ctx2d = trendCtx.getContext('2d');
+    ctx2d.clearRect(0, 0, trendCtx.width, trendCtx.height);
+    ctx2d.fillStyle = '#595c5e';
+    ctx2d.font = '13px sans-serif';
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText('אין נתונים — לחץ "עדכן עמלות"', trendCtx.width / 2, 100);
+  }
+
+  // ── 2. Niche comparison horizontal bar chart ───────────────────────────────
+  if (_nicheChart) { _nicheChart.destroy(); _nicheChart = null; }
+  const nicheCtx = document.getElementById('chart-niche-comparison');
+  if (nicheCtx && niches.length) {
+    const sorted    = [...niches].sort((a, b) => parseFloat(b.total_commission || 0) - parseFloat(a.total_commission || 0));
+    const nLabels   = sorted.map(n => n.name);
+    const nComm     = sorted.map(n => +parseFloat(n.total_commission || 0).toFixed(2));
+    const nClicks   = sorted.map(n => parseInt(n.total_clicks || 0, 10));
+    const nColors   = sorted.map(n => n.color || '#702ae1');
+
+    _nicheChart = new Chart(nicheCtx, {
+      type: 'bar',
+      data: {
+        labels: nLabels,
+        datasets: [
+          {
+            label: 'עמלה ($)',
+            data: nComm,
+            backgroundColor: nColors.map(c => c + '99'),
+            borderColor: nColors,
+            borderWidth: 1.5,
+            borderRadius: 5,
+            yAxisID: 'yComm',
+          },
+          {
+            label: 'קליקים',
+            data: nClicks,
+            type: 'line',
+            borderColor: '#3b82f6',
+            backgroundColor: 'transparent',
+            borderWidth: 1.5,
+            pointRadius: 4,
+            tension: 0.3,
+            yAxisID: 'yClicks',
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { font: { size: 11 }, color: '#595c5e', boxWidth: 14, padding: 10 },
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ctx.datasetIndex === 0
+                ? ` $${ctx.parsed.y.toFixed(2)}`
+                : ` ${ctx.parsed.y.toLocaleString()} קליקים`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            ticks: { color: '#595c5e', font: { size: 10 } },
+            grid: { color: 'rgba(0,0,0,0.05)' },
+          },
+          yComm: {
+            position: 'left',
+            ticks: { color: '#595c5e', font: { size: 10 }, callback: v => `$${v}` },
+            grid: { color: 'rgba(0,0,0,0.05)' },
+            beginAtZero: true,
+          },
+          yClicks: {
+            position: 'right',
+            ticks: { color: '#3b82f6', font: { size: 10 } },
+            grid: { drawOnChartArea: false },
+            beginAtZero: true,
+          },
+        },
+      },
+    });
+  }
+
+  // ── 3. Insight conclusions ────────────────────────────────────────────────
+  const conclusions = buildConclusions(niches, orders, dayValues, last7sum, prev7sum);
+  const conclusEl = document.getElementById('analytics-conclusions');
+  if (conclusEl) conclusEl.innerHTML = conclusions;
+}
+
+function buildConclusions(niches, orders, dayValues, last7sum, prev7sum) {
+  const cards = [];
+
+  // Trend direction
+  if (prev7sum > 0) {
+    const pct = ((last7sum - prev7sum) / prev7sum * 100).toFixed(0);
+    const up  = parseFloat(pct) >= 0;
+    cards.push({
+      icon: up ? '📈' : '📉',
+      title: up ? 'מגמה חיובית' : 'ירידה בהכנסות',
+      body: up
+        ? `העמלות עלו ב-${Math.abs(pct)}% בשבוע האחרון לעומת השבוע הקודם.`
+        : `העמלות ירדו ב-${Math.abs(pct)}% — כדאי לבדוק מה השתנה.`,
+    });
+  }
+
+  // Best niche
+  const bestNiche = [...niches].sort((a, b) => parseFloat(b.total_commission || 0) - parseFloat(a.total_commission || 0))[0];
+  if (bestNiche && parseFloat(bestNiche.total_commission || 0) > 0) {
+    cards.push({
+      icon: '🏆',
+      title: `נישה מובילה: ${bestNiche.name}`,
+      body: `$${parseFloat(bestNiche.total_commission).toFixed(2)} עמלה. תעדף שליחת מוצרים מנישה זו.`,
+    });
+  }
+
+  // Best conversion niche
+  const withConv = niches
+    .filter(n => parseInt(n.total_clicks || 0) > 50 && parseInt(n.total_orders || 0) > 0)
+    .map(n => ({ ...n, conv: parseInt(n.total_orders) / parseInt(n.total_clicks) }))
+    .sort((a, b) => b.conv - a.conv);
+  if (withConv.length) {
+    const best = withConv[0];
+    cards.push({
+      icon: '🎯',
+      title: `המרה מצוינת: ${best.name}`,
+      body: `${(best.conv * 100).toFixed(2)}% המרה — הכי גבוה מבין הנישות עם מספיק נתונים.`,
+    });
+  }
+
+  // Peak day of week
+  const dowSums = Array(7).fill(0);
+  const DOW = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  for (const o of orders) {
+    if (!o.order_time) continue;
+    const d = new Date(o.order_time);
+    dowSums[d.getDay()] += parseFloat(o.commission_usd || 0);
+  }
+  const peakDow = dowSums.indexOf(Math.max(...dowSums));
+  if (dowSums[peakDow] > 0) {
+    cards.push({
+      icon: '📅',
+      title: `יום שיא: ${DOW[peakDow]}`,
+      body: `יום ${DOW[peakDow]} מייצר הכי הרבה עמלות. שקול להגביר שליחות ביום זה.`,
+    });
+  }
+
+  // Active niches without orders
+  const missingNiches = niches.filter(n => n.tracking_id && parseInt(n.total_orders || 0) === 0);
+  if (missingNiches.length) {
+    cards.push({
+      icon: '⚠️',
+      title: 'נישות ללא הזמנות',
+      body: `${missingNiches.map(n => n.name).join(', ')} — מחוברות ל-AliExpress אך ללא הזמנות. בדוק Tracking ID.`,
+    });
+  }
+
+  if (!cards.length) return '';
+
+  return cards.map(c => `
+    <div class="an-conclusion-card">
+      <div class="an-conclusion-icon">${c.icon}</div>
+      <div>
+        <div class="an-conclusion-title">${escHtml(c.title)}</div>
+        <div class="an-conclusion-body">${escHtml(c.body)}</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderNicheRow(n) {
+  const commission = parseFloat(n.total_commission || 0);
+  const confirmed  = parseFloat(n.confirmed_commission || 0);
+  const orderValue = parseFloat(n.total_order_value || 0);
+  const orders     = parseInt(n.total_orders || 0, 10);
+  const clicks     = parseInt(n.total_clicks || 0, 10);
+  const color      = n.color || '#702ae1';
+  const convPct    = clicks > 0 && orders > 0 ? ((orders / clicks) * 100).toFixed(2) + '%' : '—';
+  const hasNoOrders = n.tracking_id && orders === 0;
+  const probeLink   = hasNoOrders
+    ? ` · <a href="/api/analytics/probe-raw-orders?subjectId=${encodeURIComponent(n.id)}" target="_blank" style="color:#3b82f6;font-size:10px;text-decoration:underline;">בדוק API ←</a>`
+    : '';
+  const statusDot  = n.tracking_id
+    ? `<span style="font-size:10px;color:#16a34a;white-space:nowrap;">● מחובר${probeLink}</span>`
+    : `<span style="font-size:10px;color:#f59e0b;white-space:nowrap;">● חסר Tracking ID</span>`;
+
+  return `
+    <div class="an-niche-row" data-subject-id="${escHtml(n.id)}">
+      <div class="an-niche-name-cell" style="display:flex;align-items:center;gap:10px;">
+        <div style="width:3px;height:34px;border-radius:2px;background:${escHtml(color)};flex-shrink:0;"></div>
+        <div>
+          <div style="font-weight:700;font-size:14px;color:var(--on-surface);">${escHtml(n.name)}</div>
+          ${statusDot}
+        </div>
+      </div>
+      <div class="an-col-c">
+        <div class="an-niche-label">עמלה</div>
+        <div style="font-size:19px;font-weight:900;color:#16a34a;">$${commission.toFixed(2)}</div>
+      </div>
+      <div class="an-col-c">
+        <div class="an-niche-label">מאושרת</div>
+        <div style="font-size:15px;font-weight:700;color:#059669;">$${confirmed.toFixed(2)}</div>
+      </div>
+      <div class="an-col-c">
+        <div class="an-niche-label">הזמנות</div>
+        <div style="font-size:17px;font-weight:700;color:var(--on-surface);">${orders}</div>
+      </div>
+      <div class="an-col-c">
+        <div class="an-niche-label">ערך</div>
+        <div style="font-size:13px;color:var(--on-surface-var);">$${orderValue.toFixed(2)}</div>
+      </div>
+      <div class="an-col-c">
+        <div class="an-niche-label">קליקים</div>
+        <div style="font-size:15px;font-weight:700;color:#702ae1;">${clicks.toLocaleString()}</div>
+      </div>
+      <div class="an-col-c">
+        <div class="an-niche-label">המרה</div>
+        <div style="font-size:14px;font-weight:600;color:var(--on-surface);">${convPct}</div>
+      </div>
+    </div>`;
+}
+
+// Sync button
+document.getElementById('btn-sync-commissions').addEventListener('click', async () => {
+  const btn    = document.getElementById('btn-sync-commissions');
+  const status = document.getElementById('analytics-sync-status');
+  const start  = document.getElementById('analytics-start-date').value;
+  const end    = document.getElementById('analytics-end-date').value;
+
+  btn.disabled = true;
+  status.textContent = 'מסנכרן עמלות...';
+  status.style.color = 'var(--on-surface-var)';
+
+  try {
+    const data = await api('/api/analytics/sync-commissions', {
+      method: 'POST',
+      body:   { startDate: start || undefined, endDate: end || undefined },
+    });
+
+    status.style.color = '#16a34a';
+    const perNiche = (data.subjects || []).map(s =>
+      s.error ? `${s.subjectName}: ✗ ${s.error}` : `${s.subjectName}: ${s.synced}`
+    ).join(' | ');
+    const unmatched = data.unmatched > 0 ? ` · ${data.unmatched} לא מזוהים` : '';
+    status.textContent = `✓ ${data.synced} הזמנות — ${perNiche}${unmatched}`;
+
+    // Refresh summary cards and orders
+    await renderAnalyticsSummary();
+    await loadDailyStats();
+    await loadAnalyticsOrders();
+  } catch (err) {
+    status.style.color = '#f87171';
+    status.textContent = `✗ שגיאה: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Section tab switching
+document.querySelectorAll('.an-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.an-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('[id^="an-section-"]').forEach(s => s.style.display = 'none');
+    btn.classList.add('active');
+    const sec = document.getElementById(`an-section-${btn.dataset.section}`);
+    if (sec) sec.style.display = '';
+  });
+});
+
+// Shared state for orders section filters
+const _ordersFilter = { days: '7', subjectId: '' };
+
+async function loadAnalyticsOrders(subjectId = _ordersFilter.subjectId, days = _ordersFilter.days) {
+  _ordersFilter.subjectId = subjectId;
+  _ordersFilter.days      = days;
+
+  const el = document.getElementById('analytics-orders-table');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const qs = new URLSearchParams();
+    if (subjectId) qs.set('subjectId', subjectId);
+    if (days)      qs.set('days', days);
+    const data   = await api(`/api/analytics/orders${qs.toString() ? '?' + qs : ''}`);
+    const orders = data.orders || [];
+
+    if (!orders.length) {
+      el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">אין הזמנות בטווח הנבחר</div>';
+      return;
+    }
+
+    el.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>מס׳ הזמנה</th>
+              <th>נישה</th>
+              <th>ערך הזמנה</th>
+              <th>עמלה</th>
+              <th>סטטוס</th>
+              <th>תאריך</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${orders.map(o => {
+              const statusColor = (o.payment_status === 'confirmed' || o.order_status === 'finished')
+                ? '#16a34a' : '#f59e0b';
+              return `<tr>
+                <td style="font-family:var(--font-mono);font-size:11px;color:var(--on-surface-var);">${escHtml(String(o.order_id))}</td>
+                <td>
+                  <span style="display:inline-flex;align-items:center;gap:6px;">
+                    <span style="width:8px;height:8px;border-radius:50%;background:${escHtml(o.subject_color||'#702ae1')};flex-shrink:0;"></span>
+                    ${escHtml(o.subject_name || '—')}
+                  </span>
+                </td>
+                <td>$${parseFloat(o.order_amount||0).toFixed(2)}</td>
+                <td style="color:#16a34a;font-weight:700;">$${parseFloat(o.commission_usd||0).toFixed(2)}</td>
+                <td><span style="color:${statusColor};font-size:12px;font-weight:600;">${escHtml(o.payment_status || o.order_status || '—')}</span></td>
+                <td style="font-size:12px;color:var(--on-surface-var);">${o.order_time ? fmtDate(o.order_time) : '—'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch (err) {
+    el.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+async function loadDailyStats(subjectId = _ordersFilter.subjectId, days = _ordersFilter.days) {
+  const el = document.getElementById('analytics-daily-stats');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const qs = new URLSearchParams();
+    if (subjectId) qs.set('subjectId', subjectId);
+    if (days)      qs.set('days', days);
+    const data = await api(`/api/analytics/daily-stats${qs.toString() ? '?' + qs : ''}`);
+    const dayRows = (data.days || []).slice().reverse(); // oldest first for chart
+
+    if (!dayRows.length) {
+      el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">אין נתונים לתקופה הנבחרת</div>';
+      return;
+    }
+
+    const maxOrders     = Math.max(...dayRows.map(d => parseInt(d.orders_count, 10)));
+    const maxCommission = Math.max(...dayRows.map(d => parseFloat(d.total_commission)));
+
+    const totalOrders     = dayRows.reduce((s, d) => s + parseInt(d.orders_count, 10), 0);
+    const totalCommission = dayRows.reduce((s, d) => s + parseFloat(d.total_commission), 0);
+    const avgOrders       = (totalOrders / dayRows.length).toFixed(1);
+    const avgCommission   = (totalCommission / dayRows.length).toFixed(2);
+
+    el.innerHTML = `
+      <!-- Summary row -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px;">
+        ${[
+          { label:'סה"כ הזמנות',    value: totalOrders.toLocaleString(),       color:'var(--on-surface)', icon:'shopping_bag' },
+          { label:'סה"כ עמלה',      value: `$${totalCommission.toFixed(2)}`,   color:'#16a34a',            icon:'paid' },
+          { label:'ממוצע הזמנות/יום', value: avgOrders,                        color:'#702ae1',            icon:'trending_up' },
+          { label:'ממוצע עמלה/יום',  value: `$${avgCommission}`,              color:'#059669',            icon:'show_chart' },
+        ].map(k => `
+          <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;">
+            <span class="material-symbols-outlined" style="font-size:20px;color:${k.color};">${k.icon}</span>
+            <div>
+              <div style="font-size:16px;font-weight:800;color:${k.color};">${k.value}</div>
+              <div style="font-size:11px;color:var(--on-surface-var);">${k.label}</div>
+            </div>
+          </div>`).join('')}
+      </div>
+
+      <!-- Bars -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <!-- Orders per day -->
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--on-surface-var);margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+            <span class="material-symbols-outlined" style="font-size:14px;color:#702ae1;">shopping_bag</span>הזמנות לפי יום
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            ${dayRows.map(d => {
+              const cnt  = parseInt(d.orders_count, 10);
+              const pct  = maxOrders > 0 ? (cnt / maxOrders * 100).toFixed(1) : 0;
+              const date = d.day ? d.day.toString().slice(0, 10) : '—';
+              return `<div style="display:flex;align-items:center;gap:8px;">
+                <div style="width:70px;font-size:10px;color:var(--on-surface-var);text-align:left;flex-shrink:0;">${date.slice(5)}</div>
+                <div style="flex:1;background:rgba(255,255,255,0.05);border-radius:4px;height:18px;overflow:hidden;">
+                  <div style="width:${pct}%;background:#702ae1;height:100%;border-radius:4px;transition:width 0.3s;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;">
+                    ${cnt > 0 ? `<span style="font-size:10px;color:#fff;font-weight:700;">${cnt}</span>` : ''}
+                  </div>
+                </div>
+                ${cnt === 0 ? `<span style="font-size:10px;color:var(--on-surface-var);">0</span>` : ''}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- Commission per day -->
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--on-surface-var);margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+            <span class="material-symbols-outlined" style="font-size:14px;color:#16a34a;">paid</span>עמלה לפי יום
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            ${dayRows.map(d => {
+              const comm = parseFloat(d.total_commission);
+              const pct  = maxCommission > 0 ? (comm / maxCommission * 100).toFixed(1) : 0;
+              const date = d.day ? d.day.toString().slice(0, 10) : '—';
+              return `<div style="display:flex;align-items:center;gap:8px;">
+                <div style="width:70px;font-size:10px;color:var(--on-surface-var);text-align:left;flex-shrink:0;">${date.slice(5)}</div>
+                <div style="flex:1;background:rgba(255,255,255,0.05);border-radius:4px;height:18px;overflow:hidden;">
+                  <div style="width:${pct}%;background:#16a34a;height:100%;border-radius:4px;transition:width 0.3s;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;">
+                    ${comm > 0 ? `<span style="font-size:10px;color:#fff;font-weight:700;">$${comm.toFixed(2)}</span>` : ''}
+                  </div>
+                </div>
+                ${comm === 0 ? `<span style="font-size:10px;color:var(--on-surface-var);">$0</span>` : ''}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>`;
+  } catch (err) {
+    el.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+// Niche filter for orders section
+document.getElementById('analytics-niche-filter').addEventListener('change', function () {
+  loadAnalyticsOrders(this.value);
+  loadDailyStats(this.value);
+});
+
+// Day filter quick-buttons
+document.querySelectorAll('.an-day-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.an-day-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const days = btn.dataset.days;
+    loadDailyStats(_ordersFilter.subjectId, days);
+    loadAnalyticsOrders(_ordersFilter.subjectId, days);
+  });
+});
+
+// ── Analytics: Top Products (real attribution) ───────────────────────────────
+
+async function loadTopProducts(subjectId = '') {
+  const el = document.getElementById('analytics-top-products-table');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const qs      = subjectId ? `?subjectId=${encodeURIComponent(subjectId)}` : '';
+    const data    = await api(`/api/analytics/top-products${qs}`);
+    const products = data.products || [];
+
+    if (!products.length) {
+      el.innerHTML = `<div style="padding:32px;text-align:center;">
+        <div style="font-size:13px;color:var(--on-surface-var);">אין נתוני עמלות אמיתיות לנישות אלו — לחץ "עדכן עמלות" כדי למשוך נתוני הזמנות מ-AliExpress.</div>
+      </div>`;
+      return;
+    }
+
+    const rows = products.map((p, i) => {
+      const attributed = p.attributed_commission != null ? parseFloat(p.attributed_commission) : null;
+      const rpc        = p.commission_per_click  != null ? parseFloat(p.commission_per_click)  : null;
+      const color      = p.subject_color || '#702ae1';
+      const rankColor  = i === 0 ? '#f59e0b' : i === 1 ? '#94a3b8' : i === 2 ? '#b45309' : 'var(--on-surface-var)';
+
+      return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+        <td style="padding:10px 8px;text-align:center;font-weight:700;font-size:13px;color:${rankColor};">${i + 1}</td>
+        <td style="padding:10px 8px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${p.image ? `<img src="${escHtml(p.image)}" style="width:36px;height:36px;object-fit:cover;border-radius:8px;flex-shrink:0;" loading="lazy" />` : `<div style="width:36px;height:36px;border-radius:8px;background:rgba(112,42,225,0.08);flex-shrink:0;"></div>`}
+            <div>
+              <div style="font-size:12px;font-weight:600;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(p.text || '')}">${escHtml(p.text || '—')}</div>
+              ${p.short_link ? `<a href="${escHtml(p.short_link)}" target="_blank" style="font-size:10px;color:var(--on-surface-var);direction:ltr;font-family:monospace;">${escHtml(p.short_link)}</a>` : ''}
+            </div>
+          </div>
+        </td>
+        <td style="padding:10px 8px;">
+          <span style="display:inline-flex;align-items:center;gap:5px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;"></span>
+            <span style="font-size:12px;">${escHtml(p.subject_name || '—')}</span>
+          </span>
+        </td>
+        <td style="padding:10px 8px;font-weight:700;color:#702ae1;text-align:center;">${(p.clicks || 0).toLocaleString()}</td>
+        <td style="padding:10px 8px;text-align:center;font-size:12px;color:var(--on-surface-var);">${rpc != null ? `$${rpc.toFixed(5)}` : '—'}</td>
+        <td style="padding:10px 8px;text-align:center;font-weight:900;font-size:16px;color:#16a34a;">${attributed != null ? `$${attributed.toFixed(2)}` : '—'}</td>
+      </tr>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="border-bottom:2px solid rgba(255,255,255,0.08);">
+              <th style="padding:8px;width:36px;"></th>
+              <th style="padding:8px;text-align:right;font-weight:600;color:var(--on-surface-var);">מוצר</th>
+              <th style="padding:8px;text-align:right;font-weight:600;color:var(--on-surface-var);">נישה</th>
+              <th style="padding:8px;text-align:center;font-weight:600;color:var(--on-surface-var);">קליקים</th>
+              <th style="padding:8px;text-align:center;font-weight:600;color:var(--on-surface-var);">$/קליק (נישה)</th>
+              <th style="padding:8px;text-align:center;font-weight:600;color:var(--on-surface-var);">עמלה מיוחסת</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div style="margin-top:10px;font-size:11px;color:var(--on-surface-var);padding:0 4px;">
+        עמלה מיוחסת = קליקי מוצר × (עמלת נישה ÷ קליקי נישה) — ללא הנחות, מבוסס על נתוני AliExpress בפועל
+      </div>`;
+  } catch (err) {
+    el.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+document.getElementById('analytics-top-niche-filter').addEventListener('change', function () {
+  loadTopProducts(this.value);
+});
+
+// ── Analytics: Real Product Orders (from order_items) ────────────────────────
+
+async function loadRealProductOrders(subjectId = '') {
+  const el = document.getElementById('analytics-real-orders-table');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const qs   = subjectId ? `?subjectId=${encodeURIComponent(subjectId)}` : '';
+    const data = await api(`/api/analytics/product-orders${qs}`);
+    const products = data.products || [];
+
+    if (!products.length) {
+      const msg = data.totalItems === 0
+        ? `<div style="padding:32px;text-align:center;">
+             <div style="font-size:36px;margin-bottom:12px;">📦</div>
+             <div style="font-weight:700;margin-bottom:8px;">אין נתוני הזמנות ברמת מוצר</div>
+             <div style="font-size:12px;color:var(--on-surface-var);max-width:380px;margin:0 auto;">
+               ה-API של AliExpress לא מחזיר פרטי מוצר בתוך ההזמנות עבור חשבונך.
+               לחץ "עדכן עמלות" כדי לנסות שוב — אם עדיין ריק, ממשק ה-API שלך לא כולל פירוט מוצרים.
+             </div>
+             <a href="/api/analytics/probe-raw-orders" target="_blank" style="display:inline-block;margin-top:16px;font-size:12px;color:#3b82f6;text-decoration:underline;">בדוק תגובת API גולמית ←</a>
+           </div>`
+        : '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">אין מוצרים תואמים לסינון זה.</div>';
+      el.innerHTML = msg;
+      return;
+    }
+
+    const rows = products.map((p, i) => {
+      const color   = p.subject_color || '#888';
+      const title   = escHtml(p.product_title || p.product_id || '—');
+      const niche   = escHtml(p.subject_name || '—');
+      const comm    = parseFloat(p.total_commission) || 0;
+      const value   = parseFloat(p.total_order_value) || 0;
+      const orders  = parseInt(p.order_count, 10) || 0;
+      const items   = parseInt(p.total_items, 10) || 0;
+      const rank    = i + 1;
+      const rankColor = rank === 1 ? '#f59e0b' : rank === 2 ? '#94a3b8' : rank === 3 ? '#b45309' : 'var(--on-surface-var)';
+
+      return `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+          <td style="padding:10px 8px;font-weight:700;font-size:13px;color:${rankColor};text-align:center;">${rank}</td>
+          <td style="padding:10px 8px;">
+            <div style="font-size:13px;font-weight:600;line-height:1.4;max-width:340px;">${title}</div>
+            <div style="font-size:11px;color:var(--on-surface-var);margin-top:2px;direction:ltr;font-family:monospace;">${escHtml(p.product_id)}</div>
+          </td>
+          <td style="padding:10px 8px;">
+            <span style="display:inline-flex;align-items:center;gap:5px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;"></span>
+              <span style="font-size:12px;">${niche}</span>
+            </span>
+          </td>
+          <td style="padding:10px 8px;text-align:center;font-weight:700;font-size:15px;">${orders}</td>
+          <td style="padding:10px 8px;text-align:center;font-size:13px;color:var(--on-surface-var);">${items}</td>
+          <td style="padding:10px 8px;text-align:center;font-size:12px;color:var(--on-surface-var);">$${value.toFixed(2)}</td>
+          <td style="padding:10px 8px;text-align:center;font-size:17px;font-weight:900;color:#16a34a;">$${comm.toFixed(2)}</td>
+        </tr>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="border-bottom:2px solid rgba(255,255,255,0.08);">
+              <th style="padding:8px;text-align:center;font-weight:600;color:var(--on-surface-var);width:36px;">#</th>
+              <th style="padding:8px;text-align:right;font-weight:600;color:var(--on-surface-var);">מוצר</th>
+              <th style="padding:8px;text-align:right;font-weight:600;color:var(--on-surface-var);">נישה</th>
+              <th style="padding:8px;text-align:center;font-weight:600;color:var(--on-surface-var);">הזמנות</th>
+              <th style="padding:8px;text-align:center;font-weight:600;color:var(--on-surface-var);">יחידות</th>
+              <th style="padding:8px;text-align:center;font-weight:600;color:var(--on-surface-var);">שווי הזמנות</th>
+              <th style="padding:8px;text-align:center;font-weight:600;color:var(--on-surface-var);">עמלה בפועל</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div style="margin-top:10px;font-size:11px;color:var(--on-surface-var);text-align:left;">
+        <a href="/api/analytics/probe-raw-orders" target="_blank" style="color:#3b82f6;text-decoration:none;">בדוק תגובת API גולמית ←</a>
+      </div>`;
+  } catch (err) {
+    el.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+document.getElementById('analytics-real-orders-niche-filter').addEventListener('change', function () {
+  loadRealProductOrders(this.value);
+});
+
+// ── Analytics: Timing Heatmap ─────────────────────────────────────────────────
+
+const DOW_LABELS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+
+async function loadTimingHeatmap(subjectId = '') {
+  const el = document.getElementById('analytics-timing-content');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const qs   = subjectId ? `?subjectId=${encodeURIComponent(subjectId)}` : '';
+    const data = await api(`/api/analytics/timing${qs}`);
+    const slots = data.slots || [];
+
+    if (!slots.length) {
+      el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);">אין נתונים — שלח לפחות פוסט אחד כדי לראות תזמונים.</div>';
+      return;
+    }
+
+    // Build lookup: dow → hour → avg_clicks
+    const map = {};
+    let maxAvg = 0;
+    for (const s of slots) {
+      const dow  = parseInt(s.dow,  10);
+      const hour = parseInt(s.hour, 10);
+      const avg  = parseFloat(s.avg_clicks);
+      if (!map[dow]) map[dow] = {};
+      map[dow][hour] = { avg, sends: parseInt(s.sends, 10) };
+      if (avg > maxAvg) maxAvg = avg;
+    }
+
+    // Top 5 slots for badges
+    const top5 = slots.slice(0, 5).map(s => `${s.dow}_${s.hour}`);
+
+    // Build header row (hours 0–23)
+    const hours = Array.from({ length: 24 }, (_, i) => i);
+
+    let html = `
+      <div style="overflow-x:auto;">
+        <table style="border-collapse:collapse;font-size:11px;min-width:700px;width:100%;">
+          <thead>
+            <tr>
+              <th style="padding:4px 8px;text-align:right;font-weight:600;color:var(--on-surface-var);white-space:nowrap;position:sticky;right:0;background:var(--surface);">יום \\ שעה</th>
+              ${hours.map(h => `<th style="padding:4px 3px;text-align:center;font-weight:500;color:var(--on-surface-var);min-width:26px;">${h}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>`;
+
+    for (let dow = 0; dow < 7; dow++) {
+      html += `<tr>
+        <td style="padding:4px 8px;font-weight:600;color:var(--on-surface-var);white-space:nowrap;position:sticky;right:0;background:var(--surface);">${DOW_LABELS[dow]}</td>`;
+
+      for (const hour of hours) {
+        const cell   = map[dow]?.[hour];
+        const avg    = cell?.avg  ?? 0;
+        const sends  = cell?.sends ?? 0;
+        const isTop  = top5.includes(`${dow}_${hour}`);
+        const intensity = maxAvg > 0 ? avg / maxAvg : 0;
+        // Color: purple at full intensity, transparent at zero
+        const alpha  = (0.08 + intensity * 0.82).toFixed(2);
+        const bg     = avg > 0 ? `rgba(112,42,225,${alpha})` : 'transparent';
+        const color  = intensity > 0.5 ? '#fff' : 'var(--on-surface-var)';
+        const border = isTop ? '2px solid #16a34a' : '1px solid transparent';
+        const title  = avg > 0 ? `${DOW_LABELS[dow]} ${hour}:00 — ממוצע ${avg.toFixed(1)} קליקים (${sends} שליחות)` : '';
+
+        html += `<td style="padding:3px 2px;text-align:center;" title="${escHtml(title)}">
+          <div style="width:24px;height:24px;border-radius:4px;margin:0 auto;background:${bg};border:${border};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:${color};cursor:${avg > 0 ? 'default' : 'default'};">
+            ${avg > 0 ? (avg >= 10 ? Math.round(avg) : avg.toFixed(1)) : ''}
+          </div>
+        </td>`;
+      }
+      html += '</tr>';
+    }
+
+    html += `</tbody></table></div>`;
+
+    // Top 5 summary pills
+    if (top5.length) {
+      html += `<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:11px;color:var(--on-surface-var);font-weight:600;">5 זמנים מובילים:</span>`;
+      for (const s of slots.slice(0, 5)) {
+        const dow  = parseInt(s.dow, 10);
+        const hour = parseInt(s.hour, 10);
+        const avg  = parseFloat(s.avg_clicks).toFixed(1);
+        html += `<span style="font-size:11px;background:rgba(22,163,74,0.1);color:#16a34a;padding:3px 10px;border-radius:20px;font-weight:600;">
+          ${DOW_LABELS[dow]} ${hour}:00 · ${avg} קליקים
+        </span>`;
+      }
+      html += '</div>';
+    }
+
+    el.innerHTML = html;
+  } catch (err) {
+    el.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+document.getElementById('analytics-timing-niche-filter').addEventListener('change', function () {
+  loadTimingHeatmap(this.value);
+});
+
+// ── Analytics: Meta Organic Reach ─────────────────────────────────────────────
+
+document.getElementById('btn-analytics-sync-clicks').addEventListener('click', async () => {
+  const btn    = document.getElementById('btn-analytics-sync-clicks');
+  const status = document.getElementById('analytics-sync-status');
+
+  btn.disabled = true;
+  status.textContent = 'מסנכרן קליקים...';
+  status.style.color = 'var(--on-surface-var)';
+
+  try {
+    const data = await api('/api/products/sync-clicks', { method: 'POST' });
+    status.style.color = '#16a34a';
+    status.textContent = `✓ עודכנו ${data.synced} קישורים`;
+    await renderAnalyticsSummary();
+  } catch (err) {
+    status.style.color = '#f87171';
+    status.textContent = `✗ שגיאה: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('btn-sync-reach').addEventListener('click', async () => {
+  const btn    = document.getElementById('btn-sync-reach');
+  const status = document.getElementById('analytics-sync-status');
+
+  btn.disabled = true;
+  status.textContent = 'מסנכרן חשיפה...';
+  status.style.color = 'var(--on-surface-var)';
+
+  try {
+    const data = await api('/api/analytics/sync-reach', { method: 'POST' });
+    status.style.color = '#16a34a';
+    status.textContent = `✓ סונכרנו ${data.synced} פוסטים`;
+    await loadReachSummary();
+    document.getElementById('analytics-reach-card').style.display = '';
+  } catch (err) {
+    status.style.color = '#f87171';
+    status.textContent = `✗ שגיאה: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Manual sync modal
+document.getElementById('btn-manual-sync').addEventListener('click', () => {
+  const niches = Array.from(document.querySelectorAll('#analytics-niches-grid .an-niche-row'))
+    .map(row => ({
+      id:   row.dataset.subjectId,
+      name: row.querySelector('[style*="font-weight:700"]')?.textContent?.trim(),
+    }))
+    .filter(n => n.id);
+
+  // Build options from already-loaded niches or fallback to empty
+  const opts = niches.length
+    ? niches.map(n => `<option value="${escHtml(n.id)}">${escHtml(n.name)}</option>`).join('')
+    : '<option value="">טען קודם את הנישות (לחץ עדכן עמלות)</option>';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  modal.innerHTML = `
+    <div class="card" style="width:100%;max-width:460px;padding:24px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <span style="font-weight:700;font-size:16px;">סנכרן Tracking ID ידנית</span>
+        <button id="modal-close" class="btn btn-ghost btn-sm">✕</button>
+      </div>
+      <div style="font-size:13px;color:var(--on-surface-var);margin-bottom:16px;">
+        שמושי ל-Tracking ID ישן שלא משויך לנישה ספציפית — הזמנות ישויכו לנישה שתבחר.
+      </div>
+      <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Tracking ID</label>
+      <input id="manual-tracking-id" class="form-input" style="width:100%;margin-bottom:14px;" placeholder="לדוגמה: affheav123" />
+      <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">שייך לנישה</label>
+      <select id="manual-subject-id" class="form-input" style="width:100%;margin-bottom:14px;">${opts}</select>
+      <div style="display:flex;gap:10px;margin-bottom:14px;">
+        <div style="flex:1;">
+          <label style="font-size:12px;color:var(--on-surface-var);display:block;margin-bottom:4px;">מתאריך</label>
+          <input type="date" id="manual-start-date" class="form-input" style="width:100%;font-size:13px;" />
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:12px;color:var(--on-surface-var);display:block;margin-bottom:4px;">עד תאריך</label>
+          <input type="date" id="manual-end-date" class="form-input" style="width:100%;font-size:13px;" />
+        </div>
+      </div>
+      <div id="manual-sync-result" style="font-size:13px;min-height:20px;margin-bottom:14px;"></div>
+      <button id="manual-sync-go" class="btn btn-primary" style="width:100%;">
+        <span class="material-symbols-outlined" style="font-size:15px;">cloud_sync</span>סנכרן
+      </button>
+    </div>`;
+  document.body.appendChild(modal);
+
+  // Pre-fill dates from main toolbar
+  const mainStart = document.getElementById('analytics-start-date').value;
+  const mainEnd   = document.getElementById('analytics-end-date').value;
+  if (mainStart) document.getElementById('manual-start-date').value = mainStart;
+  if (mainEnd)   document.getElementById('manual-end-date').value   = mainEnd;
+
+  document.getElementById('modal-close').onclick = () => modal.remove();
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  document.getElementById('manual-sync-go').addEventListener('click', async () => {
+    const trackingId = document.getElementById('manual-tracking-id').value.trim();
+    const subjectId  = document.getElementById('manual-subject-id').value;
+    const startDate  = document.getElementById('manual-start-date').value;
+    const endDate    = document.getElementById('manual-end-date').value;
+    const result     = document.getElementById('manual-sync-result');
+    const btn        = document.getElementById('manual-sync-go');
+
+    if (!trackingId) { result.style.color = '#f87171'; result.textContent = 'יש להזין Tracking ID'; return; }
+    if (!subjectId)  { result.style.color = '#f87171'; result.textContent = 'יש לבחור נישה'; return; }
+
+    btn.disabled = true;
+    result.style.color = 'var(--on-surface-var)';
+    result.textContent = 'מסנכרן...';
+
+    try {
+      const data = await api('/api/analytics/sync-commissions-manual', {
+        method: 'POST',
+        body: { trackingId, subjectId, startDate: startDate || undefined, endDate: endDate || undefined },
+      });
+      result.style.color = '#16a34a';
+      result.textContent = `✓ סונכרנו ${data.synced} הזמנות ל-${data.subjectName}`;
+      await renderAnalyticsSummary();
+    } catch (err) {
+      result.style.color = '#f87171';
+      result.textContent = `✗ שגיאה: ${err.message}`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+});
+
+async function loadReachSummary() {
+  const grid = document.getElementById('analytics-reach-grid');
+  if (!grid) return;
+  grid.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);grid-column:1/-1;">טוען...</div>';
+
+  try {
+    const data = await api('/api/analytics/reach-summary');
+    const rows = data.reach || [];
+
+    if (!rows.length) {
+      grid.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);grid-column:1/-1;">אין נתוני חשיפה. לחץ "עדכן חשיפה" לאחר שליחת פוסטים.</div>';
+      return;
+    }
+
+    // Group by niche, then platform
+    const byNiche = {};
+    for (const r of rows) {
+      if (!byNiche[r.id]) byNiche[r.id] = { name: r.name, color: r.color, platforms: [] };
+      byNiche[r.id].platforms.push(r);
+    }
+
+    grid.innerHTML = Object.values(byNiche).map(n => {
+      const fb  = n.platforms.find(p => p.platform === 'facebook');
+      const ig  = n.platforms.find(p => p.platform === 'instagram');
+      const totalReach = (parseInt(fb?.total_reach||0,10)) + (parseInt(ig?.total_reach||0,10));
+      const avgReach   = Math.round(((fb ? parseFloat(fb.avg_reach_per_post) : 0) + (ig ? parseFloat(ig.avg_reach_per_post) : 0)) / ((fb?1:0)+(ig?1:0)) || 0);
+      const ctr        = fb?.ctr_pct || ig?.ctr_pct || 0;
+
+      return `<div class="dashboard-subject-card" style="border-top:3px solid ${escHtml(n.color||'#702ae1')};">
+        <div style="font-size:15px;font-weight:800;margin-bottom:12px;">${escHtml(n.name)}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+          <div class="dashboard-kpi-item">
+            <div class="dashboard-kpi-label">סה״כ חשיפה</div>
+            <div class="dashboard-kpi-val" style="color:#3b82f6;">${totalReach.toLocaleString()}</div>
+          </div>
+          <div class="dashboard-kpi-item">
+            <div class="dashboard-kpi-label">חשיפה ממוצעת</div>
+            <div class="dashboard-kpi-val">${avgReach.toLocaleString()}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;">
+          ${fb ? `<div style="background:rgba(59,130,246,0.1);color:#3b82f6;padding:3px 8px;border-radius:20px;">FB: ${parseInt(fb.total_reach,10).toLocaleString()} חשיפה · ${fb.posts_tracked} פוסטים</div>` : ''}
+          ${ig ? `<div style="background:rgba(168,85,247,0.1);color:#a855f7;padding:3px 8px;border-radius:20px;">IG: ${parseInt(ig.total_reach,10).toLocaleString()} חשיפה · ${ig.posts_tracked} פוסטים</div>` : ''}
+        </div>
+        ${parseFloat(ctr) > 0 ? `<div style="margin-top:8px;font-size:11px;color:var(--on-surface-var);">CTR: <strong style="color:var(--on-surface);">${parseFloat(ctr).toFixed(2)}%</strong> (קליקים / חשיפה)</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch (err) {
+    grid.innerHTML = `<div style="padding:20px;color:#f87171;grid-column:1/-1;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+// ── Analytics: ROAS ───────────────────────────────────────────────────────────
+
+document.getElementById('btn-roas-add-toggle').addEventListener('click', () => {
+  const form = document.getElementById('roas-add-form');
+  form.style.display = form.style.display === 'none' ? '' : 'none';
+});
+
+document.getElementById('btn-roas-save').addEventListener('click', async () => {
+  const btn      = document.getElementById('btn-roas-save');
+  const status   = document.getElementById('roas-form-status');
+  const subjectId = document.getElementById('roas-form-subject').value;
+  const platform  = document.getElementById('roas-form-platform').value;
+  const spendUsd  = document.getElementById('roas-form-spend').value;
+  const periodStart = document.getElementById('roas-form-start').value;
+  const periodEnd   = document.getElementById('roas-form-end').value;
+  const notes       = document.getElementById('roas-form-notes').value;
+
+  if (!subjectId || !spendUsd || !periodStart || !periodEnd) {
+    status.style.color = '#f87171';
+    status.textContent = 'יש למלא נישה, סכום ותאריכים';
+    return;
+  }
+
+  btn.disabled = true;
+  status.textContent = 'שומר...';
+  status.style.color = 'var(--on-surface-var)';
+
+  try {
+    await api('/api/analytics/spend', {
+      method: 'POST',
+      body: { subjectId, platform, spendUsd, periodStart, periodEnd, notes },
+    });
+    status.style.color = '#16a34a';
+    status.textContent = '✓ נשמר';
+    document.getElementById('roas-form-spend').value = '';
+    document.getElementById('roas-form-notes').value = '';
+    await loadRoas();
+  } catch (err) {
+    status.style.color = '#f87171';
+    status.textContent = `✗ ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+async function loadRoas() {
+  const grid    = document.getElementById('analytics-roas-grid');
+  const records = document.getElementById('analytics-roas-records');
+  if (!grid) return;
+
+  try {
+    const data   = await api('/api/analytics/roas');
+    const niches = (data.niches || []).filter(n => parseFloat(n.total_spend) > 0 || parseFloat(n.total_commission) > 0);
+    const recs   = data.records || [];
+
+    if (!niches.length) {
+      grid.innerHTML = '<div style="padding:20px;text-align:center;color:var(--on-surface-var);grid-column:1/-1;">אין הוצאות פרסום מוגדרות. לחץ "הוסף הוצאה" להזנה ידנית.</div>';
+    } else {
+      grid.innerHTML = niches.map(n => {
+        const spend      = parseFloat(n.total_spend || 0);
+        const commission = parseFloat(n.total_commission || 0);
+        const roas       = n.roas != null ? parseFloat(n.roas) : null;
+        const color      = n.color || '#702ae1';
+
+        let roasColor = '#f59e0b';
+        if (roas != null) roasColor = roas >= 1 ? '#16a34a' : '#ef4444';
+
+        return `<div class="dashboard-subject-card" style="border-top:3px solid ${escHtml(color)};">
+          <div style="font-size:15px;font-weight:800;margin-bottom:12px;">${escHtml(n.name)}</div>
+          <div class="dashboard-subject-kpi" style="grid-template-columns:1fr 1fr;gap:8px;">
+            <div class="dashboard-kpi-item">
+              <div class="dashboard-kpi-label">הוצאה ($)</div>
+              <div class="dashboard-kpi-val" style="color:#ef4444;">$${spend.toFixed(2)}</div>
+            </div>
+            <div class="dashboard-kpi-item">
+              <div class="dashboard-kpi-label">עמלה ($)</div>
+              <div class="dashboard-kpi-val" style="color:#16a34a;">$${commission.toFixed(2)}</div>
+            </div>
+          </div>
+          <div style="margin-top:12px;text-align:center;">
+            <div style="font-size:11px;color:var(--on-surface-var);margin-bottom:2px;">ROAS</div>
+            <div style="font-size:28px;font-weight:900;color:${roasColor};">
+              ${roas != null ? roas.toFixed(2) + 'x' : '—'}
+            </div>
+            ${roas != null ? `<div style="font-size:10px;color:var(--on-surface-var);">${roas >= 1 ? 'רווחי ✓' : 'הפסד ✗'}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    if (!recs.length) {
+      records.innerHTML = '';
+      return;
+    }
+
+    records.innerHTML = `
+      <div style="margin-top:16px;">
+        <div style="font-size:13px;font-weight:700;color:var(--on-surface);margin-bottom:8px;">רשומות הוצאות</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>נישה</th>
+                <th>פלטפורמה</th>
+                <th>סכום</th>
+                <th>מתאריך</th>
+                <th>עד תאריך</th>
+                <th>הערות</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${recs.map(r => `<tr>
+                <td>
+                  <span style="display:inline-flex;align-items:center;gap:5px;">
+                    <span style="width:8px;height:8px;border-radius:50%;background:${escHtml(r.subject_color||'#702ae1')};flex-shrink:0;"></span>
+                    ${escHtml(r.subject_name)}
+                  </span>
+                </td>
+                <td style="font-size:12px;">${escHtml(r.platform)}</td>
+                <td style="color:#ef4444;font-weight:700;">$${parseFloat(r.spend_usd).toFixed(2)}</td>
+                <td style="font-size:12px;">${fmtDate(r.period_start)}</td>
+                <td style="font-size:12px;">${fmtDate(r.period_end)}</td>
+                <td style="font-size:12px;color:var(--on-surface-var);">${escHtml(r.notes || '—')}</td>
+                <td>
+                  <button class="icon-btn" title="מחק" onclick="deleteSpend('${escHtml(r.id)}')">
+                    <span class="material-symbols-outlined" style="font-size:16px;color:#f87171;">delete</span>
+                  </button>
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  } catch (err) {
+    grid.innerHTML = `<div style="padding:20px;color:#f87171;grid-column:1/-1;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+async function deleteSpend(id) {
+  if (!confirm('למחוק רשומה זו?')) return;
+  try {
+    await api(`/api/analytics/spend/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await loadRoas();
+  } catch (err) {
+    alert(`שגיאה: ${err.message}`);
+  }
+}
+
+// ── Analytics: Insights (Profit Analysis) ────────────────────────────────────
+
+async function loadInsights() {
+  const el = document.getElementById('analytics-insights-content');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const data   = await api('/api/analytics/insights');
+    const niches = (data.niches || []).filter(n => parseInt(n.total_clicks, 10) > 0 || parseFloat(n.real_commission) > 0);
+    const totals = data.totals || {};
+
+    const hasRealData = parseFloat(totals.real_commission) > 0;
+
+    // ── Global assumption-vs-reality banner ───────────────────────────────────
+    const avgRealConv  = totals.real_orders > 0 && totals.total_clicks > 0
+      ? (totals.real_orders / totals.total_clicks * 100)
+      : null;
+    const avgRealComm  = hasRealData
+      ? (niches.filter(n => n.real_commission_rate).reduce((s, n) => s + parseFloat(n.real_commission_rate || 0), 0) /
+         Math.max(1, niches.filter(n => n.real_commission_rate).length) * 100)
+      : null;
+    const overallRpc   = totals.total_clicks > 0 && hasRealData
+      ? totals.real_commission / totals.total_clicks
+      : null;
+    const modelAccuracy = totals.est_default > 0 && hasRealData
+      ? (totals.real_commission / totals.est_default * 100)
+      : null;
+
+    function diffBadge(assumed, real, unit = '%', higherIsBetter = true) {
+      if (real == null) return '<span style="color:var(--on-surface-var);font-size:11px;">אין נתונים</span>';
+      const diff    = real - assumed;
+      const pct     = Math.abs(diff / assumed * 100).toFixed(0);
+      const up      = higherIsBetter ? diff > 0 : diff < 0;
+      const color   = up ? '#16a34a' : '#ef4444';
+      const arrow   = diff > 0 ? '↑' : '↓';
+      return `<span style="color:${color};font-weight:700;font-size:13px;">${arrow} ${pct}% ${diff > 0 ? 'מעל ההנחה' : 'מתחת להנחה'}</span>`;
+    }
+
+    const globalCards = [
+      {
+        icon: 'conversion_path', label: 'שיעור המרה ממוצע',
+        assumed: '2.0%', real: avgRealConv != null ? `${avgRealConv.toFixed(2)}%` : null,
+        badge: diffBadge(2, avgRealConv),
+        hint: 'אחוז הקליקים שהפכו להזמנה בפועל',
+      },
+      {
+        icon: 'percent', label: 'עמלת AliExpress ממוצעת',
+        assumed: '8.0%', real: avgRealComm != null ? `${avgRealComm.toFixed(1)}%` : null,
+        badge: diffBadge(8, avgRealComm),
+        hint: 'ממוצע אחוז העמלה מהזמנות שהתקבלו',
+      },
+      {
+        icon: 'ads_click', label: 'הכנסה לקליק',
+        assumed: '—', real: overallRpc != null ? `$${overallRpc.toFixed(4)}` : null,
+        badge: overallRpc != null ? `<span style="color:#16a34a;font-weight:700;">$${(overallRpc * 1000).toFixed(2)} לאלף קליקים</span>` : '',
+        hint: 'כמה $ מרווח בפועל על כל קליק',
+      },
+      {
+        icon: 'target', label: 'דיוק המודל',
+        assumed: '100%', real: modelAccuracy != null ? `${modelAccuracy.toFixed(0)}%` : null,
+        badge: modelAccuracy != null ? diffBadge(100, modelAccuracy, '%', true) : '<span style="color:var(--on-surface-var);font-size:11px;">חסר מחיר מוצר</span>',
+        hint: 'יחס עמלה אמיתית לעמלה משוערת בהנחות ברירת מחדל',
+      },
+    ];
+
+    let html = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:24px;">
+        ${globalCards.map(c => `
+          <div class="card an-kpi-card" style="flex-direction:column;align-items:flex-start;gap:10px;padding:18px 20px;">
+            <div style="display:flex;align-items:center;gap:8px;width:100%;">
+              <span class="material-symbols-outlined" style="font-size:20px;color:#702ae1;">${c.icon}</span>
+              <span style="font-size:12px;color:var(--on-surface-var);font-weight:600;">${c.label}</span>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+              <span style="font-size:11px;color:var(--on-surface-var);">הנחה: <s>${c.assumed}</s></span>
+              ${c.real != null ? `<span style="font-size:22px;font-weight:900;color:var(--on-surface);">${c.real}</span>` : '<span style="font-size:15px;color:var(--on-surface-var);">אין נתונים</span>'}
+            </div>
+            <div>${c.badge}</div>
+            <div style="font-size:11px;color:var(--on-surface-var);border-top:1px solid rgba(255,255,255,0.06);padding-top:8px;width:100%;">${c.hint}</div>
+          </div>`).join('')}
+      </div>`;
+
+    // ── No real data notice ────────────────────────────────────────────────────
+    if (!hasRealData) {
+      html += `
+        <div class="card" style="padding:32px;text-align:center;border:1px dashed rgba(112,42,225,0.3);">
+          <div style="font-size:36px;margin-bottom:12px;">📊</div>
+          <div style="font-weight:700;margin-bottom:8px;">אין עדיין נתוני הזמנות אמיתיות</div>
+          <div style="font-size:13px;color:var(--on-surface-var);">לחץ "עדכן עמלות" כדי למשוך הזמנות מ-AliExpress — לאחר מכן התובנות יתמלאו אוטומטית.</div>
+        </div>`;
+      el.innerHTML = html;
+      return;
+    }
+
+    // ── Per-niche breakdown table ─────────────────────────────────────────────
+    const nicheRows = niches.map(n => {
+      const color      = n.color || '#702ae1';
+      const realConv   = n.real_conversion_rate != null ? parseFloat(n.real_conversion_rate) : null;
+      const realComm   = n.real_commission_rate  != null ? parseFloat(n.real_commission_rate)  : null;
+      const rpc        = n.revenue_per_click      != null ? parseFloat(n.revenue_per_click)      : null;
+      const clicks     = parseInt(n.total_clicks   || 0, 10);
+      const commission = parseFloat(n.real_commission || 0);
+      const orders     = parseInt(n.real_orders || 0, 10);
+
+      const convCell = realConv != null
+        ? `<span style="font-weight:700;">${(realConv * 100).toFixed(2)}%</span>
+           <span style="font-size:10px;color:${realConv > 0.02 ? '#16a34a' : '#ef4444'};margin-right:4px;">${realConv > 0.02 ? '↑' : '↓'} ℅ הנחה 2%</span>`
+        : '<span style="color:var(--on-surface-var);">—</span>';
+
+      const commCell = realComm != null
+        ? `<span style="font-weight:700;color:${realComm > 0.08 ? '#16a34a' : '#ef4444'};">${(realComm * 100).toFixed(1)}%</span>
+           <span style="font-size:10px;color:var(--on-surface-var);">℅ הנחה 8%</span>`
+        : '<span style="color:var(--on-surface-var);">—</span>';
+
+      const rpcCell = rpc != null
+        ? `<span style="font-weight:700;color:#16a34a;">$${rpc.toFixed(4)}</span>
+           <small style="color:var(--on-surface-var);display:block;font-size:10px;">$${(rpc * 1000).toFixed(2)} / 1K קליקים</small>`
+        : '<span style="color:var(--on-surface-var);">—</span>';
+
+      // Projection: clicks * real rpc * 30-day extrapolation hint
+      const projMonthly = rpc != null && clicks > 0
+        ? `<span style="font-size:11px;color:var(--on-surface-var);">+50% קליקים → +$${(clicks * 0.5 * rpc).toFixed(2)}</span>`
+        : '—';
+
+      return `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+          <td style="padding:12px 8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="width:3px;height:36px;border-radius:2px;background:${color};flex-shrink:0;"></div>
+              <div>
+                <div style="font-weight:700;font-size:13px;">${escHtml(n.name)}</div>
+                <div style="font-size:11px;color:var(--on-surface-var);">${orders} הזמנות · ${clicks.toLocaleString()} קליקים</div>
+              </div>
+            </div>
+          </td>
+          <td style="padding:12px 8px;">${convCell}</td>
+          <td style="padding:12px 8px;">${commCell}</td>
+          <td style="padding:12px 8px;">${rpcCell}</td>
+          <td style="padding:12px 8px;font-weight:900;font-size:16px;color:#16a34a;">$${commission.toFixed(2)}</td>
+          <td style="padding:12px 8px;font-size:12px;color:var(--on-surface-var);">${projMonthly}</td>
+        </tr>`;
+    }).join('');
+
+    html += `
+      <div class="card" style="padding:0;overflow:hidden;margin-bottom:24px;">
+        <div style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;">
+          <span class="material-symbols-outlined" style="font-size:18px;color:#702ae1;">leaderboard</span>
+          <span style="font-weight:700;">ביצועי נישות — הנחות מול מציאות</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="border-bottom:2px solid rgba(255,255,255,0.08);">
+                <th style="padding:10px 8px;text-align:right;color:var(--on-surface-var);font-weight:600;">נישה</th>
+                <th style="padding:10px 8px;text-align:right;color:var(--on-surface-var);font-weight:600;">המרה בפועל <small style="font-weight:400;">(הנחה 2%)</small></th>
+                <th style="padding:10px 8px;text-align:right;color:var(--on-surface-var);font-weight:600;">עמלה בפועל <small style="font-weight:400;">(הנחה 8%)</small></th>
+                <th style="padding:10px 8px;text-align:right;color:var(--on-surface-var);font-weight:600;">$/קליק</th>
+                <th style="padding:10px 8px;text-align:right;color:var(--on-surface-var);font-weight:600;">עמלה כוללת</th>
+                <th style="padding:10px 8px;text-align:right;color:var(--on-surface-var);font-weight:600;">פוטנציאל</th>
+              </tr>
+            </thead>
+            <tbody>${nicheRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+
+    // ── Goal calculator ───────────────────────────────────────────────────────
+    if (overallRpc) {
+      const clicksPer1k  = Math.ceil(1000  / overallRpc);
+      const clicksPer5k  = Math.ceil(5000  / overallRpc);
+      const clicksPer10k = Math.ceil(10000 / overallRpc);
+
+      html += `
+        <div class="card" style="margin-bottom:24px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+            <span class="material-symbols-outlined" style="font-size:18px;color:#702ae1;">calculate</span>
+            <span style="font-weight:700;">מחשבון יעד רווח</span>
+            <span style="font-size:11px;background:rgba(22,163,74,0.1);color:#16a34a;padding:2px 8px;border-radius:20px;">מבוסס נתונים אמיתיים</span>
+          </div>
+          <div style="font-size:13px;color:var(--on-surface-var);margin-bottom:16px;">
+            הכנסה לקליק: <strong style="color:var(--on-surface);">$${overallRpc.toFixed(4)}</strong> — כמה קליקים תצטרך כדי להגיע ליעד?
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
+            ${[
+              { target: '$1,000', clicks: clicksPer1k },
+              { target: '$5,000', clicks: clicksPer5k },
+              { target: '$10,000', clicks: clicksPer10k },
+            ].map(g => `
+              <div style="background:var(--surface-1);border-radius:12px;padding:16px;text-align:center;">
+                <div style="font-size:22px;font-weight:900;color:#702ae1;margin-bottom:4px;">${g.target}</div>
+                <div style="font-size:12px;color:var(--on-surface-var);margin-bottom:8px;">יעד חודשי</div>
+                <div style="font-size:28px;font-weight:900;">${g.clicks.toLocaleString()}</div>
+                <div style="font-size:11px;color:var(--on-surface-var);">קליקים נדרשים</div>
+              </div>`).join('')}
+          </div>
+          <div style="font-size:12px;color:var(--on-surface-var);border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;">
+            💡 כדי להגיע ל-$1,000/חודש תצטרך בממוצע <strong>${Math.ceil(clicksPer1k / 30).toLocaleString()} קליקים ביום</strong> —
+            כלומר בערך ${Math.ceil(clicksPer1k / 30 / (totals.sent_products || 1)).toFixed(0)} קליקים לפוסט אם שולחים ${totals.sent_products || '?'} פוסטים פעילים.
+          </div>
+        </div>`;
+    }
+
+    // ── What-if levers ────────────────────────────────────────────────────────
+    const topNiches = niches.filter(n => parseFloat(n.revenue_per_click) > 0).slice(0, 3);
+    if (topNiches.length) {
+      html += `
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+            <span class="material-symbols-outlined" style="font-size:18px;color:#702ae1;">tune</span>
+            <span style="font-weight:700;">מנופי צמיחה — מה אם...</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;">
+            ${topNiches.map(n => {
+              const rpc    = parseFloat(n.revenue_per_click);
+              const clicks = parseInt(n.total_clicks, 10);
+              const color  = n.color || '#702ae1';
+              return `
+                <div style="background:var(--surface-1);border-radius:12px;padding:16px;">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+                    <div style="width:10px;height:10px;border-radius:50%;background:${color};"></div>
+                    <strong style="font-size:13px;">${escHtml(n.name)}</strong>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;">
+                    <div style="display:flex;justify-content:space-between;padding:6px 10px;background:rgba(22,163,74,0.06);border-radius:8px;">
+                      <span style="color:var(--on-surface-var);">+50% קליקים</span>
+                      <span style="color:#16a34a;font-weight:700;">+$${(clicks * 0.5 * rpc).toFixed(2)}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;padding:6px 10px;background:rgba(22,163,74,0.06);border-radius:8px;">
+                      <span style="color:var(--on-surface-var);">+100% קליקים</span>
+                      <span style="color:#16a34a;font-weight:700;">+$${(clicks * rpc).toFixed(2)}</span>
+                    </div>
+                    <div style="font-size:11px;color:var(--on-surface-var);padding-top:4px;">
+                      בסיס: ${clicks.toLocaleString()} קליקים · $${rpc.toFixed(4)}/קליק
+                    </div>
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+    }
+
+    el.innerHTML = html;
+
+    // Append suggested products after main content
+    loadSuggestedProducts(el);
+  } catch (err) {
+    document.getElementById('analytics-insights-content').innerHTML =
+      `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+async function loadSuggestedProducts(container) {
+  try {
+    const data     = await api('/api/analytics/suggested-products');
+    const products = data.products || [];
+    if (!products.length) return;
+
+    const rows = products.map((p, i) => {
+      const comm    = parseFloat(p.attributed_commission || 0);
+      const cps     = parseFloat(p.commission_per_send   || 0);
+      const sends   = parseInt(p.send_count || 1, 10);
+      const color   = p.subject_color || '#702ae1';
+
+      // Compute days since last sent
+      let daysAgo = '—';
+      if (p.sent_at) {
+        const ms = Date.now() - new Date(p.sent_at).getTime();
+        daysAgo  = Math.floor(ms / 86400000);
+      }
+      const stale    = typeof daysAgo === 'number' && daysAgo > 14;
+      const staleTag = stale
+        ? `<span style="font-size:10px;background:rgba(245,158,11,0.15);color:#f59e0b;padding:1px 6px;border-radius:10px;margin-right:4px;">לא פורסם ${daysAgo} ימים</span>`
+        : `<span style="font-size:10px;color:var(--on-surface-var);">${daysAgo} ימים</span>`;
+
+      return `
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.04);">
+          <div style="font-size:18px;font-weight:900;color:var(--on-surface-var);width:24px;text-align:center;flex-shrink:0;">${i + 1}</div>
+          ${p.image ? `<img src="${escHtml(p.image)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0;" loading="lazy" />` : `<div style="width:44px;height:44px;border-radius:8px;background:rgba(112,42,225,0.08);flex-shrink:0;"></div>`}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(p.text || '')}">${escHtml(p.text || '—')}</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:3px;flex-wrap:wrap;">
+              <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;">
+                <span style="width:7px;height:7px;border-radius:50%;background:${color};"></span>
+                ${escHtml(p.subject_name || '—')}
+              </span>
+              <span style="font-size:11px;color:var(--on-surface-var);">${(p.clicks || 0).toLocaleString()} קליקים · ${sends} שליחות</span>
+              ${staleTag}
+            </div>
+          </div>
+          <div style="text-align:left;flex-shrink:0;">
+            <div style="font-size:18px;font-weight:900;color:#16a34a;">$${cps.toFixed(2)}</div>
+            <div style="font-size:10px;color:var(--on-surface-var);">לשליחה</div>
+          </div>
+        </div>`;
+    }).join('');
+
+    const section = document.createElement('div');
+    section.className = 'card';
+    section.style.marginTop = '24px';
+    section.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <span class="material-symbols-outlined" style="font-size:18px;color:#702ae1;">recommend</span>
+        <span style="font-weight:700;">המלצות לפרסום — מוצרים שכדאי לפרסם שוב</span>
+        <span style="font-size:11px;background:rgba(22,163,74,0.12);color:#16a34a;padding:2px 8px;border-radius:20px;">נתונים אמיתיים</span>
+      </div>
+      <div style="font-size:11px;color:var(--on-surface-var);margin-bottom:14px;">
+        מדורגים לפי עמלה מיוחסת לשליחה — המוצרים שהרוויחו הכי הרבה ביחס למספר הפעמים שפורסמו
+      </div>
+      <div>${rows}</div>`;
+    container.appendChild(section);
+  } catch (_) {
+    // suggestions are additive — fail silently
+  }
+}
+
+// ── Analytics: Sales Dashboard ────────────────────────────────────────────────
+
+async function loadJoinLinkStats() {
+  const el = document.getElementById('analytics-join-links-content');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const data   = await api('/api/analytics/join-link-stats');
+    const groups = data.groups || [];
+
+    if (!groups.length) {
+      el.innerHTML = `<div class="card" style="padding:40px;text-align:center;">
+        <div style="font-size:36px;margin-bottom:12px;">👥</div>
+        <div style="font-weight:700;margin-bottom:8px;">אין קבוצות WhatsApp מוגדרות</div>
+        <div style="font-size:13px;color:var(--on-surface-var);">הוסף קבוצות בהגדרות הנישה</div>
+      </div>`;
+      return;
+    }
+
+    // ── Sync button header ────────────────────────────────────────────────────
+    let html = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-weight:700;font-size:16px;">קליקים על קישורי הצטרפות</div>
+          <div style="font-size:12px;color:var(--on-surface-var);">מעקב יומי דרך spoo.me — לחץ "עדכן היום" לקחת צילום</div>
+        </div>
+        <button class="btn btn-primary btn-sm" id="btn-sync-join-clicks">
+          <span class="material-symbols-outlined" style="font-size:14px;">update</span>עדכן היום
+        </button>
+      </div>`;
+
+    // ── One card per group ────────────────────────────────────────────────────
+    for (const g of groups) {
+      const color   = g.subject_color || '#702ae1';
+      const days    = g.days || [];
+      const today   = days[0];
+      const totalToday = today ? today.total_clicks : null;
+
+      // last 14 days of daily_clicks
+      const recentDays = days.slice(0, 14).reverse();
+      const maxDaily   = Math.max(...recentDays.map(d => d.daily_clicks || 0), 1);
+
+      const bars = recentDays.map(d => {
+        const dc    = d.daily_clicks != null ? Math.max(d.daily_clicks, 0) : 0;
+        const h     = Math.round(dc / maxDaily * 40);
+        const dateStr = new Date(d.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' });
+        return `
+          <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1;">
+            <span style="font-size:9px;color:var(--on-surface-var);">${dc > 0 ? dc : ''}</span>
+            <div style="width:100%;height:40px;display:flex;align-items:flex-end;">
+              <div style="width:100%;height:${h}px;background:${color};border-radius:2px 2px 0 0;min-height:${dc>0?2:0}px;opacity:0.85;"></div>
+            </div>
+            <span style="font-size:9px;color:var(--on-surface-var);white-space:nowrap;">${dateStr}</span>
+          </div>`;
+      }).join('');
+
+      // Daily table (last 10 days)
+      const tableRows = days.slice(0, 10).map(d => {
+        const dc = d.daily_clicks != null ? Math.max(d.daily_clicks, 0) : '—';
+        const dateStr = new Date(d.date).toLocaleDateString('he-IL', { weekday: 'short', day: '2-digit', month: '2-digit' });
+        return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+          <td style="padding:7px 12px;font-size:13px;">${dateStr}</td>
+          <td style="padding:7px 12px;text-align:center;font-weight:700;font-size:15px;color:${color};">${typeof dc === 'number' ? dc.toLocaleString() : dc}</td>
+          <td style="padding:7px 12px;text-align:center;font-size:12px;color:var(--on-surface-var);">${d.total_clicks.toLocaleString()} סה"כ</td>
+        </tr>`;
+      }).join('');
+
+      html += `
+        <div class="card" style="margin-bottom:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></span>
+              <span style="font-weight:700;font-size:15px;">${escHtml(g.group_name)}</span>
+              <span style="font-size:12px;color:var(--on-surface-var);">${escHtml(g.subject_name)}</span>
+            </div>
+            ${totalToday != null
+              ? `<div style="font-size:24px;font-weight:900;color:${color};">${totalToday.toLocaleString()} <span style="font-size:12px;font-weight:400;color:var(--on-surface-var);">קליקים כולל</span></div>`
+              : `<span style="font-size:12px;color:var(--on-surface-var);">לחץ "עדכן היום" להתחיל מעקב</span>`}
+          </div>
+          ${recentDays.length ? `
+            <div style="display:flex;gap:2px;align-items:flex-end;margin-bottom:16px;padding:0 4px;">
+              ${bars}
+            </div>` : ''}
+          ${tableRows ? `
+            <div style="overflow-x:auto;">
+              <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                  <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+                    <th style="padding:6px 12px;text-align:right;font-size:11px;color:var(--on-surface-var);font-weight:600;">תאריך</th>
+                    <th style="padding:6px 12px;text-align:center;font-size:11px;color:var(--on-surface-var);font-weight:600;">קליקים היום</th>
+                    <th style="padding:6px 12px;text-align:center;font-size:11px;color:var(--on-surface-var);font-weight:600;">סה"כ מצטבר</th>
+                  </tr>
+                </thead>
+                <tbody>${tableRows}</tbody>
+              </table>
+            </div>` : '<div style="font-size:13px;color:var(--on-surface-var);padding:8px 0;">לחץ "עדכן היום" כדי להתחיל לצבור נתונים יומיים</div>'}
+        </div>`;
+    }
+
+    el.innerHTML = html;
+
+    document.getElementById('btn-sync-join-clicks').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;">update</span>מעדכן...';
+      try {
+        const r = await api('/api/analytics/sync-join-clicks', { method: 'POST', body: {} });
+        await loadJoinLinkStats();
+      } catch (err) {
+        alert('שגיאה: ' + err.message);
+        btn.disabled = false;
+      }
+    });
+  } catch (err) {
+    el.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+async function sendProductById(productId) {
+  if (!productId) return;
+  if (!confirm('לשלוח את המוצר הזה עכשיו לכל הקבוצות של הנישה?')) return;
+  try {
+    const res = await api('/api/send', { method: 'POST', body: JSON.stringify({ productId }), headers: { 'Content-Type': 'application/json' } });
+    alert(res.message || 'המוצר נשלח בהצלחה ✓');
+    loadSalesDashboard();
+  } catch (err) {
+    alert('שגיאה בשליחה: ' + err.message);
+  }
+}
+
+async function loadSalesDashboard() {
+  const el = document.getElementById('analytics-sales-content');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);">טוען...</div>';
+
+  try {
+    const [profData, mktData] = await Promise.all([
+      api('/api/analytics/product-profitability'),
+      api('/api/analytics/marketing-insights'),
+    ]);
+
+    const products  = profData.products  || [];
+    const buckets   = mktData.priceBuckets  || [];
+    const hot       = mktData.hotVsRegular   || [];
+    const buyers    = mktData.buyerTypes     || [];
+    const momentum  = mktData.momentum       || {};
+
+    if (!products.length) {
+      el.innerHTML = `<div class="card" style="padding:40px;text-align:center;">
+        <div style="font-size:36px;margin-bottom:12px;">📦</div>
+        <div style="font-weight:700;margin-bottom:8px;">אין עדיין נתוני מכירות</div>
+        <div style="font-size:13px;color:var(--on-surface-var);">לחץ "עדכן עמלות" כדי למשוך הזמנות מ-AliExpress</div>
+      </div>`;
+      return;
+    }
+
+    let html = '';
+
+    // ── Momentum strip ────────────────────────────────────────────────────────
+    const last7    = parseInt(momentum.last_7  || 0, 10);
+    const prev7    = parseInt(momentum.prev_7  || 0, 10);
+    const commL7   = parseFloat(momentum.comm_last_7 || 0);
+    const commP7   = parseFloat(momentum.comm_prev_7 || 0);
+    const momPct   = prev7 > 0 ? ((last7 - prev7) / prev7 * 100).toFixed(0) : null;
+    const momColor = momPct != null ? (parseFloat(momPct) >= 0 ? '#16a34a' : '#ef4444') : '#702ae1';
+    const momArrow = momPct != null ? (parseFloat(momPct) >= 0 ? '↑' : '↓') : '';
+
+    html += `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px;">
+        <div class="card an-kpi-card" style="flex-direction:column;align-items:flex-start;gap:6px;padding:16px;">
+          <span style="font-size:11px;color:var(--on-surface-var);">7 ימים אחרונים</span>
+          <div style="font-size:28px;font-weight:900;color:#702ae1;">${last7}</div>
+          <div style="font-size:12px;color:var(--on-surface-var);">הזמנות</div>
+          ${momPct != null ? `<div style="font-size:13px;font-weight:700;color:${momColor};">${momArrow} ${Math.abs(momPct)}% vs שבוע קודם</div>` : ''}
+        </div>
+        <div class="card an-kpi-card" style="flex-direction:column;align-items:flex-start;gap:6px;padding:16px;">
+          <span style="font-size:11px;color:var(--on-surface-var);">עמלה 7 ימים</span>
+          <div style="font-size:28px;font-weight:900;color:#16a34a;">$${commL7.toFixed(2)}</div>
+          <div style="font-size:12px;color:var(--on-surface-var);">vs $${commP7.toFixed(2)} שבוע קודם</div>
+        </div>
+        <div class="card an-kpi-card" style="flex-direction:column;align-items:flex-start;gap:6px;padding:16px;">
+          <span style="font-size:11px;color:var(--on-surface-var);">מוצרים שמכרו</span>
+          <div style="font-size:28px;font-weight:900;color:#702ae1;">${products.length}</div>
+          <div style="font-size:12px;color:var(--on-surface-var);">פריטים ייחודיים</div>
+        </div>
+        <div class="card an-kpi-card" style="flex-direction:column;align-items:flex-start;gap:6px;padding:16px;">
+          <span style="font-size:11px;color:var(--on-surface-var);">מוצרים מקושרים</span>
+          <div style="font-size:28px;font-weight:900;color:#702ae1;">${products.filter(p => p.local_product_id).length}</div>
+          <div style="font-size:12px;color:var(--on-surface-var);">נמצאו בקטלוג שלך</div>
+        </div>
+      </div>`;
+
+    // ── Product profitability table ───────────────────────────────────────────
+    const prodRows = products.map((p, i) => {
+      const comm     = parseFloat(p.total_commission || 0);
+      const rev      = parseFloat(p.total_revenue    || 0);
+      const orders   = parseInt(p.total_orders       || 0, 10);
+      const newB     = parseInt(p.new_buyers          || 0, 10);
+      const color    = p.subject_color || '#702ae1';
+      const isHot    = p.is_hot;
+      const hasLocal = !!p.local_product_id;
+      const daysStale = p.local_sent_at
+        ? Math.floor((Date.now() - new Date(p.local_sent_at)) / 86400000)
+        : null;
+      const rankColor = i === 0 ? '#f59e0b' : i === 1 ? '#94a3b8' : i === 2 ? '#b45309' : 'var(--on-surface-var)';
+
+      const actionBtn = hasLocal && daysStale != null && daysStale > 7
+        ? `<button class="btn btn-primary btn-sm" style="font-size:11px;padding:4px 10px;white-space:nowrap;"
+             onclick="sendProductById('${escHtml(p.local_product_id)}')">
+             <span class="material-symbols-outlined" style="font-size:13px;">send</span>שלח שוב
+           </button>`
+        : hasLocal ? `<span style="font-size:11px;color:#16a34a;">✓ נשלח לאחרונה</span>`
+          : `<span style="font-size:11px;color:var(--on-surface-var);">לא בקטלוג</span>`;
+
+      return `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+          <td style="padding:12px 8px;text-align:center;font-weight:700;color:${rankColor};">${i + 1}</td>
+          <td style="padding:12px 8px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              ${p.product_image ? `<img src="${escHtml(p.product_image)}" style="width:48px;height:48px;object-fit:cover;border-radius:8px;flex-shrink:0;" loading="lazy" />` : `<div style="width:48px;height:48px;border-radius:8px;background:rgba(112,42,225,0.08);flex-shrink:0;"></div>`}
+              <div style="min-width:0;">
+                <div style="font-size:12px;font-weight:600;line-height:1.4;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(p.product_title || '')}">${escHtml(p.product_title || p.local_text || '—')}</div>
+                <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
+                  ${isHot ? '<span style="font-size:10px;background:rgba(239,68,68,0.1);color:#ef4444;padding:1px 6px;border-radius:10px;">🔥 מוצר חם</span>' : ''}
+                  ${hasLocal ? '<span style="font-size:10px;background:rgba(22,163,74,0.1);color:#16a34a;padding:1px 6px;border-radius:10px;">✓ בקטלוג</span>' : '<span style="font-size:10px;background:rgba(255,255,255,0.06);color:var(--on-surface-var);padding:1px 6px;border-radius:10px;">לא בקטלוג</span>'}
+                  ${newB > 0 ? `<span style="font-size:10px;background:rgba(59,130,246,0.1);color:#3b82f6;padding:1px 6px;border-radius:10px;">${newB} קונים חדשים</span>` : ''}
+                </div>
+              </div>
+            </div>
+          </td>
+          <td style="padding:12px 8px;">
+            <span style="display:inline-flex;align-items:center;gap:5px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:${color};"></span>
+              <span style="font-size:12px;">${escHtml(p.subject_name || '—')}</span>
+            </span>
+          </td>
+          <td style="padding:12px 8px;text-align:center;font-weight:700;font-size:18px;">${orders}</td>
+          <td style="padding:12px 8px;text-align:center;font-size:13px;">$${rev.toFixed(2)}</td>
+          <td style="padding:12px 8px;text-align:center;font-weight:900;font-size:18px;color:#16a34a;">$${comm.toFixed(2)}</td>
+          <td style="padding:12px 8px;text-align:center;">${actionBtn}</td>
+        </tr>`;
+    }).join('');
+
+    html += `
+      <div class="card" style="padding:0;overflow:hidden;margin-bottom:24px;">
+        <div style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:8px;">
+          <span class="material-symbols-outlined" style="font-size:18px;color:#702ae1;">storefront</span>
+          <span style="font-weight:700;font-size:15px;">מוצרים שמכרו בפועל</span>
+          <span style="font-size:11px;background:rgba(22,163,74,0.12);color:#16a34a;padding:2px 8px;border-radius:20px;">נתונים אמיתיים מ-AliExpress</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="border-bottom:2px solid rgba(255,255,255,0.08);">
+                <th style="padding:10px 8px;width:36px;"></th>
+                <th style="padding:10px 8px;text-align:right;font-weight:600;color:var(--on-surface-var);">מוצר</th>
+                <th style="padding:10px 8px;text-align:right;font-weight:600;color:var(--on-surface-var);">נישה</th>
+                <th style="padding:10px 8px;text-align:center;font-weight:600;color:var(--on-surface-var);">הזמנות</th>
+                <th style="padding:10px 8px;text-align:center;font-weight:600;color:var(--on-surface-var);">מחזור</th>
+                <th style="padding:10px 8px;text-align:center;font-weight:600;color:var(--on-surface-var);">עמלה</th>
+                <th style="padding:10px 8px;text-align:center;font-weight:600;color:var(--on-surface-var);">פעולה</th>
+              </tr>
+            </thead>
+            <tbody>${prodRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+
+    // ── Marketing analysis grid ───────────────────────────────────────────────
+    // Price buckets
+    const maxBucketComm = Math.max(...buckets.map(b => parseFloat(b.total_commission || 0)), 0.01);
+    const bucketBars = buckets.map(b => {
+      const comm  = parseFloat(b.total_commission || 0);
+      const cnt   = parseInt(b.order_count || 0, 10);
+      const width = Math.round(comm / maxBucketComm * 100);
+      return `
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+            <span style="font-weight:600;">${escHtml(b.bucket)}</span>
+            <span style="color:var(--on-surface-var);">${cnt} הזמנות · <span style="color:#16a34a;font-weight:700;">$${comm.toFixed(2)}</span></span>
+          </div>
+          <div style="height:8px;border-radius:4px;background:rgba(255,255,255,0.06);overflow:hidden;">
+            <div style="height:100%;width:${width}%;background:linear-gradient(90deg,#702ae1,#16a34a);border-radius:4px;"></div>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Hot vs regular
+    const hotRow  = hot.find(r => r.is_hot)  || {};
+    const regRow  = hot.find(r => !r.is_hot) || {};
+    const hotOrd  = parseInt(hotRow.order_count || 0, 10);
+    const regOrd  = parseInt(regRow.order_count || 0, 10);
+    const totalOrd = hotOrd + regOrd || 1;
+
+    // New vs returning buyers
+    const newRow  = buyers.find(r => r.is_new)  || {};
+    const retRow  = buyers.find(r => !r.is_new) || {};
+    const newCnt  = parseInt(newRow.order_count || 0, 10);
+    const retCnt  = parseInt(retRow.order_count || 0, 10);
+    const totalB  = newCnt + retCnt || 1;
+
+    html += `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+            <span class="material-symbols-outlined" style="font-size:18px;color:#702ae1;">price_change</span>
+            <span style="font-weight:700;">טווח מחירים מנצח</span>
+          </div>
+          ${bucketBars || '<div style="color:var(--on-surface-var);font-size:13px;">אין נתונים</div>'}
+          <div style="font-size:11px;color:var(--on-surface-var);margin-top:8px;">
+            בחר מוצרים בטווח המחיר שמייצר הכי הרבה עמלה
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+            <span class="material-symbols-outlined" style="font-size:18px;color:#ef4444;">local_fire_department</span>
+            <span style="font-weight:700;">מוצרים חמים vs רגילים</span>
+          </div>
+          <div style="margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+              <span>🔥 מוצרים חמים</span>
+              <span style="font-weight:700;color:#ef4444;">${hotOrd} הזמנות (${Math.round(hotOrd/totalOrd*100)}%)</span>
+            </div>
+            <div style="height:10px;border-radius:5px;background:rgba(255,255,255,0.06);">
+              <div style="height:100%;width:${Math.round(hotOrd/totalOrd*100)}%;background:#ef4444;border-radius:5px;"></div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+              <span>📦 מוצרים רגילים</span>
+              <span style="font-weight:700;color:#702ae1;">${regOrd} הזמנות (${Math.round(regOrd/totalOrd*100)}%)</span>
+            </div>
+            <div style="height:10px;border-radius:5px;background:rgba(255,255,255,0.06);">
+              <div style="height:100%;width:${Math.round(regOrd/totalOrd*100)}%;background:#702ae1;border-radius:5px;"></div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--on-surface-var);margin-top:12px;">
+            ${hotOrd > regOrd ? '✅ תעדף פרסום מוצרים חמים — הם ממירים טוב יותר' : '💡 המוצרים הרגילים שלך מצליחים — תמשיך לגוון'}
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+            <span class="material-symbols-outlined" style="font-size:18px;color:#3b82f6;">group</span>
+            <span style="font-weight:700;">סוגי קונים</span>
+          </div>
+          <div style="margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+              <span>🆕 קונים חדשים ב-AliExpress</span>
+              <span style="font-weight:700;color:#3b82f6;">${newCnt} (${Math.round(newCnt/totalB*100)}%)</span>
+            </div>
+            <div style="height:10px;border-radius:5px;background:rgba(255,255,255,0.06);">
+              <div style="height:100%;width:${Math.round(newCnt/totalB*100)}%;background:#3b82f6;border-radius:5px;"></div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+              <span>🔄 קונים חוזרים</span>
+              <span style="font-weight:700;color:#16a34a;">${retCnt} (${Math.round(retCnt/totalB*100)}%)</span>
+            </div>
+            <div style="height:10px;border-radius:5px;background:rgba(255,255,255,0.06);">
+              <div style="height:100%;width:${Math.round(retCnt/totalB*100)}%;background:#16a34a;border-radius:5px;"></div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--on-surface-var);margin-top:12px;">
+            ${retCnt > newCnt ? '💪 הלקוחות שלך חוזרים לקנות — הם סומכים על הפלטפורמה' : '🌱 רוב הקונים הם חדשים — הפוטנציאל לצמיחה גבוה'}
+          </div>
+        </div>
+      </div>`;
+
+    el.innerHTML = html;
+  } catch (err) {
+    document.getElementById('analytics-sales-content').innerHTML =
+      `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+// ── AI Product Discovery ──────────────────────────────────────────────────
+
+async function renderDiscoverTab() {
+  const grid = document.getElementById('discover-grid');
+  const status = document.getElementById('discover-status');
+  if (!grid) return;
+  grid.innerHTML = '<div style="color:var(--on-surface-var);font-size:13px;">טוען הצעות...</div>';
+  try {
+    const { suggestions } = await api('/api/discover');
+    if (!suggestions || suggestions.length === 0) {
+      grid.innerHTML = '<div style="color:var(--on-surface-var);font-size:13px;padding:20px 0;">אין הצעות כרגע. לחץ על "רענן הצעות" כדי לחפש מוצרים.</div>';
+      if (status) status.textContent = '';
+      return;
+    }
+    grid.innerHTML = suggestions.map(s => renderSuggestionCard(s)).join('');
+    if (status) status.textContent = `${suggestions.length} הצעות ממתינות`;
+  } catch (err) {
+    grid.innerHTML = `<div style="color:#ef4444;font-size:13px;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+function renderSuggestionCard(s) {
+  const price = s.sale_price ? `₪${parseFloat(s.sale_price).toFixed(2)}` : '';
+  const rating = s.evaluate_rate ? `${s.evaluate_rate}` : '';
+  const volume = s.lastest_volume ? `${s.lastest_volume.toLocaleString()} מכירות` : '';
+  const subject = s.subject_name ? `<span class="suggestion-subject-badge">${escHtml(s.subject_name)}</span>` : '';
+  const img = s.image_url
+    ? `<img src="${escHtml(s.image_url)}" alt="" style="width:100%;height:160px;object-fit:cover;border-radius:8px 8px 0 0;">`
+    : `<div style="width:100%;height:160px;background:var(--surface-2);border-radius:8px 8px 0 0;"></div>`;
+
+  const productData = JSON.stringify({
+    promotion_link: s.promotion_link,
+    product_main_image_url: s.image_url,
+    product_title: s.title,
+    app_sale_price: s.sale_price,
+  });
+
+  return `
+    <div class="suggestion-card" data-id="${escHtml(String(s.id))}" data-product="${escHtml(productData)}">
+      ${img}
+      <div style="padding:12px;">
+        ${subject}
+        <div class="suggestion-title" title="${escHtml(s.title)}">${escHtml(s.title)}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0;font-size:12px;color:var(--on-surface-var);">
+          ${price ? `<span>${price}</span>` : ''}
+          ${rating ? `<span>⭐ ${escHtml(String(rating))}</span>` : ''}
+          ${volume ? `<span>${escHtml(volume)}</span>` : ''}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn btn-primary btn-sm" style="flex:1;font-size:12px;"
+            onclick="addSuggestion(this)">
+            הוסף
+          </button>
+          <button class="btn btn-sm" style="flex:1;font-size:12px;background:var(--surface-2);color:var(--on-surface-var);"
+            onclick="dismissSuggestion(this)">
+            דחה
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function runDiscovery() {
+  const runBtn = document.getElementById('btn-run-discovery');
+  const status = document.getElementById('discover-status');
+  if (runBtn) {
+    runBtn.disabled = true;
+    runBtn.textContent = 'מחפש...';
+  }
+  if (status) status.textContent = 'מחפש מוצרים ב-AliExpress...';
+  try {
+    const result = await api('/api/discover/run', { method: 'POST' });
+    if (status) status.textContent = result.newCount > 0
+      ? `נמצאו ${result.newCount} מוצרים חדשים`
+      : 'לא נמצאו מוצרים חדשים';
+    await renderDiscoverTab();
+  } catch (err) {
+    if (status) status.textContent = 'שגיאה: ' + err.message;
+  } finally {
+    if (runBtn) {
+      runBtn.disabled = false;
+      runBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;">refresh</span> רענן הצעות';
+    }
+  }
+}
+
+async function addSuggestion(btn) {
+  btn.disabled = true;
+  const card = btn.closest('.suggestion-card');
+  const suggestionId = card.dataset.id;
+  const product = JSON.parse(card.dataset.product);
+  try {
+    await api('/api/aliexpress/add', { method: 'POST', body: JSON.stringify({ product }) });
+    await api(`/api/discover/${suggestionId}`, { method: 'PATCH', body: JSON.stringify({ status: 'added' }) });
+    if (card) card.style.animation = 'fadeOut 0.3s ease forwards';
+    setTimeout(() => card && card.remove(), 320);
+  } catch (err) {
+    alert('שגיאה בהוספת מוצר: ' + err.message);
+    btn.disabled = false;
+  }
+}
+
+async function dismissSuggestion(btn) {
+  btn.disabled = true;
+  const card = btn.closest('.suggestion-card');
+  const suggestionId = card.dataset.id;
+  try {
+    await api(`/api/discover/${suggestionId}`, { method: 'PATCH', body: JSON.stringify({ status: 'dismissed' }) });
+    if (card) card.style.animation = 'fadeOut 0.3s ease forwards';
+    setTimeout(() => card && card.remove(), 320);
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+    btn.disabled = false;
+  }
+}
+
+// Wire up Refresh button
+document.addEventListener('DOMContentLoaded', () => {
+  const runBtn = document.getElementById('btn-run-discovery');
+  if (runBtn) runBtn.addEventListener('click', runDiscovery);
+});
+
+// ─── PENDING APPROVALS (SuperAdmin) ────────────────────────────────────────
+
+async function renderPendingApprovals() {
+  const container = document.getElementById('pending-approvals-content');
+  if (!container) return;
+  container.innerHTML = '<p>טוען...</p>';
+  try {
+    const res  = await fetch('/api/users/pending');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    if (data.users.length === 0) {
+      container.innerHTML = '<p style="color:var(--on-surface-var)">אין משתמשים הממתינים לאישור</p>';
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="pending-list">
+        ${data.users.map(u => `
+          <div class="card" id="pending-${u.id}" style="margin-bottom:16px;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+              ${u.photo ? `<img src="${escHtml(u.photo)}" width="40" height="40" style="border-radius:50%;object-fit:cover;flex-shrink:0;" alt="">` : ''}
+              <div>
+                <div style="font-weight:700;font-size:15px;">${escHtml(u.name)}</div>
+                <div style="font-size:12px;color:var(--on-surface-var);">${escHtml(u.email)}</div>
+                <div style="font-size:11px;color:var(--on-surface-var);">נרשם: ${new Date(u.created_at).toLocaleDateString('he-IL')}</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+              <select id="role-${u.id}" class="form-input" style="width:auto;" onchange="toggleMaxUsers('${u.id}')">
+                <option value="group_admin">מנהל קבוצה</option>
+                <option value="group_user">משתמש קבוצה</option>
+              </select>
+              <span id="max-users-wrap-${u.id}" style="display:inline-flex;align-items:center;gap:6px;">
+                <label style="font-size:13px;">מקסימום משתמשים:</label>
+                <input type="number" id="max-${u.id}" value="5" min="0" max="100" class="form-input" style="width:70px;">
+              </span>
+              <button class="btn btn-primary btn-sm" onclick="approveUser('${u.id}')">אשר</button>
+              <span id="approve-status-${u.id}" style="font-size:13px;"></span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch (err) {
+    container.innerHTML = `<p style="color:#f87171;">שגיאה: ${escHtml(err.message)}</p>`;
+  }
+}
+
+window.toggleMaxUsers = function toggleMaxUsers(userId) {
+  const role = document.getElementById(`role-${userId}`).value;
+  const wrap = document.getElementById(`max-users-wrap-${userId}`);
+  wrap.style.display = role === 'group_admin' ? 'inline-flex' : 'none';
+};
+
+window.approveUser = async function approveUser(userId) {
+  const role          = document.getElementById(`role-${userId}`).value;
+  const maxGroupUsers = parseInt(document.getElementById(`max-${userId}`)?.value || '0', 10);
+  const statusEl      = document.getElementById(`approve-status-${userId}`);
+  statusEl.textContent = 'שומר...';
+  try {
+    const res  = await fetch(`/api/users/${userId}/approve`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ role, maxGroupUsers }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    document.getElementById(`pending-${userId}`)?.remove();
+  } catch (err) {
+    statusEl.textContent = `שגיאה: ${escHtml(err.message)}`;
+    statusEl.style.color = '#e74c3c';
+  }
+};
+
+// ─── MY TEAM (Group Admin) ──────────────────────────────────────────────────
+
+const PERM_LABELS = {
+  add_products:     'הוספת מוצרים',
+  edit_products:    'עריכת מוצרים',
+  delete_products:  'מחיקת מוצרים',
+  view_logs:        'צפייה ביומן',
+  trigger_send:     'שליחה ידנית',
+  manage_schedules: 'ניהול לוח זמנים',
+  view_settings:    'צפייה בהגדרות',
+};
+
+async function renderMyTeam() {
+  const container = document.getElementById('my-team-content');
+  if (!container) return;
+  container.innerHTML = '<p>טוען...</p>';
+  try {
+    const res  = await fetch('/api/users/group');
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    const max      = (window._currentUser || {}).max_group_users || 0;
+    const count    = data.users.length;
+    const capLabel = max > 0 ? `${count} / ${max} משתמשים` : `${count} משתמשים`;
+
+    container.innerHTML = `
+      <div class="card" style="margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:15px;font-weight:700;">${escHtml(capLabel)}</div>
+          <button class="btn btn-primary btn-sm" onclick="showInviteFormTeam()">
+            <span class="material-symbols-outlined" style="font-size:14px;">person_add</span>
+            הזמן משתמש
+          </button>
+        </div>
+        <div id="invite-form-team" style="display:none;margin-bottom:16px;padding:12px;background:rgba(255,255,255,0.04);border-radius:10px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <input type="email" id="invite-email-team" class="form-input" placeholder="כתובת אימייל" style="flex:1;min-width:200px;" dir="ltr">
+            <button class="btn btn-primary btn-sm" onclick="inviteTeamMember()">שלח הזמנה</button>
+          </div>
+          <div id="invite-status-team" style="font-size:13px;margin-top:8px;min-height:18px;"></div>
+        </div>
+        <div class="members-list">
+          ${data.users.length === 0
+            ? '<p style="color:var(--on-surface-var)">אין חברי צוות עדיין</p>'
+            : data.users.map(u => `
+              <div style="border-top:1px solid rgba(255,255,255,0.06);padding:16px 0;" id="member-${u.id}">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    ${u.photo ? `<img src="${escHtml(u.photo)}" width="34" height="34" style="border-radius:50%;object-fit:cover;flex-shrink:0;" alt="">` : ''}
+                    <div>
+                      <div style="font-weight:600;font-size:14px;">${escHtml(u.name)}</div>
+                      <div style="font-size:12px;color:var(--on-surface-var);">${escHtml(u.email)}</div>
+                    </div>
+                  </div>
+                  <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="removeTeamMember('${u.id}', '${escHtml(u.name)}', '${u.role}')">הסר</button>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:6px;">
+                  ${Object.entries(PERM_LABELS).map(([key, label]) => `
+                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+                      <input type="checkbox" id="perm-${u.id}-${key}"
+                        ${u.permissions?.[key] ? 'checked' : ''}
+                        onchange="savePermissions('${u.id}')">
+                      ${escHtml(label)}
+                    </label>
+                  `).join('')}
+                </div>
+                <div id="perm-status-${u.id}" style="font-size:12px;min-height:16px;"></div>
+              </div>
+            `).join('')}
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    container.innerHTML = `<p style="color:#f87171;">שגיאה: ${escHtml(err.message)}</p>`;
+  }
+}
+
+window.showInviteFormTeam = function showInviteFormTeam() {
+  const form = document.getElementById('invite-form-team');
+  if (!form) return;
+  form.style.display = form.style.display === 'none' ? '' : 'none';
+};
+
+window.inviteTeamMember = async function inviteTeamMember() {
+  const email    = document.getElementById('invite-email-team').value.trim();
+  const statusEl = document.getElementById('invite-status-team');
+  if (!email) { statusEl.textContent = 'נא להזין אימייל'; return; }
+  statusEl.textContent = 'שולח...';
+  statusEl.style.color = '';
+  try {
+    const res  = await fetch('/api/users/invites', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email, invitedRole: 'group_user' }),
+    });
+    const data = await res.json();
+    if (!data.success) {
+      statusEl.textContent = data.limitReached
+        ? `הגעת למגבלת המשתמשים (${data.current}/${data.max})`
+        : `שגיאה: ${data.error}`;
+      statusEl.style.color = '#e74c3c';
+      return;
+    }
+    statusEl.textContent = 'ההזמנה נשלחה בהצלחה';
+    statusEl.style.color = '#4ecca3';
+    document.getElementById('invite-email-team').value = '';
+  } catch (err) {
+    statusEl.textContent = `שגיאה: ${escHtml(err.message)}`;
+    statusEl.style.color = '#e74c3c';
+  }
+};
+
+window.savePermissions = async function savePermissions(userId) {
+  const permissions = {};
+  for (const key of Object.keys(PERM_LABELS)) {
+    permissions[key] = document.getElementById(`perm-${userId}-${key}`)?.checked || false;
+  }
+  const statusEl = document.getElementById(`perm-status-${userId}`);
+  statusEl.textContent = 'שומר...';
+  statusEl.style.color = '';
+  try {
+    const res  = await fetch(`/api/users/${userId}/permissions`, {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ permissions }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    statusEl.textContent = 'נשמר';
+    statusEl.style.color = '#4ecca3';
+    setTimeout(() => { statusEl.textContent = ''; }, 2000);
+  } catch (err) {
+    statusEl.textContent = `שגיאה: ${escHtml(err.message)}`;
+    statusEl.style.color = '#e74c3c';
+  }
+};
+
+window.removeTeamMember = async function removeTeamMember(userId, userName, userRole) {
+  let keepProducts = false;
+
+  if (userRole === 'group_admin') {
+    const decision = confirm(
+      `האם להסיר את ${userName}?\n\nהמשתמש הוא מנהל קבוצה.\nלחץ אישור כדי להעביר את המוצרים שלהם אליך.\nלחץ ביטול כדי למחוק את המוצרים.`
+    );
+    keepProducts = decision;
+  } else {
+    if (!confirm(`האם להסיר את ${userName} מהצוות?`)) return;
+  }
+
+  try {
+    const res  = await fetch(`/api/users/${userId}?keepProducts=${keepProducts}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    document.getElementById(`member-${userId}`)?.remove();
+  } catch (err) {
+    alert(`שגיאה בהסרת משתמש: ${err.message}`);
+  }
+};
+
+
