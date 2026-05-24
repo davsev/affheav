@@ -142,6 +142,196 @@ async function migrate() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS logs_user_ts ON logs(user_id, ts DESC)`);
 
+
+  // ── Broadcast Messages ────────────────────────────────────────────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS broadcast_messages (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      subject_id   UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+      label        VARCHAR(255) NOT NULL,
+      text         TEXT NOT NULL,
+      image_url    TEXT,
+      recurrence   JSONB NOT NULL,
+      cron         VARCHAR(100) NOT NULL,
+      enabled      BOOLEAN NOT NULL DEFAULT true,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS bcast_user_id    ON broadcast_messages(user_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS bcast_subject_id ON broadcast_messages(subject_id)`);
+  await query(`ALTER TABLE broadcast_messages ADD COLUMN IF NOT EXISTS send_facebook BOOLEAN NOT NULL DEFAULT true`);
+
+  // ── Commission Snapshots (AliExpress affiliate orders) ───────────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS commission_snapshots (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      subject_id      UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+      tracking_id     TEXT NOT NULL,
+      order_id        TEXT NOT NULL,
+      order_amount    NUMERIC(12,2),
+      commission_rate NUMERIC(5,4),
+      commission_usd  NUMERIC(10,2),
+      order_status    TEXT,
+      payment_status  TEXT,
+      order_time      TIMESTAMPTZ,
+      fetched_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(user_id, order_id)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS commission_snapshots_subject ON commission_snapshots(subject_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS commission_snapshots_user    ON commission_snapshots(user_id)`);
+
+  // ── Post IDs on products (for Meta Insights) ─────────────────────────────
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS fb_post_id  TEXT`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS ig_media_id TEXT`);
+
+  // ── Post Insights (Meta organic reach per post) ───────────────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_insights (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      product_id   UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      platform     TEXT NOT NULL,
+      reach        INTEGER,
+      impressions  INTEGER,
+      fetched_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(product_id, platform)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS post_insights_product ON post_insights(product_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS post_insights_user    ON post_insights(user_id)`);
+
+  // ── Ad Spend (manual ROAS tracking) ──────────────────────────────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS ad_spend (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      subject_id   UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+      platform     TEXT NOT NULL,
+      spend_usd    NUMERIC(10,2) NOT NULL,
+      period_start DATE NOT NULL,
+      period_end   DATE NOT NULL,
+      notes        TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS ad_spend_user    ON ad_spend(user_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS ad_spend_subject ON ad_spend(subject_id)`);
+
+  // ── Order Items (AliExpress per-product line items within each order) ─────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS order_items (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      subject_id      UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+      order_id        TEXT NOT NULL,
+      product_id      TEXT NOT NULL,
+      product_title   TEXT,
+      item_count      INTEGER,
+      order_amount    NUMERIC(12,2),
+      commission_rate NUMERIC(5,4),
+      commission_usd  NUMERIC(10,2),
+      fetched_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(user_id, order_id, product_id)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS order_items_user    ON order_items(user_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS order_items_subject ON order_items(subject_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS order_items_product ON order_items(product_id)`);
+
+  // ── Enrich commission_snapshots with product-level fields from AliExpress ────
+  // sub_order_id is the per-product unique key (parent order_id may cover multiple products)
+  await query(`ALTER TABLE commission_snapshots ADD COLUMN IF NOT EXISTS sub_order_id TEXT`);
+  await query(`ALTER TABLE commission_snapshots ADD COLUMN IF NOT EXISTS aliexpress_product_id TEXT`);
+  await query(`ALTER TABLE commission_snapshots ADD COLUMN IF NOT EXISTS product_title TEXT`);
+  await query(`ALTER TABLE commission_snapshots ADD COLUMN IF NOT EXISTS product_image TEXT`);
+  await query(`ALTER TABLE commission_snapshots ADD COLUMN IF NOT EXISTS is_hot_product BOOLEAN`);
+  await query(`ALTER TABLE commission_snapshots ADD COLUMN IF NOT EXISTS is_new_buyer BOOLEAN`);
+  await query(`ALTER TABLE commission_snapshots ADD COLUMN IF NOT EXISTS category_id TEXT`);
+  await query(`CREATE INDEX IF NOT EXISTS commission_snapshots_product ON commission_snapshots(aliexpress_product_id)`);
+
+  // ── Join link click tracking ───────────────────────────────────────────────
+  // join_short_link kept for backward compat but not required — join_link already holds spoo.me link
+  await query(`ALTER TABLE whatsapp_groups ADD COLUMN IF NOT EXISTS join_short_link TEXT`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS join_link_click_snapshots (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      group_id      UUID NOT NULL REFERENCES whatsapp_groups(id) ON DELETE CASCADE,
+      short_link    TEXT NOT NULL,
+      snapshot_date DATE NOT NULL,
+      total_clicks  INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(group_id, snapshot_date)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS jl_snapshots_group ON join_link_click_snapshots(group_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS jl_snapshots_user  ON join_link_click_snapshots(user_id)`);
+
+  // ── Product Suggestions (AI discovery agent) ──────────────────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS product_suggestions (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      subject_id     UUID REFERENCES subjects(id) ON DELETE SET NULL,
+      aliexpress_id  TEXT NOT NULL,
+      title          TEXT NOT NULL,
+      image_url      TEXT,
+      promotion_link TEXT NOT NULL,
+      sale_price     NUMERIC(10,2),
+      evaluate_rate  TEXT,
+      lastest_volume INTEGER,
+      source_keyword TEXT,
+      status         TEXT NOT NULL DEFAULT 'pending',
+      score          NUMERIC(6,2),
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(user_id, aliexpress_id)
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS product_suggestions_user   ON product_suggestions(user_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS product_suggestions_status ON product_suggestions(user_id, status)`);
+
+  // ── Phase 3.5: user management system ────────────────────────────────────
+
+  // --- users table ---
+  // Change status default to 'pending' for new self-registered users
+  await query(`ALTER TABLE users ALTER COLUMN status SET DEFAULT 'pending'`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS max_group_users INTEGER NOT NULL DEFAULT 0`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS group_admin_id UUID REFERENCES users(id) ON DELETE SET NULL`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{}'::jsonb`);
+
+  // --- invitations table (still used for Group Admin → Group User invites) ---
+  await query(`ALTER TABLE invitations ADD COLUMN IF NOT EXISTS invited_role VARCHAR(20) NOT NULL DEFAULT 'group_user'`);
+  await query(`ALTER TABLE invitations ADD COLUMN IF NOT EXISTS group_admin_id UUID REFERENCES users(id) ON DELETE SET NULL`);
+
+  // --- products table: group-level ownership ---
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS group_admin_id UUID REFERENCES users(id) ON DELETE SET NULL`);
+
+  // --- Data migrations (idempotent) ---
+  // Existing 'user' role → 'group_user'; mark them approved (they existed before the approval system)
+  await query(`UPDATE users SET role = 'group_user', status = 'approved' WHERE role = 'user'`);
+  // Existing 'admin' role users are already approved
+  await query(`UPDATE users SET status = 'approved' WHERE role = 'admin'`);
+
+  // --- Indexes ---
+  await query(`CREATE INDEX IF NOT EXISTS users_group_admin_id_idx ON users(group_admin_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS users_status_idx ON users(status)`);
+  await query(`CREATE INDEX IF NOT EXISTS products_group_admin_id_idx ON products(group_admin_id)`);
+
+  // --- Constraints ---
+  // group_user must have a group_admin_id (NOT VALID skips validating existing rows)
+  await query(`
+    DO $$ BEGIN
+      ALTER TABLE users ADD CONSTRAINT users_group_user_has_admin
+        CHECK (role != 'group_user' OR group_admin_id IS NOT NULL) NOT VALID;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$
+  `);
+
+
   console.log('✓ Database schema up to date');
 }
 
