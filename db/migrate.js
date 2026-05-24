@@ -298,6 +298,43 @@ async function migrate() {
   await query(`CREATE INDEX IF NOT EXISTS product_suggestions_user   ON product_suggestions(user_id)`);
   await query(`CREATE INDEX IF NOT EXISTS product_suggestions_status ON product_suggestions(user_id, status)`);
 
+  // ── Phase 3.5: user management system ────────────────────────────────────
+
+  // --- users table ---
+  // Change status default to 'pending' for new self-registered users
+  await query(`ALTER TABLE users ALTER COLUMN status SET DEFAULT 'pending'`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS max_group_users INTEGER NOT NULL DEFAULT 0`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS group_admin_id UUID REFERENCES users(id) ON DELETE SET NULL`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{}'::jsonb`);
+
+  // --- invitations table (still used for Group Admin → Group User invites) ---
+  await query(`ALTER TABLE invitations ADD COLUMN IF NOT EXISTS invited_role VARCHAR(20) NOT NULL DEFAULT 'group_user'`);
+  await query(`ALTER TABLE invitations ADD COLUMN IF NOT EXISTS group_admin_id UUID REFERENCES users(id) ON DELETE SET NULL`);
+
+  // --- products table: group-level ownership ---
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS group_admin_id UUID REFERENCES users(id) ON DELETE SET NULL`);
+
+  // --- Data migrations (idempotent) ---
+  // Existing 'user' role → 'group_user'; mark them approved (they existed before the approval system)
+  await query(`UPDATE users SET role = 'group_user', status = 'approved' WHERE role = 'user'`);
+  // Existing 'admin' role users are already approved
+  await query(`UPDATE users SET status = 'approved' WHERE role = 'admin'`);
+
+  // --- Indexes ---
+  await query(`CREATE INDEX IF NOT EXISTS users_group_admin_id_idx ON users(group_admin_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS users_status_idx ON users(status)`);
+  await query(`CREATE INDEX IF NOT EXISTS products_group_admin_id_idx ON products(group_admin_id)`);
+
+  // --- Constraints ---
+  // group_user must have a group_admin_id (NOT VALID skips validating existing rows)
+  await query(`
+    DO $$ BEGIN
+      ALTER TABLE users ADD CONSTRAINT users_group_user_has_admin
+        CHECK (role != 'group_user' OR group_admin_id IS NOT NULL) NOT VALID;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$
+  `);
+
   console.log('✓ Database schema up to date');
 }
 
