@@ -28,7 +28,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const style = document.createElement('style');
-style.textContent = '@keyframes fadeOut { to { opacity:0; transform:scale(1.02); } }';
+style.textContent = `
+  @keyframes fadeOut { to { opacity:0; transform:scale(1.02); } }
+  .suggestion-subject-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: var(--primary, #6366f1);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    letter-spacing: 0.3px;
+  }
+`;
 document.head.appendChild(style);
 
 function showLoginPage(errorMsg) {
@@ -4771,6 +4784,7 @@ function renderSuggestionCard(s) {
     product_main_image_url: s.image_url,
     product_title: s.title,
     app_sale_price: s.sale_price,
+    subject_id: s.subject_id,
   });
 
   return `
@@ -4829,8 +4843,8 @@ async function addSuggestion(btn) {
   const suggestionId = card.dataset.id;
   const product = JSON.parse(card.dataset.product);
   try {
-    await api('/api/aliexpress/add', { method: 'POST', body: JSON.stringify({ product }) });
-    await api(`/api/discover/${suggestionId}`, { method: 'PATCH', body: JSON.stringify({ status: 'added' }) });
+    await api('/api/aliexpress/add', { method: 'POST', body: { product, subject: product.subject_id || '' } });
+    await api(`/api/discover/${suggestionId}`, { method: 'PATCH', body: { status: 'added' } });
     if (card) card.style.animation = 'fadeOut 0.3s ease forwards';
     setTimeout(() => card && card.remove(), 320);
   } catch (err) {
@@ -4844,7 +4858,7 @@ async function dismissSuggestion(btn) {
   const card = btn.closest('.suggestion-card');
   const suggestionId = card.dataset.id;
   try {
-    await api(`/api/discover/${suggestionId}`, { method: 'PATCH', body: JSON.stringify({ status: 'dismissed' }) });
+    await api(`/api/discover/${suggestionId}`, { method: 'PATCH', body: { status: 'dismissed' } });
     if (card) card.style.animation = 'fadeOut 0.3s ease forwards';
     setTimeout(() => card && card.remove(), 320);
   } catch (err) {
