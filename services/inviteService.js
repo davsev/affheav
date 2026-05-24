@@ -3,15 +3,15 @@ const { v4: uuidv4 } = require('uuid');
 
 const INVITE_EXPIRY_DAYS = 7;
 
-async function createInvitation({ email, invitedBy }) {
+async function createInvitation({ email, invitedBy, invitedRole = 'group_user', groupAdminId = null }) {
   const token     = uuidv4();
   const expiresAt = new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
   const { rows } = await query(
-    `INSERT INTO invitations (email, token, invited_by, expires_at)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO invitations (email, token, invited_by, invited_role, group_admin_id, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [email.toLowerCase().trim(), token, invitedBy, expiresAt]
+    [email.toLowerCase().trim(), token, invitedBy, invitedRole, groupAdminId, expiresAt]
   );
   return rows[0];
 }
