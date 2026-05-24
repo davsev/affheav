@@ -31,6 +31,7 @@ function _row(r) {
     maxGroupUsers: r.max_group_users || 0,
     groupAdminId:  r.group_admin_id || null,
     permissions:   r.permissions || {},
+    preferredLang: r.preferred_lang || 'he',
     createdAt:     r.created_at,
     updatedAt:     r.updated_at,
   };
@@ -118,7 +119,7 @@ async function updateUser(googleId, fields) {
 }
 
 async function updateUserById(id, fields) {
-  const allowedKeys = ['name', 'photo', 'role', 'status', 'permissions', 'group_admin_id', 'max_group_users'];
+  const allowedKeys = ['name', 'photo', 'role', 'status', 'permissions', 'group_admin_id', 'max_group_users', 'preferred_lang'];
   const updates = [];
   const values  = [];
   let   i       = 1;
