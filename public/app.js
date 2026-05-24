@@ -28,7 +28,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const style = document.createElement('style');
-style.textContent = '@keyframes fadeOut { to { opacity:0; transform:scale(1.02); } }';
+style.textContent = `
+  @keyframes fadeOut { to { opacity:0; transform:scale(1.02); } }
+  .suggestion-subject-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: var(--primary, #6366f1);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    letter-spacing: 0.3px;
+  }
+`;
 document.head.appendChild(style);
 
 function showLoginPage(errorMsg) {
@@ -4742,6 +4755,13 @@ async function renderDiscoverTab() {
   const grid = document.getElementById('discover-grid');
   const status = document.getElementById('discover-status');
   if (!grid) return;
+
+  // Load AI settings and render the settings panel
+  try {
+    const s = await api('/api/discover/settings');
+    renderDiscoverSettings(s);
+  } catch (_) {}
+
   grid.innerHTML = '<div style="color:var(--on-surface-var);font-size:13px;">טוען הצעות...</div>';
   try {
     const { suggestions } = await api('/api/discover');
@@ -4754,6 +4774,81 @@ async function renderDiscoverTab() {
     if (status) status.textContent = `${suggestions.length} הצעות ממתינות`;
   } catch (err) {
     grid.innerHTML = `<div style="color:#ef4444;font-size:13px;">שגיאה: ${escHtml(err.message)}</div>`;
+  }
+}
+
+function renderDiscoverSettings({ aiEnabled, aiPrompt, defaultPrompt }) {
+  const container = document.getElementById('discover-ai-settings');
+  if (!container) return;
+  container.innerHTML = `
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:${aiEnabled ? '14px' : '0'};">
+        <span class="material-symbols-outlined" style="font-size:18px;color:var(--primary);">auto_awesome</span>
+        <span style="font-weight:600;font-size:14px;">AI Keyword Generation</span>
+        <label style="margin-right:auto;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+          <span style="color:var(--on-surface-var);">${aiEnabled ? 'פעיל' : 'כבוי'}</span>
+          <div class="ai-toggle${aiEnabled ? ' on' : ''}" id="ai-toggle-btn" onclick="toggleDiscoverAI(this)"
+               style="width:40px;height:22px;border-radius:11px;background:${aiEnabled ? 'var(--primary)' : 'var(--surface-3, #444)'};
+                      position:relative;cursor:pointer;transition:background 0.2s;flex-shrink:0;">
+            <div style="position:absolute;top:3px;left:${aiEnabled ? '20px' : '3px'};width:16px;height:16px;
+                        border-radius:50%;background:#fff;transition:left 0.2s;"></div>
+          </div>
+        </label>
+      </div>
+      ${aiEnabled ? `
+      <div>
+        <label style="font-size:12px;color:var(--on-surface-var);display:block;margin-bottom:6px;">
+          פרומפט (השאר ריק לשימוש בברירת המחדל)
+        </label>
+        <textarea id="discover-ai-prompt" rows="6"
+          style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--border);
+                 border-radius:6px;color:var(--on-surface);font-size:12px;font-family:monospace;
+                 padding:10px;resize:vertical;line-height:1.5;"
+          placeholder="${escHtml(defaultPrompt)}"
+        >${escHtml(aiPrompt)}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="btn btn-primary btn-sm" onclick="saveDiscoverAISettings()" style="font-size:12px;">
+            שמור פרומפט
+          </button>
+          <button class="btn btn-sm" onclick="resetDiscoverAIPrompt()" style="font-size:12px;background:var(--surface-2);color:var(--on-surface-var);">
+            אפס לברירת מחדל
+          </button>
+        </div>
+      </div>` : ''}
+    </div>
+  `;
+}
+
+async function toggleDiscoverAI(toggleEl) {
+  const isOn = toggleEl.classList.contains('on');
+  try {
+    await api('/api/discover/settings', { method: 'PATCH', body: { aiEnabled: !isOn } });
+    const s = await api('/api/discover/settings');
+    renderDiscoverSettings(s);
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+}
+
+async function saveDiscoverAISettings() {
+  const promptEl = document.getElementById('discover-ai-prompt');
+  if (!promptEl) return;
+  try {
+    await api('/api/discover/settings', { method: 'PATCH', body: { aiPrompt: promptEl.value } });
+    promptEl.style.border = '1px solid #22c55e';
+    setTimeout(() => { if (promptEl) promptEl.style.border = '1px solid var(--border)'; }, 1500);
+  } catch (err) {
+    alert('שגיאה בשמירה: ' + err.message);
+  }
+}
+
+async function resetDiscoverAIPrompt() {
+  try {
+    await api('/api/discover/settings', { method: 'PATCH', body: { aiPrompt: '' } });
+    const s = await api('/api/discover/settings');
+    renderDiscoverSettings(s);
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
   }
 }
 
@@ -4771,6 +4866,7 @@ function renderSuggestionCard(s) {
     product_main_image_url: s.image_url,
     product_title: s.title,
     app_sale_price: s.sale_price,
+    subject_id: s.subject_id,
   });
 
   return `
@@ -4809,9 +4905,10 @@ async function runDiscovery() {
   if (status) status.textContent = 'מחפש מוצרים ב-AliExpress...';
   try {
     const result = await api('/api/discover/run', { method: 'POST' });
+    const aiNote = result.aiEnabled ? ' (AI)' : '';
     if (status) status.textContent = result.newCount > 0
-      ? `נמצאו ${result.newCount} מוצרים חדשים`
-      : 'לא נמצאו מוצרים חדשים';
+      ? `נמצאו ${result.newCount} מוצרים חדשים${aiNote}`
+      : `לא נמצאו מוצרים חדשים${aiNote}`;
     await renderDiscoverTab();
   } catch (err) {
     if (status) status.textContent = 'שגיאה: ' + err.message;
@@ -4829,8 +4926,8 @@ async function addSuggestion(btn) {
   const suggestionId = card.dataset.id;
   const product = JSON.parse(card.dataset.product);
   try {
-    await api('/api/aliexpress/add', { method: 'POST', body: JSON.stringify({ product }) });
-    await api(`/api/discover/${suggestionId}`, { method: 'PATCH', body: JSON.stringify({ status: 'added' }) });
+    await api('/api/aliexpress/add', { method: 'POST', body: { product, subject: product.subject_id || '' } });
+    await api(`/api/discover/${suggestionId}`, { method: 'PATCH', body: { status: 'added' } });
     if (card) card.style.animation = 'fadeOut 0.3s ease forwards';
     setTimeout(() => card && card.remove(), 320);
   } catch (err) {
@@ -4844,7 +4941,7 @@ async function dismissSuggestion(btn) {
   const card = btn.closest('.suggestion-card');
   const suggestionId = card.dataset.id;
   try {
-    await api(`/api/discover/${suggestionId}`, { method: 'PATCH', body: JSON.stringify({ status: 'dismissed' }) });
+    await api(`/api/discover/${suggestionId}`, { method: 'PATCH', body: { status: 'dismissed' } });
     if (card) card.style.animation = 'fadeOut 0.3s ease forwards';
     setTimeout(() => card && card.remove(), 320);
   } catch (err) {
@@ -4853,9 +4950,12 @@ async function dismissSuggestion(btn) {
   }
 }
 
-// Wire up Refresh button
+// Wire up Refresh button + expose inline-onclick handlers to window
 document.addEventListener('DOMContentLoaded', () => {
   const runBtn = document.getElementById('btn-run-discovery');
   if (runBtn) runBtn.addEventListener('click', runDiscovery);
 });
+window.toggleDiscoverAI      = toggleDiscoverAI;
+window.saveDiscoverAISettings = saveDiscoverAISettings;
+window.resetDiscoverAIPrompt  = resetDiscoverAIPrompt;
 
