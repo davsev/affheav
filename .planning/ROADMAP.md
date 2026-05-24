@@ -28,7 +28,7 @@ Nine phases decompose the Node.js/Express monolith into independently deployable
 ### Phase 3.5: User Management System
 **Goal:** Extend the monolith with a 3-tier role system (SuperAdmin/Group Admin/Group User), per-user JSONB permission flags, group-scoped data isolation, and a vanilla JS team management UI — standalone validation phase before microservices rebuild
 **Depends on:** Phases 1–3 (v1.0 complete)
-**Plans:** 4 plans
+**Plans:** 2/4 plans executed
 
 Plans:
 - [x] 3.5-01-PLAN.md — DB migrations (group_admin_id, permissions, invited_role columns) + middleware/auth.js + middleware/scopeGroup.js

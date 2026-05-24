@@ -15,9 +15,9 @@ See: .planning/PROJECT.md (updated 2026-04-29)
 ## Current Position
 
 Phase: Phase 3.5 — User Management System (in progress)
-Plan: 3.5-01 complete
-Status: Plan 3.5-01 complete — DB schema migrations (status/pending, group hierarchy, product scoping), middleware/auth.js, middleware/scopeGroup.js
-Last activity: 2026-05-24 — Plan 3.5-01 executed (DB columns, approval gate middleware, 2 commits)
+Plan: 3.5-02 complete
+Status: Plan 3.5-02 complete — Three-path registration (self/invite/bootstrap) with role/status wired through userService, inviteService, OAuth callback; pending users routed to /pending page
+Last activity: 2026-05-24 — Plan 3.5-02 executed (userService, inviteService, server.js, 2 commits)
 
 Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 
@@ -41,6 +41,7 @@ Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 | 04-monorepo-scaffold-infrastructure | 3 | ✅ Complete |
 | 05-api-gateway-feature-flag-system P01 | 5 min | 3 tasks | 6 files |
 | Phase 05-api-gateway-feature-flag-system P02 | 15 | 2 tasks | 8 files |
+| Phase 3.5 P02 | 6 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -102,5 +103,5 @@ Progress: ██░░░░░░░░ 11% (1/9 v2.0 phases complete)
 ## Session Continuity
 
 Last session: 2026-05-24
-Stopped at: Completed 3.5-01-PLAN.md
-Resume: Run next plan in Phase 3.5 (3.5-02)
+Stopped at: Completed 3.5-02-PLAN.md
+Resume: Run next plan in Phase 3.5 (3.5-03)
