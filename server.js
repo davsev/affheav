@@ -43,25 +43,35 @@ passport.use(new GoogleStrategy(
       let user = await findUser(profile.id);
 
       if (!user) {
-        // New user — check if they have a valid invite token
+        // New user — determine registration path
+        let assignedRole   = 'group_admin'; // default for self-registrants
+        let assignedStatus = 'pending';     // all self-registrants wait for approval
+        let assignedGroupAdminId = null;
+
         const inviteToken = req.session.inviteToken;
+        let inv = null;
         if (inviteToken) {
-          const inv = await validateToken(inviteToken);
+          inv = await validateToken(inviteToken);
           if (!inv || inv.email.toLowerCase() !== email.toLowerCase()) {
             return done(null, false, { message: 'invalid_invite' });
           }
           await markUsed(inviteToken);
           delete req.session.inviteToken;
-        } else if (!process.env.ADMIN_GOOGLE_EMAIL || email !== process.env.ADMIN_GOOGLE_EMAIL) {
-          // Not admin bootstrap and no invite
-          return done(null, false, { message: 'no_invite' });
+          // Invited as group_user by a Group Admin — approved immediately
+          assignedRole         = inv.invited_role || 'group_user';
+          assignedStatus       = 'approved';
+          assignedGroupAdminId = inv.group_admin_id || null;
         }
+        // Bootstrap admin check is handled inside createUser (ADMIN_GOOGLE_EMAIL logic)
 
         user = await createUser({
-          googleId: profile.id,
+          googleId:     profile.id,
           email,
-          name:  profile.displayName,
-          photo: profile.photos?.[0]?.value,
+          name:         profile.displayName,
+          photo:        profile.photos?.[0]?.value,
+          role:         assignedRole,
+          status:       assignedStatus,
+          groupAdminId: assignedGroupAdminId,
         });
       } else {
         // Existing user — refresh name/photo
@@ -71,7 +81,7 @@ passport.use(new GoogleStrategy(
         });
       }
 
-      if (user.status !== 'active') {
+      if (user.status === 'suspended') {
         return done(null, false, { message: 'suspended' });
       }
 
@@ -120,12 +130,42 @@ app.get('/auth/google/callback',
   passport.authenticate('google', { failureMessage: true, failureRedirect: '/?error=unauthorized' }),
   (req, res) => {
     const msgs = req.session.messages || [];
-    if (msgs.includes('suspended'))     return res.redirect('/?error=suspended');
-    if (msgs.includes('no_invite'))     return res.redirect('/?error=no_invite');
+    if (msgs.includes('suspended'))      return res.redirect('/?error=suspended');
     if (msgs.includes('invalid_invite')) return res.redirect('/?error=invalid_invite');
+    // Redirect pending users to a waiting page
+    if (req.user?.status === 'pending') return res.redirect('/pending');
     res.redirect('/');
   }
 );
+
+app.get('/pending', (req, res) => {
+  if (!req.user) return res.redirect('/');
+  if (req.user.status === 'approved') return res.redirect('/');
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="he" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <title>ממתין לאישור</title>
+      <style>
+        body { font-family: Arial, sans-serif; background: #1a1a2e; color: #e0e0e0;
+               display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .card { background: #16213e; padding: 2rem; border-radius: 12px; text-align: center; max-width: 400px; }
+        h1 { color: #4ecca3; margin-bottom: 1rem; }
+        p  { color: #a0a0b0; line-height: 1.6; }
+        a  { color: #4ecca3; text-decoration: none; display: inline-block; margin-top: 1rem; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <h1>בקשתך התקבלה</h1>
+        <p>חשבונך ממתין לאישור מנהל המערכת.<br>תקבל הודעה כשהחשבון יאושר.</p>
+        <a href="/auth/logout">יציאה</a>
+      </div>
+    </body>
+    </html>
+  `);
+});
 app.post('/auth/logout', (req, res) => {
   req.logout(() => res.json({ success: true }));
 });
