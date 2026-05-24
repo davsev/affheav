@@ -20,6 +20,8 @@ async function migrate() {
     )
   `);
 
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_lang VARCHAR(10) NOT NULL DEFAULT 'he'`);
+
   // ── Invitations ───────────────────────────────────────────────────────────
   await query(`
     CREATE TABLE IF NOT EXISTS invitations (

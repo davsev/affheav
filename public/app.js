@@ -1,6 +1,7 @@
 import { api, escHtml, fmtDate }  from './utils.js';
 import { init as initScheduleModal, resetCronBuilder } from './schedule-modal.js';
 import { initBroadcastModal } from './broadcast-modal.js';
+import { t, initLang, setLang, getLang, applyTranslations } from './i18n/index.js';
 
 // ── Sidebar mobile toggle ─────────────────────────────────────────────────────
 function toggleSidebar() {
@@ -81,19 +82,23 @@ window.doLogout = async () => {
 (async function initAuth() {
   const params = new URLSearchParams(window.location.search);
   const errorMap = {
-    unauthorized:   'החשבון לא מורשה לגשת למערכת',
-    suspended:      'החשבון הושעה. פנה למנהל המערכת.',
-    no_invite:      'נדרשת הזמנה כדי להירשם למערכת.',
-    invalid_invite: 'קישור ההזמנה אינו תקין או שפג תוקפו.',
+    unauthorized:   'errUnauthorized',
+    suspended:      'errSuspended',
+    no_invite:      'errNoInvite',
+    invalid_invite: 'errInvalidInvite',
   };
-  const errMsg = errorMap[params.get('error')];
-  if (errMsg) { showLoginPage(errMsg); return; }
+  const errKey = errorMap[params.get('error')];
+  if (errKey) { showLoginPage(t(errKey)); return; }
 
   try {
     const res = await fetch('/api/me');
     if (res.ok) {
       const data = await res.json();
       window._currentUser = data.user;
+      // Apply user's preferred language — this also calls applyTranslations()
+      initLang(data.user.preferredLang || 'he');
+      updateLangSwitcher(data.user.preferredLang || 'he');
+      updateTabNames();
       updateSidebarUser(data.user);
       if (data.user.role === 'admin') {
         const navUsers = document.getElementById('nav-users');
@@ -127,9 +132,59 @@ document.getElementById('chk-recycle-products').addEventListener('change', async
   try {
     await api('/api/settings', { method: 'PATCH', body: { key: 'recycle_products', value: String(this.checked) } });
   } catch (err) {
-    alert('שגיאה בשמירת הגדרה: ' + err.message);
+    alert(t('errSaveSetting') + err.message);
     this.checked = !this.checked; // revert
   }
+});
+
+// ── i18n helpers ─────────────────────────────────────────────────────────────
+
+/** Update the tabNames global so topbar breadcrumb stays in sync after a lang switch. */
+function updateTabNames() {
+  const map = {
+    dashboard:          t('navDashboard'),
+    products:           t('navProducts'),
+    schedules:          t('navSchedules'),
+    scraper:            t('navScraper'),
+    'add-product':      t('navAddProduct'),
+    'aliexpress-search':t('navAliSearch'),
+    discover:           t('navDiscover'),
+    analytics:          t('navAnalytics'),
+    logs:               t('navLogs'),
+    settings:           t('navSettings'),
+    users:              t('navUsers'),
+  };
+  // Mutate global object (declared in inline <script> in index.html)
+  if (typeof tabNames !== 'undefined') {
+    Object.assign(tabNames, map);
+  }
+  // Refresh topbar text for currently active tab
+  const activeTab = document.querySelector('.tab-btn.active');
+  if (activeTab) {
+    const el = document.getElementById('topbar-section');
+    if (el) el.textContent = map[activeTab.dataset.tab] || '';
+  }
+}
+
+/** Highlight the active language button in the Settings switcher. */
+function updateLangSwitcher(lang) {
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.lang === lang);
+  });
+}
+
+// ── Language switcher button handler ─────────────────────────────────────────
+document.getElementById('lang-btn-group')?.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.lang-btn');
+  if (!btn) return;
+  const lang = btn.dataset.lang;
+  if (lang === getLang()) return;
+  await setLang(lang);             // applies direction + translations + persists
+  updateLangSwitcher(lang);
+  updateTabNames();
+  // Re-render dynamic content that uses t() so it picks up the new lang
+  renderSubjectBar();
+  populateSubjectSelects();
 });
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
@@ -187,13 +242,13 @@ document.getElementById('btn-log-history').addEventListener('click', async () =>
     const data = await api('/api/logs/history?limit=500');
     logPanel.innerHTML = '';
     if (!data.logs || data.logs.length === 0) {
-      logPanel.innerHTML = '<div style="color:var(--on-surface-var);font-size:13px;padding:8px;">אין לוגים שמורים עדיין</div>';
+      logPanel.innerHTML = `<div style="color:var(--on-surface-var);font-size:13px;padding:8px;">${t('noLogsYet')}</div>`;
       return;
     }
     data.logs.forEach(entry => appendLog(entry));
     logPanel.scrollTop = logPanel.scrollHeight;
   } catch (err) {
-    alert('שגיאה בטעינת ההיסטוריה: ' + err.message);
+    alert(t('errLoadHistory') + err.message);
   } finally {
     btn.disabled = false;
   }
@@ -253,7 +308,7 @@ function renderSubjectBar() {
   const items = [
     `<button class="subject-item ${_currentSubject === '' ? 'active' : ''}" data-subject="" data-color="#007AFF" style="--item-color:#007AFF">
       <span class="subject-dot" style="background:#007AFF;"></span>
-      <span class="subject-item-name">הכל</span>
+      <span class="subject-item-name">${t('navSubjectAll')}</span>
     </button>`
   ];
 
@@ -313,26 +368,26 @@ function populateSubjectSelects() {
 
   // Schedules form
   const schedSel = document.getElementById('sched-subject');
-  if (schedSel) schedSel.innerHTML = '<option value="">כל הנישות</option>' + options;
+  if (schedSel) schedSel.innerHTML = `<option value="">${t('allNiches')}</option>` + options;
 
   // Add-product form
   const newSubj = document.getElementById('new-subject');
   if (newSubj) {
-    newSubj.innerHTML = '<option value="">ללא נישה</option>' + options;
+    newSubj.innerHTML = `<option value="">${t('scraperNoNiche')}</option>` + options;
     newSubj.addEventListener('change', () => loadWaGroupsForSelect('new-wa-group-select', newSubj.value));
   }
 
   // Fishing auto-search form
   const fishingSubj = document.getElementById('fishing-subject-select');
   if (fishingSubj) {
-    fishingSubj.innerHTML = '<option value="">ללא נישה</option>' + options;
+    fishingSubj.innerHTML = `<option value="">${t('scraperNoNiche')}</option>` + options;
     fishingSubj.addEventListener('change', () => loadWaGroupsForSelect('fishing-wa-group-select', fishingSubj.value));
   }
 
   // URL scraper form
   const scrapeSubj = document.getElementById('scrape-subject-select');
   if (scrapeSubj) {
-    scrapeSubj.innerHTML = '<option value="">ללא נישה</option>' + options;
+    scrapeSubj.innerHTML = `<option value="">${t('scraperNoNiche')}</option>` + options;
     scrapeSubj.addEventListener('change', () => loadWaGroupsForSelect('scrape-wa-group-select', scrapeSubj.value));
   }
 }
@@ -360,14 +415,14 @@ async function loadWaGroupsForSelect(selectId, subjectId) {
   const sel = document.getElementById(selectId);
   if (!sel) return;
   if (!subjectId) {
-    sel.innerHTML = '<option value="">בחר נישה קודם...</option>';
+    sel.innerHTML = `<option value="">${t('selectNicheFirst')}</option>`;
     return;
   }
   const groups = await loadWaGroupsForSubject(subjectId);
   if (!groups.length) {
-    sel.innerHTML = '<option value="">אין קבוצות לנישה זו</option>';
+    sel.innerHTML = `<option value="">${t('noGroupsForNiche')}</option>`;
   } else {
-    sel.innerHTML = '<option value="">בחר קבוצה...</option>' +
+    sel.innerHTML = `<option value="">${t('selectGroup')}</option>` +
       groups.map(g => `<option value="${escHtml(g.id)}">${escHtml(g.name)}</option>`).join('');
   }
 }
@@ -421,10 +476,10 @@ function hexToRgba(hex, a) {
 }
 
 function passField(id, isSet, placeholder) {
-  const ph = isSet ? 'השאר ריק לשמור ערך קיים' : placeholder;
+  const ph = isSet ? t('keepExisting') : placeholder;
   return `<div class="pass-wrap">
     <input class="form-input" type="password" id="${id}" value="" placeholder="${ph}" dir="ltr" style="font-size:13px;" />
-    <button type="button" class="pass-eye" onclick="togglePassEye(this)" aria-label="הצג/הסתר">
+    <button type="button" class="pass-eye" onclick="togglePassEye(this)" aria-label="show/hide">
       <span class="material-symbols-outlined">visibility</span>
     </button>
   </div>`;
@@ -432,8 +487,8 @@ function passField(id, isSet, placeholder) {
 
 function credBadge(isSet) {
   return isSet
-    ? '<span class="cred-badge cred-set">✓ מוגדר</span>'
-    : '<span class="cred-badge cred-unset">לא מוגדר</span>';
+    ? `<span class="cred-badge cred-set">${t('credSet')}</span>`
+    : `<span class="cred-badge cred-unset">${t('credUnset')}</span>`;
 }
 
 window.togglePassEye = (btn) => {
@@ -893,7 +948,7 @@ window.deleteSubject = async (id) => {
     await loadSubjects();
     await loadProducts();
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 };
 
@@ -1018,7 +1073,7 @@ function renderProducts(products) {
   }
 
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="10" class="empty-state">${_currentFilter === 'unsent' ? 'כל המוצרים נשלחו ✓' : 'אין מוצרים'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" class="empty-state">${_currentFilter === 'unsent' ? t('emptyAllSent') : t('emptyNoProducts')}</td></tr>`;
     return;
   }
 
@@ -1059,7 +1114,7 @@ function renderProducts(products) {
   const grid = document.getElementById('products-grid');
   if (grid) {
     if (!filtered.length) {
-      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">${_currentFilter === 'unsent' ? 'כל המוצרים נשלחו ✓' : 'אין מוצרים'}</div>`;
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">${_currentFilter === 'unsent' ? t('emptyAllSent') : t('emptyNoProducts')}</div>`;
     } else {
       grid.innerHTML = filtered.map(p => {
         const clicksHtml = p.clicks != null
@@ -1139,7 +1194,7 @@ function initDragAndDrop(tbody) {
       try {
         await api('/api/products/reorder', { method: 'POST', body: { fromId, toId } });
       } catch (err) {
-        alert('שגיאה בסידור מחדש: ' + err.message);
+        alert(t('errShuffle') + err.message);
         loadProducts(); // revert on failure
       }
     });
@@ -1148,7 +1203,7 @@ function initDragAndDrop(tbody) {
 
 async function loadProducts() {
   const tbody = document.getElementById('products-body');
-  tbody.innerHTML = '<tr><td colspan="10" class="empty-state">טוען...</td></tr>';
+  tbody.innerHTML = `<tr><td colspan="10" class="empty-state">${t('loading')}</td></tr>`;
 
   try {
     const url = _currentSubject ? `/api/products?subject=${encodeURIComponent(_currentSubject)}` : '/api/products';
@@ -1170,7 +1225,7 @@ window.deleteProduct = async (id, btn) => {
     await api(`/api/products/${id}`, { method: 'DELETE' });
     await loadProducts();
   } catch (err) {
-    alert('שגיאה במחיקה: ' + err.message);
+    alert(t('errDelete') + err.message);
     btn.disabled = false;
   }
 };
@@ -1182,7 +1237,7 @@ window.unsendProduct = async (id, btn) => {
     await api(`/api/products/${id}/unsend`, { method: 'POST' });
     await loadProducts();
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
     btn.disabled = false;
   }
 };
@@ -1267,7 +1322,7 @@ window.sendProduct = async (rowNumber, btn) => {
     if (document.getElementById('modal-chk-wa').checked) platforms.push('whatsapp');
     if (document.getElementById('modal-chk-fb').checked) platforms.push('facebook');
     if (document.getElementById('modal-chk-ig').checked) platforms.push('instagram');
-    if (!platforms.length) { alert('יש לבחור לפחות פלטפורמה אחת'); return; }
+    if (!platforms.length) { alert(t('errSendPlatform')); return; }
 
     // Collect selected WA group ids
     const waGroupIds = [...document.querySelectorAll('.modal-wa-group-chk:checked')]
@@ -1283,7 +1338,7 @@ window.sendProduct = async (rowNumber, btn) => {
       await api(`/api/send/${rowNumber}`, { method: 'POST', body: sendBody });
       await loadProducts();
     } catch (err) {
-      alert('שגיאה: ' + err.message);
+      alert(t('errGeneral') + err.message);
     } finally {
       btn.disabled = false;
       btn.textContent = '▶ שלח';
@@ -1426,7 +1481,7 @@ document.getElementById('btn-delete-all-404').addEventListener('click', async fu
     _syncUI.panel404.style.display = 'none';
     await loadProducts();
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   } finally {
     this.disabled = false;
     this.textContent = 'מחק הכל';
@@ -1591,7 +1646,7 @@ window.assignScheduleSubject = async (id, subject) => {
     if (ok) { ok.textContent = '✓ נשמר'; setTimeout(() => { ok.textContent = ''; }, 2000); }
     await loadSchedules();
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 };
 
@@ -1599,7 +1654,7 @@ window.toggleSchedule = async (id, enabled) => {
   try {
     await api(`/api/schedules/${id}`, { method: 'PUT', body: { enabled } });
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
     await loadSchedules();
   }
 };
@@ -1610,7 +1665,7 @@ window.deleteSchedule = async (id) => {
     await api(`/api/schedules/${id}`, { method: 'DELETE' });
     await loadSchedules();
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 };
 
@@ -1618,7 +1673,7 @@ window.fireScheduleNow = async (id) => {
   try {
     await api(`/api/schedules/${id}/fire`, { method: 'POST' });
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 };
 
@@ -1637,7 +1692,7 @@ document.getElementById('btn-add-schedule').addEventListener('click', async () =
     resetCronBuilder();
     await loadSchedules();
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 });
 
@@ -1720,7 +1775,7 @@ window.fireBroadcastNow = async (id) => {
       alert('ההודעה נשלחה!');
     }
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 };
 
@@ -1728,7 +1783,7 @@ window.toggleBroadcast = async (id, enabled) => {
   try {
     await api(`/api/broadcasts/${id}/enabled`, { method: 'PATCH', body: { enabled } });
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
     await loadBroadcasts();
   }
 };
@@ -1739,7 +1794,7 @@ window.deleteBroadcast = async (id) => {
     await api(`/api/broadcasts/${id}`, { method: 'DELETE' });
     await loadBroadcasts();
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 };
 
@@ -2195,7 +2250,7 @@ function refreshAliSubjectSelect() {
   const sel = document.getElementById('ali-subject-select');
   if (!sel) return;
   const current = sel.value;
-  sel.innerHTML = '<option value="">ללא נישה</option>';
+  sel.innerHTML = `<option value="">${t('scraperNoNiche')}</option>`;
   (_subjects || []).forEach(s => {
     const opt = document.createElement('option');
     opt.value = s.id;
@@ -2522,7 +2577,7 @@ window.saveNewWaGroup = async (subjectId) => {
     hideAddWaGroup(subjectId);
     await loadAndRenderWaGroups(subjectId);
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 };
 
@@ -2533,7 +2588,7 @@ window.cleanupInvalidWaGroups = async (subjectId) => {
     await loadAndRenderWaGroups(subjectId);
     alert(`נמחקו ${data.deleted} קבוצות לא תקינות`);
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 };
 
@@ -2543,7 +2598,7 @@ window.deleteWaGroup = async (groupId, subjectId) => {
     await api(`/api/subjects/whatsapp-groups/${groupId}`, { method: 'DELETE' });
     await loadAndRenderWaGroups(subjectId);
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 };
 
@@ -2566,7 +2621,7 @@ window.saveEditWaGroup = async (groupId, subjectId) => {
     });
     await loadAndRenderWaGroups(subjectId);
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 };
 
@@ -2674,7 +2729,7 @@ window.setUserStatus = async (id, status) => {
     if (!data.success) throw new Error(data.error);
     loadUsers();
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 };
 
@@ -2686,7 +2741,7 @@ window.deleteUserConfirm = async (id, name) => {
     if (!data.success) throw new Error(data.error);
     loadUsers();
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 };
 
@@ -2741,7 +2796,7 @@ window.deleteInvite = async (id) => {
     if (!data.success) throw new Error(data.error);
     loadInvites();
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 };
 
@@ -2885,7 +2940,7 @@ async function renderAnalyticsSummary() {
     }
 
     // Populate niche filters
-    const nicheOptions = '<option value="">כל הנישות</option>' +
+    const nicheOptions = `<option value="">${t('allNiches')}</option>` +
       niches.map(n => `<option value="${escHtml(n.id)}">${escHtml(n.name)}</option>`).join('');
     ['analytics-niche-filter','analytics-top-niche-filter','analytics-real-orders-niche-filter','analytics-timing-niche-filter'].forEach(id => {
       const el = document.getElementById(id);
@@ -4497,7 +4552,7 @@ async function loadJoinLinkStats() {
         const r = await api('/api/analytics/sync-join-clicks', { method: 'POST', body: {} });
         await loadJoinLinkStats();
       } catch (err) {
-        alert('שגיאה: ' + err.message);
+        alert(t('errGeneral') + err.message);
         btn.disabled = false;
       }
     });
@@ -4962,7 +5017,7 @@ async function dismissSuggestion(btn) {
     if (card) card.style.animation = 'fadeOut 0.3s ease forwards';
     setTimeout(() => card && card.remove(), 320);
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
     btn.disabled = false;
   }
 }
