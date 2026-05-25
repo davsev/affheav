@@ -20,7 +20,12 @@ async function migrate() {
     )
   `);
 
-  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_lang VARCHAR(10) NOT NULL DEFAULT 'he'`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_lang VARCHAR(10) NOT NULL DEFAULT 'en'`);
+  // Migrate any existing rows that still have the old 'he' column default
+  // (users who never explicitly chose a language keep the server default).
+  // We do this with ALTER COLUMN so the column default also changes for new rows.
+  await query(`ALTER TABLE users ALTER COLUMN preferred_lang SET DEFAULT 'en'`);
+  await query(`UPDATE users SET preferred_lang = 'en' WHERE preferred_lang = 'he'`);
 
   // ── Invitations ───────────────────────────────────────────────────────────
   await query(`

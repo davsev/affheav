@@ -85,11 +85,11 @@ describe('initLang()', () => {
     expect(document.documentElement.dir).toBe('ltr');
   });
 
-  it('falls back to "he" for an unrecognised locale', async () => {
+  it('falls back to "en" for an unrecognised locale', async () => {
     const { initLang } = await import('../../public/i18n/index.js');
     initLang('xx');
-    expect(document.documentElement.lang).toBe('he');
-    expect(document.documentElement.dir).toBe('rtl');
+    expect(document.documentElement.lang).toBe('en');
+    expect(document.documentElement.dir).toBe('ltr');
   });
 
   it('applies translations to data-i18n elements', async () => {
@@ -212,9 +212,9 @@ describe('setLang()', () => {
     await setLang('he', { persist: false });
   });
 
-  it('falls back to he for an unknown language code', async () => {
+  it('falls back to en for an unknown language code', async () => {
     const { setLang, getLang } = await import('../../public/i18n/index.js');
     await setLang('zz', { persist: false });
-    expect(getLang()).toBe('he');
+    expect(getLang()).toBe('en');
   });
 });

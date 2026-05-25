@@ -96,8 +96,8 @@ window.doLogout = async () => {
       const data = await res.json();
       window._currentUser = data.user;
       // Apply user's preferred language — this also calls applyTranslations()
-      initLang(data.user.preferredLang || 'he');
-      updateLangSwitcher(data.user.preferredLang || 'he');
+      initLang(data.user.preferredLang || 'en');
+      updateLangSwitcher(data.user.preferredLang || 'en');
       updateTabNames();
       updateSidebarUser(data.user);
       if (data.user.role === 'admin') {

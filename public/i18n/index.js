@@ -32,8 +32,8 @@ export function isRTL() {
  */
 export async function setLang(lang, { persist = true } = {}) {
   if (!STRINGS[lang]) {
-    console.warn(`[i18n] Unknown language "${lang}", falling back to "he"`);
-    lang = 'he';
+    console.warn(`[i18n] Unknown language "${lang}", falling back to "en"`);
+    lang = 'en';
   }
   _lang = lang;
 
@@ -88,7 +88,7 @@ export function applyTranslations(root = document) {
  * Call once after the user object is available.
  */
 export function initLang(preferredLang) {
-  const lang = preferredLang && STRINGS[preferredLang] ? preferredLang : 'he';
+  const lang = preferredLang && STRINGS[preferredLang] ? preferredLang : 'en';
   // setLang without persisting — it's already stored server-side
   _lang = lang;
   const html = document.documentElement;
