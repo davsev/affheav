@@ -105,9 +105,9 @@ window.doLogout = async () => {
         if (navUsers) navUsers.style.display = '';
         const navPending = document.getElementById('nav-pending-approvals');
         if (navPending) navPending.style.display = '';
-        const btnReset = document.getElementById('btn-wwebjs-reset-session');
-        if (btnReset) btnReset.style.display = '';
       }
+      const btnReset = document.getElementById('btn-wwebjs-reset-session');
+      if (btnReset) btnReset.style.display = '';
       if (data.user.role === 'group_admin') {
         const navTeam = document.getElementById('nav-my-team');
         if (navTeam) navTeam.style.display = '';
