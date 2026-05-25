@@ -196,8 +196,8 @@ if (process.env.NODE_ENV === 'test') {
 
 app.get('/api/me', (req, res) => {
   if (!req.isAuthenticated() || !req.user) return res.status(401).json({ success: false });
-  const { id, email, name, photo, role } = req.user;
-  res.json({ success: true, user: { id, email, name, photo, role } });
+  const { id, email, name, photo, role, preferredLang } = req.user;
+  res.json({ success: true, user: { id, email, name, photo, role, preferredLang: preferredLang || 'en' } });
 });
 
 // ── Load persisted prompt ─────────────────────────────────────────────────────
@@ -286,7 +286,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4562;
 
 app.listen(PORT, async () => {
   console.log(`\n🎯 Affiliate Heaven running at http://localhost:${PORT}\n`);
