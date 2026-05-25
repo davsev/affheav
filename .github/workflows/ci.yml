@@ -111,6 +111,7 @@ jobs:
           NODE_ENV=test \
           SESSION_SECRET=${{ secrets.CI_SESSION_SECRET }} \
           DATABASE_URL=postgresql://ah_mono:${MONOLITH_DB_PASSWORD}@localhost:5432/affiliate_heaven \
+          PORT=3000 \
           npm start &
           timeout 60 bash -c 'until curl -sf http://localhost:3000/; do sleep 2; done'
 
