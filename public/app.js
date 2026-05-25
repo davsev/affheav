@@ -2077,18 +2077,27 @@ async function loadWWebjsDebug() {
   } catch (_) {}
 }
 
-async function resetWWebjsSession() {
+window.resetWWebjsSession = async function resetWWebjsSession() {
   if (!confirm('איפוס הסשן ימחק את נתוני החיבור הקיימים ויחייב סריקת QR מחדש.\nלהמשיך?')) return;
   const btn = document.getElementById('btn-wwebjs-reset-session');
   const origHtml = btn.innerHTML;
+  const debugPre = document.getElementById('wwebjs-debug-pre');
+  const debugWrap = document.getElementById('wwebjs-debug-wrap');
   btn.disabled = true;
   btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:13px;">hourglass_empty</span>מוחק...';
+  console.log('[WA] Sending DELETE /api/whatsapp-service/session...');
   try {
-    await api('/api/whatsapp-service/session', { method: 'DELETE' });
+    const result = await api('/api/whatsapp-service/session', { method: 'DELETE' });
+    console.log('[WA] Session reset response:', result);
     showToast('✅ הסשן אופס — ממתין ל-QR');
     setTimeout(loadWWebjsStatus, 3000);
   } catch (e) {
-    showToast(`❌ שגיאה: ${e.message}`);
+    console.error('[WA] Session reset failed:', e);
+    if (debugWrap && debugPre) {
+      debugWrap.style.display = 'block';
+      debugPre.textContent = `❌ שגיאת איפוס סשן:\n${e.message}`;
+    }
+    showToast(`❌ שגיאה: ${e.message}`, 5000);
   } finally {
     btn.disabled = false;
     btn.innerHTML = origHtml;
@@ -2125,7 +2134,7 @@ function copyToClipboard(text) {
   navigator.clipboard.writeText(text).then(() => showToast('ID הועתק ללוח'));
 }
 
-function showToast(msg) {
+function showToast(msg, durationMs = 2000) {
   let t = document.getElementById('_toast');
   if (!t) {
     t = document.createElement('div');
@@ -2136,7 +2145,7 @@ function showToast(msg) {
   t.textContent = msg;
   t.style.opacity = '1';
   clearTimeout(t._timer);
-  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 2000);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, durationMs);
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
