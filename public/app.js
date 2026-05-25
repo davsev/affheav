@@ -105,6 +105,8 @@ window.doLogout = async () => {
         if (navUsers) navUsers.style.display = '';
         const navPending = document.getElementById('nav-pending-approvals');
         if (navPending) navPending.style.display = '';
+        const btnReset = document.getElementById('btn-wwebjs-reset-session');
+        if (btnReset) btnReset.style.display = '';
       }
       if (data.user.role === 'group_admin') {
         const navTeam = document.getElementById('nav-my-team');
@@ -2073,6 +2075,24 @@ async function loadWWebjsDebug() {
     debugWrap.style.display = 'block';
     debugPre.textContent = JSON.stringify(info, null, 2);
   } catch (_) {}
+}
+
+async function resetWWebjsSession() {
+  if (!confirm('איפוס הסשן ימחק את נתוני החיבור הקיימים ויחייב סריקת QR מחדש.\nלהמשיך?')) return;
+  const btn = document.getElementById('btn-wwebjs-reset-session');
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:13px;">hourglass_empty</span>מוחק...';
+  try {
+    await api('/api/whatsapp-service/session', { method: 'DELETE' });
+    showToast('✅ הסשן אופס — ממתין ל-QR');
+    setTimeout(loadWWebjsStatus, 3000);
+  } catch (e) {
+    showToast(`❌ שגיאה: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
 }
 
 async function loadWWebjsGroups() {
