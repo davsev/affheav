@@ -9,7 +9,7 @@ const { getSubjects, getAllProducts, markMigratedToDb } = require('../services/g
 // ── Current user ──────────────────────────────────────────────────────────────
 router.get('/me', (req, res) => {
   const { id, email, name, photo, role, preferredLang } = req.user;
-  res.json({ success: true, user: { id, email, name, photo, role, preferredLang: preferredLang || 'he' } });
+  res.json({ success: true, user: { id, email, name, photo, role, preferredLang: preferredLang || 'en' } });
 });
 
 router.patch('/me/lang', async (req, res) => {

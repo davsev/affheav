@@ -31,7 +31,7 @@ function _row(r) {
     maxGroupUsers: r.max_group_users || 0,
     groupAdminId:  r.group_admin_id || null,
     permissions:   r.permissions || {},
-    preferredLang: r.preferred_lang || 'he',
+    preferredLang: r.preferred_lang || 'en',
     createdAt:     r.created_at,
     updatedAt:     r.updated_at,
   };
