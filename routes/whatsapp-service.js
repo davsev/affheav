@@ -30,7 +30,6 @@ router.get('/groups', (req, res) => proxyGet('/groups', res));
 router.get('/debug',  (req, res) => proxyGet('/debug',  res));
 
 router.delete('/session', async (req, res) => {
-  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
   const base = getServiceBase();
   if (!base) return res.status(503).json({ error: 'WHATSAPP_SERVICE_URL not configured' });
   try {
