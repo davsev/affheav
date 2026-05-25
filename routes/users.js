@@ -8,8 +8,22 @@ const { getSubjects, getAllProducts, markMigratedToDb } = require('../services/g
 
 // ── Current user ──────────────────────────────────────────────────────────────
 router.get('/me', (req, res) => {
-  const { id, email, name, photo, role } = req.user;
-  res.json({ success: true, user: { id, email, name, photo, role } });
+  const { id, email, name, photo, role, preferredLang } = req.user;
+  res.json({ success: true, user: { id, email, name, photo, role, preferredLang: preferredLang || 'he' } });
+});
+
+router.patch('/me/lang', async (req, res) => {
+  const { lang } = req.body;
+  if (!['he', 'en'].includes(lang)) {
+    return res.status(400).json({ success: false, error: 'Invalid language code' });
+  }
+  try {
+    await updateUserById(req.user.id, { preferred_lang: lang });
+    _cacheInvalidate(req.user.googleId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // ── SuperAdmin: list all users ────────────────────────────────────────────────
