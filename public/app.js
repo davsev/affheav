@@ -2077,7 +2077,7 @@ async function loadWWebjsDebug() {
   } catch (_) {}
 }
 
-async function resetWWebjsSession() {
+window.resetWWebjsSession = async function resetWWebjsSession() {
   if (!confirm('איפוס הסשן ימחק את נתוני החיבור הקיימים ויחייב סריקת QR מחדש.\nלהמשיך?')) return;
   const btn = document.getElementById('btn-wwebjs-reset-session');
   const origHtml = btn.innerHTML;
