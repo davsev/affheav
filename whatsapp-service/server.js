@@ -124,6 +124,35 @@ function attachClientEvents() {
   });
 }
 
+// DELETE /session — wipes auth data and forces a fresh QR scan.
+// Protected by WHATSAPP_API_KEY. Safe to call remotely when the session is corrupt.
+app.delete('/session', (req, res) => {
+  const apiKey = process.env.WHATSAPP_API_KEY;
+  if (apiKey && req.headers['x-api-key'] !== apiKey) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    fs.rmSync(DATA_PATH, { recursive: true, force: true });
+    console.log('[WA] Session data wiped via /session endpoint — restarting init');
+    res.json({ ok: true, message: 'Session wiped. QR will appear within 30s.' });
+    // Restart init from clean state
+    clearTimeout(initTimeoutId);
+    try { currentClient.destroy(); } catch (_) {}
+    currentClient = makeClient();
+    attachClientEvents();
+    setState({ state: 'LOADING', lastError: null });
+    reconnectDelay = 5000;
+    startInitTimeout();
+    currentClient.initialize().catch((e) => {
+      clearTimeout(initTimeoutId);
+      setState({ state: 'DISCONNECTED', lastError: e.message });
+      scheduleReconnect();
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Boot
 cleanupStaleLock();
 attachClientEvents();
