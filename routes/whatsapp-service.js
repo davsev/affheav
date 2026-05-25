@@ -29,4 +29,20 @@ router.get('/status', (req, res) => proxyGet('/status', res));
 router.get('/groups', (req, res) => proxyGet('/groups', res));
 router.get('/debug',  (req, res) => proxyGet('/debug',  res));
 
+router.delete('/session', async (req, res) => {
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  const base = getServiceBase();
+  if (!base) return res.status(503).json({ error: 'WHATSAPP_SERVICE_URL not configured' });
+  try {
+    const { data } = await axios.delete(`${base}/session`, {
+      headers: { 'X-API-Key': getApiKey() },
+      timeout: 10000,
+    });
+    res.json(data);
+  } catch (err) {
+    const status = err.response?.status || 502;
+    res.status(status).json({ error: err.response?.data?.error || err.message });
+  }
+});
+
 module.exports = router;
