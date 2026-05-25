@@ -1947,44 +1947,10 @@ document.getElementById('btn-fishing-search').addEventListener('click', async ()
   }
 });
 
-// ── Prompt Editor ─────────────────────────────────────────────────────────────
-async function loadPrompt() {
-  const data = await api('/api/prompt');
-  document.getElementById('prompt-editor').value = data.prompt;
-}
-
-document.getElementById('btn-save-prompt').addEventListener('click', async () => {
-  const prompt = document.getElementById('prompt-editor').value.trim();
-  const res = document.getElementById('prompt-save-result');
-  if (!prompt) return;
-  try {
-    await api('/api/prompt', { method: 'POST', body: { prompt } });
-    res.style.color = '#16a34a';
-    res.textContent = '✓ הפרומפט נשמר בהצלחה';
-  } catch (e) {
-    res.style.color = '#dc2626';
-    res.textContent = '✗ שגיאה בשמירה';
-  }
-  setTimeout(() => { res.textContent = ''; }, 3000);
-});
-
-document.getElementById('btn-reset-prompt').addEventListener('click', async () => {
-  const res = document.getElementById('prompt-save-result');
-  try {
-    const data = await api('/api/prompt/reset', { method: 'POST' });
-    document.getElementById('prompt-editor').value = data.prompt;
-    res.style.color = '#16a34a';
-    res.textContent = '✓ הפרומפט אופס לברירת המחדל';
-  } catch (e) {
-    res.style.color = '#dc2626';
-    res.textContent = '✗ שגיאה באיפוס';
-  }
-  setTimeout(() => { res.textContent = ''; }, 3000);
-});
-
 // ── Facebook Token Info ────────────────────────────────────────────────────────
 async function loadTokenInfo() {
   const el = document.getElementById('fb-token-info');
+  if (!el) return;
   try {
     const d = await api('/api/facebook/token-info');
     const daysLeft = d.days_left;
@@ -2004,11 +1970,10 @@ async function loadTokenInfo() {
   }
 }
 
-document.getElementById('btn-check-token').addEventListener('click', loadTokenInfo);
+document.getElementById('btn-check-token')?.addEventListener('click', loadTokenInfo);
 
-// Load prompt + subjects when settings tab is opened
+// Load subjects when settings tab is opened
 document.querySelector('[data-tab="settings"]').addEventListener('click', () => {
-  loadPrompt();
   loadSubjects();
   loadWWebjsStatus();
 });
