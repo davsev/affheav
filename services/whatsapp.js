@@ -1,7 +1,7 @@
 const axios = require('axios');
 require('dotenv').config();
 
-async function send({ text, image, wa_group }) {
+async function send({ text, image, videoUrl, wa_group }) {
   const baseUrl = process.env.WHATSAPP_SERVICE_URL?.replace(/\/$/, '');
   if (!baseUrl) throw new Error('WHATSAPP_SERVICE_URL not configured');
 
@@ -9,7 +9,7 @@ async function send({ text, image, wa_group }) {
   try {
     response = await axios.post(
       `${baseUrl}/send`,
-      { groupId: wa_group, text, imageUrl: image || undefined },
+      { groupId: wa_group, text, imageUrl: image || undefined, videoUrl: videoUrl || undefined },
       {
         headers: { 'X-API-Key': process.env.WHATSAPP_API_KEY || '' },
         timeout: 60000,

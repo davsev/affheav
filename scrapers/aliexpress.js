@@ -78,8 +78,41 @@ async function scrapeProduct(url) {
     }
     if (image && image.startsWith('//')) image = 'https:' + image;
 
+    let videoUrl = '';
+    // Strategy A: window.__NEXT_DATA__
+    try {
+      const found = await page.evaluate(() => {
+        try {
+          const m = JSON.stringify(window.__NEXT_DATA__).match(/"videoUrl"\s*:\s*"([^"]+)"/);
+          return m ? m[1] : null;
+        } catch { return null; }
+      });
+      if (found) videoUrl = found;
+    } catch { /* try next */ }
+
+    // Strategy B: window.runParams
+    if (!videoUrl) {
+      try {
+        const found = await page.evaluate(() => {
+          try {
+            const m = JSON.stringify(window.runParams).match(/"videoUrl"\s*:\s*"([^"]+)"/);
+            return m ? m[1] : null;
+          } catch { return null; }
+        });
+        if (found) videoUrl = found;
+      } catch { /* try next */ }
+    }
+
+    // Strategy C: <video> element
+    if (!videoUrl) {
+      try {
+        videoUrl = await page.getAttribute('video source', 'src', { timeout: 2000 }) || '';
+        if (!videoUrl) videoUrl = await page.getAttribute('video[src]', 'src', { timeout: 2000 }) || '';
+      } catch { videoUrl = ''; }
+    }
+
     await browser.close();
-    return { text: text || 'Unknown Product', image: image || '', affiliateLink: url };
+    return { text: text || 'Unknown Product', image: image || '', videoUrl: videoUrl || '', affiliateLink: url };
   } catch (err) {
     await browser.close();
     throw new Error(`Scrape failed for ${url}: ${err.message}`);

@@ -26,6 +26,8 @@ function rowToProduct(r, idx) {
     send_count:      r.send_count     || 0,
     sale_price:      r.sale_price     != null ? parseFloat(r.sale_price) : null,
     commission_rate: r.commission_rate != null ? parseFloat(r.commission_rate) : null,
+    video_url:       r.video_url      || '',
+    use_video:       r.use_video      || false,
   };
 }
 
@@ -123,18 +125,19 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// PUT /api/products/:id — edit text and/or skip_ai flag
+// PUT /api/products/:id — edit text, skip_ai flag, and/or use_video toggle
 router.put('/:id', async (req, res) => {
-  const { Text, skip_ai } = req.body;
-  if (Text === undefined && skip_ai === undefined) {
+  const { Text, skip_ai, use_video } = req.body;
+  if (Text === undefined && skip_ai === undefined && use_video === undefined) {
     return res.status(400).json({ success: false, error: 'Nothing to update' });
   }
   try {
     const updates = ['updated_at = NOW()'];
     const values  = [];
     let i = 1;
-    if (Text !== undefined)    { updates.push(`text = $${i++}`);    values.push(Text); }
-    if (skip_ai !== undefined) { updates.push(`skip_ai = $${i++}`); values.push(!!skip_ai); }
+    if (Text !== undefined)      { updates.push(`text = $${i++}`);      values.push(Text); }
+    if (skip_ai !== undefined)   { updates.push(`skip_ai = $${i++}`);   values.push(!!skip_ai); }
+    if (use_video !== undefined) { updates.push(`use_video = $${i++}`); values.push(!!use_video); }
     values.push(req.params.id, req.user.id);
     const { rows } = await query(
       `UPDATE products SET ${updates.join(', ')} WHERE id = $${i++} AND user_id = $${i} RETURNING *`,

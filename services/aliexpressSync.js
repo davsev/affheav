@@ -101,17 +101,23 @@ async function fetchViaScraper(url) {
   const match = html.match(/window\.runParams\s*=\s*(\{[\s\S]+?\});\s*(?:window|var|let|const)/);
   if (match) {
     try {
-      const state = JSON.parse(match[1]);
-      const title = state?.data?.titleModule?.subject || state?.titleModule?.subject;
-      const image = state?.data?.imageModule?.imagePathList?.[0] || state?.imageModule?.imagePathList?.[0];
-      if (title || image) return { title: title || null, image: image || null, sale_price: null };
+      const state    = JSON.parse(match[1]);
+      const title    = state?.data?.titleModule?.subject || state?.titleModule?.subject;
+      const image    = state?.data?.imageModule?.imagePathList?.[0] || state?.imageModule?.imagePathList?.[0];
+      const videoUrl = state?.data?.videoModule?.videoUrl || state?.videoModule?.videoUrl || null;
+      if (title || image) return { title: title || null, image: image || null, sale_price: null, video_url: videoUrl };
     } catch { /* fall through */ }
   }
+
+  // Also try extracting videoUrl from any embedded JSON blobs
+  let video_url = null;
+  const videoMatch = html.match(/"videoUrl"\s*:\s*"([^"]+)"/);
+  if (videoMatch) video_url = videoMatch[1];
 
   // Tier 3: og meta tags
   const title = $('meta[property="og:title"]').attr('content') || $('title').text() || null;
   const image = $('meta[property="og:image"]').attr('content') || null;
-  return { title, image, sale_price: null };
+  return { title, image, sale_price: null, video_url };
 }
 
 // Returns { data } on success, { deleted: true } if the product was 404'd and removed.
@@ -158,6 +164,7 @@ async function syncProduct(dbProductId, userId) {
   if (data.title      != null) { sets.push(`title = $${idx++}`);      values.push(data.title); }
   if (data.image      != null) { sets.push(`image = $${idx++}`);      values.push(data.image); }
   if (data.sale_price != null) { sets.push(`sale_price = $${idx++}`); values.push(data.sale_price); }
+  if (data.video_url  != null) { sets.push(`video_url = $${idx++}`);  values.push(data.video_url); }
 
   if (!sets.length) throw new Error('No product data returned');
 
