@@ -116,6 +116,8 @@ async function migrate() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS sale_price      NUMERIC(10,2)`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS commission_rate NUMERIC(5,4)`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS title TEXT`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS video_url TEXT`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS use_video BOOLEAN NOT NULL DEFAULT false`);
 
   // ── Schedules ─────────────────────────────────────────────────────────────
   await query(`

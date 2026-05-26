@@ -67,7 +67,7 @@ function createApp({
   });
 
   app.post('/send', requireApiKey, (req, res) => {
-    const { groupId, text, imageUrl } = req.body;
+    const { groupId, text, imageUrl, videoUrl } = req.body;
 
     if (!groupId || !text) {
       return res.status(400).json({ error: 'groupId and text are required' });
@@ -93,7 +93,24 @@ function createApp({
       }
 
       let message;
-      if (imageUrl) {
+
+      // Try video first
+      if (videoUrl) {
+        let media = null;
+        try {
+          media = await MessageMedia.fromUrl(videoUrl, { unsafeMime: true });
+          if (!media.mimetype?.startsWith('video/')) media = null;
+        } catch (_) { media = null; }
+
+        if (media) {
+          try {
+            message = await withRetry(() => client.sendMessage(groupId, media, { caption: text }), { attempts: retryAttempts, delayMs: retryDelayMs });
+          } catch (_) { /* fall through to image */ }
+        }
+      }
+
+      // Fall back to image
+      if (!message && imageUrl) {
         let media = null;
         try {
           media = await MessageMedia.fromUrl(imageUrl, { unsafeMime: true });
@@ -114,13 +131,12 @@ function createApp({
         if (media) {
           try {
             message = await withRetry(() => client.sendMessage(groupId, media, { caption: text }), { attempts: retryAttempts, delayMs: retryDelayMs });
-          } catch (_) {
-            message = await withRetry(() => client.sendMessage(groupId, text), { attempts: retryAttempts, delayMs: retryDelayMs });
-          }
-        } else {
-          message = await withRetry(() => client.sendMessage(groupId, text), { attempts: retryAttempts, delayMs: retryDelayMs });
+          } catch (_) { /* fall through to text-only */ }
         }
-      } else {
+      }
+
+      // Fall back to text-only
+      if (!message) {
         message = await withRetry(() => client.sendMessage(groupId, text), { attempts: retryAttempts, delayMs: retryDelayMs });
       }
 

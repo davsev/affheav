@@ -69,6 +69,8 @@ async function getNextUnsent({ userId, subject } = {}) {
     sent:      r.sent_at     ? new Date(r.sent_at).toISOString() : '',
     subject:   r.subject_id  || '',
     skip_ai:   r.skip_ai     || false,
+    video_url: r.video_url   || '',
+    use_video: r.use_video   || false,
   };
 }
 
@@ -105,6 +107,8 @@ async function getFallbackProduct({ userId, subject } = {}) {
       sent:      new Date(r.sent_at).toISOString(),
       subject:   r.subject_id  || '',
       skip_ai:   r.skip_ai     || false,
+      video_url: r.video_url   || '',
+      use_video: r.use_video   || false,
     };
   }
   return null;
@@ -255,6 +259,7 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
           const waResult = await whatsapp.send({
             text:     message,
             image:    product.image,
+            videoUrl: (product.use_video && product.video_url) ? product.video_url : undefined,
             wa_group: group.waGroup,
           });
           results.whatsapp.push({ group: group.name, ...waResult });
@@ -280,6 +285,7 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
         const waResult = await whatsapp.send({
           text:     message,
           image:    product.image,
+          videoUrl: (product.use_video && product.video_url) ? product.video_url : undefined,
           wa_group: waGroup,
         });
         results.whatsapp = waResult;

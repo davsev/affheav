@@ -1090,7 +1090,10 @@ function renderProducts(products) {
     <tr draggable="true" data-id="${p.id}">
       <td><input type="checkbox" class="product-chk" data-id="${p.id}" /></td>
       <td><span class="drag-handle" title="גרור לסידור מחדש">⠿</span></td>
-      <td>${p.image ? `<img class="img-thumb" src="${escHtml(p.image)}" onerror="this.style.display='none'" />` : '—'}</td>
+      <td style="position:relative;">
+        ${p.image ? `<img class="img-thumb" src="${escHtml(p.image)}" onerror="this.style.display='none'" />` : '—'}
+        ${p.video_url ? `<span onclick="toggleUseVideo('${p.id}',${!p.use_video},this)" title="${p.use_video ? 'שולח וידאו — לחץ לעבור לתמונה' : 'לחץ לשלוח וידאו במקום תמונה'}" style="position:absolute;bottom:2px;left:2px;font-size:16px;cursor:pointer;line-height:1;opacity:${p.use_video ? '1' : '0.4'};">🎬</span>` : ''}
+      </td>
       <td style="max-width:200px;word-break:break-word;">
         ${escHtml(p.Text)}
         ${p.title && p.title !== p.Text ? `<div style="font-size:10px;color:var(--on-surface-var);margin-top:2px;line-height:1.3;" dir="ltr">${escHtml(p.title)}</div>` : ''}
@@ -1131,9 +1134,12 @@ function renderProducts(products) {
         return `
         <div class="product-card">
           <input type="checkbox" class="product-chk product-card-chk" data-id="${p.id}" />
-          ${p.image
-            ? `<img class="product-card-img" src="${escHtml(p.image)}" onerror="this.style.display='none'" loading="lazy" />`
-            : `<div class="product-card-img-placeholder">📦</div>`}
+          <div style="position:relative;">
+            ${p.image
+              ? `<img class="product-card-img" src="${escHtml(p.image)}" onerror="this.style.display='none'" loading="lazy" />`
+              : `<div class="product-card-img-placeholder">📦</div>`}
+            ${p.video_url ? `<span onclick="toggleUseVideo('${p.id}',${!p.use_video},this)" title="${p.use_video ? 'שולח וידאו — לחץ לעבור לתמונה' : 'לחץ לשלוח וידאו במקום תמונה'}" style="position:absolute;bottom:4px;left:4px;font-size:20px;cursor:pointer;line-height:1;opacity:${p.use_video ? '1' : '0.4'};">🎬</span>` : ''}
+          </div>
           <div class="product-card-body">
             <div class="product-card-title">${escHtml(p.Text)}</div>
             <div class="product-card-meta">
@@ -1219,6 +1225,22 @@ async function loadProducts() {
     tbody.innerHTML = `<tr><td colspan="10" class="empty-state" style="color:#f87171;">${escHtml(err.message)}</td></tr>`;
   }
 }
+
+window.toggleUseVideo = async (id, newValue, el) => {
+  try {
+    const res = await api(`/api/products/${id}`, { method: 'PUT', body: { use_video: newValue } });
+    if (res.success) {
+      el.style.opacity = newValue ? '1' : '0.4';
+      el.title = newValue ? 'שולח וידאו — לחץ לעבור לתמונה' : 'לחץ לשלוח וידאו במקום תמונה';
+      el.onclick = () => window.toggleUseVideo(id, !newValue, el);
+      // Update local product data
+      const p = _lastProducts.find(p => p.id === id);
+      if (p) p.use_video = newValue;
+    }
+  } catch (err) {
+    console.error('toggleUseVideo failed', err);
+  }
+};
 
 window.deleteProduct = async (id, btn) => {
   if (!confirm('למחוק את המוצר לצמיתות?')) return;
