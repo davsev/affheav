@@ -1,8 +1,11 @@
 // ── Cron Builder Component ────────────────────────────────────────────────────
-// No dependencies.
+import { t } from './i18n/index.js';
 
-const CRON_DAYS_HE   = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
-const CRON_DAYS_FULL = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+const CRON_DAYS_SHORT = () => ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
+const CRON_DAYS_FULL  = () => [
+  t('weekdaySun'), t('weekdayMon'), t('weekdayTue'), t('weekdayWed'),
+  t('weekdayThu'), t('weekdayFri'), t('weekdaySat'),
+];
 
 /** Parse a 5-part cron expression into builder state */
 export function parseCronExpression(expr) {
@@ -46,12 +49,12 @@ export function createCronBuilder(rootId, onUpdate) {
 
   function describeExpr() {
     const hh = String(state.hour).padStart(2,'0'), mm = String(state.minute).padStart(2,'0');
-    if (state.mode === 'every-day')     return `כל יום בשעה ${hh}:${mm}`;
+    if (state.mode === 'every-day')     return `${t('cronEveryDay')} ${t('cronAtHour')} ${hh}:${mm}`;
     if (state.mode === 'specific-days') {
-      if (!state.days.length) return 'לא נבחרו ימים';
-      return `כל ${state.days.map(d => CRON_DAYS_FULL[d]).join(', ')} בשעה ${hh}:${mm}`;
+      if (!state.days.length) return t('cronNoDays');
+      return `${t('cronEveryDay')} ${state.days.map(d => CRON_DAYS_FULL()[d]).join(', ')} ${t('cronAtHour')} ${hh}:${mm}`;
     }
-    if (state.mode === 'every-hour')    return `כל שעה בדקה ${mm}`;
+    if (state.mode === 'every-hour')    return `${t('cronEveryHour')} ${t('cronAtMinute')} ${mm}`;
     return '';
   }
 
@@ -79,8 +82,8 @@ export function createCronBuilder(rootId, onUpdate) {
   function renderDays() {
     const el = $('.js-cb-day-grid');
     if (!el) return;
-    el.innerHTML = CRON_DAYS_HE.map((name, i) =>
-      `<button class="cron-day-btn${state.days.includes(i) ? ' active' : ''}" data-d="${i}" title="${CRON_DAYS_FULL[i]}">${name}</button>`
+    el.innerHTML = CRON_DAYS_SHORT().map((name, i) =>
+      `<button class="cron-day-btn${state.days.includes(i) ? ' active' : ''}" data-d="${i}" title="${CRON_DAYS_FULL()[i]}">${name}</button>`
     ).join('');
     el.querySelectorAll('.cron-day-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -107,8 +110,8 @@ export function createCronBuilder(rootId, onUpdate) {
     if (timeRow)     timeRow.style.display   = showTime   ? '' : 'none';
     if (hourSel)     hourSel.style.display   = showHour   ? '' : 'none';
     if (timeSep)     timeSep.style.display   = showHour   ? '' : 'none';
-    if (timeLbl)     timeLbl.textContent     = showHour   ? 'בשעה' : 'בדקה';
-    if (timeSectLbl) timeSectLbl.textContent = showHour   ? 'שעת שליחה' : 'דקת שליחה';
+    if (timeLbl)     timeLbl.textContent     = showHour   ? t('cronAtHour')    : t('cronAtMinute');
+    if (timeSectLbl) timeSectLbl.textContent = showHour   ? t('cronSendTime') : t('cronSendMinute');
     if (daysRow)     daysRow.style.display   = showDays   ? '' : 'none';
     if (customRow)   customRow.style.display = showCustom ? '' : 'none';
 

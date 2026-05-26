@@ -217,13 +217,21 @@ updateTime();
 const logPanel = document.getElementById('log-panel');
 const logDot = document.getElementById('log-dot');
 
-const es = new EventSource('/api/logs');
-es.onopen = () => { logDot.classList.remove('idle'); };
-es.onerror = () => { logDot.classList.add('idle'); };
-es.onmessage = (e) => {
-  const entry = JSON.parse(e.data);
-  appendLog(entry);
-};
+let _es = null;
+
+function connectLogStream(subjectId) {
+  if (_es) { _es.close(); _es = null; }
+  const url = subjectId ? `/api/logs?subjectId=${encodeURIComponent(subjectId)}` : '/api/logs';
+  _es = new EventSource(url);
+  _es.onopen = () => { logDot.classList.remove('idle'); };
+  _es.onerror = () => { logDot.classList.add('idle'); };
+  _es.onmessage = (e) => {
+    const entry = JSON.parse(e.data);
+    appendLog(entry);
+  };
+}
+
+connectLogStream('');
 
 function appendLog({ ts, level, msg }) {
   const el = document.createElement('div');
@@ -241,7 +249,8 @@ document.getElementById('btn-log-history').addEventListener('click', async () =>
   const btn = document.getElementById('btn-log-history');
   btn.disabled = true;
   try {
-    const data = await api('/api/logs/history?limit=500');
+    const subjectParam = _currentSubject ? `&subjectId=${encodeURIComponent(_currentSubject)}` : '';
+    const data = await api(`/api/logs/history?limit=500${subjectParam}`);
     logPanel.innerHTML = '';
     if (!data.logs || data.logs.length === 0) {
       logPanel.innerHTML = `<div style="color:var(--on-surface-var);font-size:13px;padding:8px;">${t('noLogsYet')}</div>`;
@@ -335,6 +344,8 @@ function renderSubjectBar() {
       const id    = item.dataset.subject;
       const color = item.dataset.color;
       _currentSubject = id;
+      connectLogStream(id);
+      logPanel.innerHTML = '';
 
       container.querySelectorAll('.subject-item').forEach(i => i.classList.remove('active'));
       item.classList.add('active');
@@ -350,7 +361,7 @@ function renderSubjectBar() {
       document.querySelector('[data-tab="products"]').classList.add('active');
       document.getElementById('tab-products').classList.add('active');
       const topbarEl = document.getElementById('topbar-section');
-      if (topbarEl) topbarEl.textContent = tabNames['products'] || 'מוצרים';
+      if (topbarEl) topbarEl.textContent = tabNames['products'] || t('navProducts');
 
       loadProducts();
     });
@@ -518,7 +529,7 @@ function renderActiveNicheCard() {
     container.innerHTML = `
       <div class="niche-select-placeholder">
         <span class="material-symbols-outlined" style="font-size:48px;opacity:0.3;display:block;margin-bottom:12px;">category</span>
-        <div style="font-size:14px;">הוסף נישה חדשה כדי להתחיל</div>
+        <div style="font-size:14px;">${t('nicheStartHint')}</div>
       </div>`;
     return;
   }
@@ -545,12 +556,12 @@ function renderActiveNicheCard() {
                 <h2 class="niche-name-h2">${escHtml(s.name)}</h2>
                 <div class="niche-status-row">
                   <span class="niche-pulse"></span>
-                  <span class="niche-status-label" id="niche-status-label-${s.id}">הגדרות נישה פעילה</span>
+                  <span class="niche-status-label" id="niche-status-label-${s.id}">${t('nicheActiveStatus')}</span>
                 </div>
               </div>
             </div>
             <div class="niche-header-actions">
-              <button class="niche-action-btn danger" onclick="deleteSubject('${s.id}')" title="מחק נישה">
+              <button class="niche-action-btn danger" onclick="deleteSubject('${s.id}')" title="${t('nicheDeleteTitle')}">
                 <span class="material-symbols-outlined">delete</span>
               </button>
             </div>
@@ -561,9 +572,9 @@ function renderActiveNicheCard() {
             <div style="order:2;">
               <div class="niche-field-label">
                 <span class="material-symbols-outlined">psychology</span>
-                הנחיית (Prompt) AI
+                ${t('nicheAiLabel')}
               </div>
-              <textarea class="niche-prompt-textarea" id="niche-prompt-${s.id}" placeholder="הגדר כיצד ה-AI יכתוב את הפוסט..." dir="rtl">${escHtml(s.prompt || '')}</textarea>
+              <textarea class="niche-prompt-textarea" id="niche-prompt-${s.id}" placeholder="${t('nicheAiPh')}" dir="rtl">${escHtml(s.prompt || '')}</textarea>
               <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
                 <code class="code-tag">{{Text}}</code>
                 <code class="code-tag">{{Link}}</code>
@@ -575,7 +586,7 @@ function renderActiveNicheCard() {
             <div style="order:1;">
               <div class="niche-field-label" style="margin-bottom:10px;">
                 <span class="material-symbols-outlined">hub</span>
-                ערוצי יעד
+                ${t('nicheChannels')}
               </div>
               <div class="channel-toggles-grid" style="margin-bottom:28px;grid-template-columns:1fr 1fr 1fr;">
                 <div class="channel-toggle-card">
@@ -585,7 +596,7 @@ function renderActiveNicheCard() {
                     </div>
                     <span style="font-weight:700;font-size:13px;">WhatsApp</span>
                   </div>
-                  <div class="ios-toggle ${waEnabled ? 'active' : ''}" id="wa-toggle-${s.id}" onclick="this.classList.toggle('active')" role="switch" aria-checked="${waEnabled}" aria-label="הפעל WhatsApp"></div>
+                  <div class="ios-toggle ${waEnabled ? 'active' : ''}" id="wa-toggle-${s.id}" onclick="this.classList.toggle('active')" role="switch" aria-checked="${waEnabled}" aria-label="Enable WhatsApp"></div>
                 </div>
                 <div class="channel-toggle-card">
                   <div class="channel-toggle-info">
@@ -594,7 +605,7 @@ function renderActiveNicheCard() {
                     </div>
                     <span style="font-weight:700;font-size:13px;">Facebook</span>
                   </div>
-                  <div class="ios-toggle ${fbEnabled ? 'active' : ''}" id="fb-toggle-${s.id}" onclick="this.classList.toggle('active')" role="switch" aria-checked="${fbEnabled}" aria-label="הפעל Facebook"></div>
+                  <div class="ios-toggle ${fbEnabled ? 'active' : ''}" id="fb-toggle-${s.id}" onclick="this.classList.toggle('active')" role="switch" aria-checked="${fbEnabled}" aria-label="Enable Facebook"></div>
                 </div>
                 <div class="channel-toggle-card">
                   <div class="channel-toggle-info">
@@ -603,7 +614,7 @@ function renderActiveNicheCard() {
                     </div>
                     <span style="font-weight:700;font-size:13px;">Instagram</span>
                   </div>
-                  <div class="ios-toggle ${igEnabled ? 'active' : ''}" id="ig-toggle-${s.id}" onclick="this.classList.toggle('active')" role="switch" aria-checked="${igEnabled}" aria-label="הפעל Instagram"></div>
+                  <div class="ios-toggle ${igEnabled ? 'active' : ''}" id="ig-toggle-${s.id}" onclick="this.classList.toggle('active')" role="switch" aria-checked="${igEnabled}" aria-label="Enable Instagram"></div>
                 </div>
               </div>
 
@@ -611,55 +622,55 @@ function renderActiveNicheCard() {
               <details class="niche-cred-section" ${waEnabled ? 'open' : ''}>
                 <summary class="niche-cred-summary">
                   <span class="material-symbols-outlined" style="color:#16a34a;">forum</span>
-                  <span>הגדרות WhatsApp</span>
+                  <span>${t('waSettingsLabel')}</span>
                   <span class="material-symbols-outlined niche-cred-chevron">expand_more</span>
                 </summary>
                 <div class="niche-cred-body">
                   <div class="form-group" style="margin-bottom:16px;">
-                    <label class="form-label" style="margin-bottom:6px;display:block;">קבוצה ראשית <span style="font-size:11px;color:var(--on-surface-var);">(שידורים)</span></label>
+                    <label class="form-label" style="margin-bottom:6px;display:block;">${t('waPrimaryGroup')} <span style="font-size:11px;color:var(--on-surface-var);">(${t('waBroadcastsLabel')})</span></label>
                     <select class="form-input" id="niche-wa-group-${s.id}" onchange="scheduleNicheSave('${s.id}')">
-                      <option value="">טוען קבוצות...</option>
+                      <option value="">${t('loadingGroups')}</option>
                     </select>
                   </div>
                   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                    <label class="form-label" style="margin:0;">קבוצות WhatsApp</label>
+                    <label class="form-label" style="margin:0;">${t('waGroupsLabel2')}</label>
                     <div style="display:flex;gap:6px;">
-                      <button class="btn btn-ghost btn-sm" onclick="cleanupInvalidWaGroups('${s.id}')" style="font-size:11px;padding:4px 10px;color:#dc2626;" title="מחק קבוצות עם מזהה לא תקין">
+                      <button class="btn btn-ghost btn-sm" onclick="cleanupInvalidWaGroups('${s.id}')" style="font-size:11px;padding:4px 10px;color:#dc2626;" title="${t('cleanupInvalidTitle')}">
                         <span class="material-symbols-outlined" style="font-size:13px;">delete_sweep</span>
                       </button>
                       <button class="btn btn-ghost btn-sm" onclick="showAddWaGroup('${s.id}')" style="font-size:11px;padding:4px 10px;">
-                        <span class="material-symbols-outlined" style="font-size:13px;">add</span>הוסף קבוצה
+                        <span class="material-symbols-outlined" style="font-size:13px;">add</span>${t('addGroup')}
                       </button>
                     </div>
                   </div>
                   <div id="wa-groups-list-${s.id}" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;">
-                    <div style="font-size:12px;color:var(--on-surface-var);">טוען קבוצות...</div>
+                    <div style="font-size:12px;color:var(--on-surface-var);">${t('loadingGroups')}</div>
                   </div>
                   <div id="add-wa-group-form-${s.id}" style="display:none;margin-top:12px;padding:14px;background:var(--surface-low);border-radius:1rem;border:1px solid var(--outline-var);">
                     <div class="form-group" style="margin-bottom:10px;">
-                      <label class="form-label">בחר מקבוצות מחוברות</label>
+                      <label class="form-label">${t('selectFromConnected')}</label>
                       <select class="form-input" id="wa-service-pick-${s.id}" style="font-size:13px;">
-                        <option value="">טוען קבוצות...</option>
+                        <option value="">${t('loadingGroups')}</option>
                       </select>
                     </div>
                     <div class="form-grid">
                       <div class="form-group">
-                        <label class="form-label">שם לתצוגה</label>
-                        <input class="form-input" id="new-wa-name-${s.id}" placeholder="קבוצת דיג צפון" style="font-size:13px;" />
+                        <label class="form-label">${t('displayName')}</label>
+                        <input class="form-input" id="new-wa-name-${s.id}" placeholder="${t('waGroupNamePh')}" style="font-size:13px;" />
                       </div>
                       <div class="form-group">
-                        <label class="form-label">מזהה קבוצה</label>
+                        <label class="form-label">${t('groupId')}</label>
                         <input class="form-input" id="new-wa-group-id-${s.id}" placeholder="120363...@g.us" dir="ltr" style="font-size:13px;" />
                       </div>
                       <div class="form-group form-full">
-                        <label class="form-label">קישור הצטרפות</label>
+                        <label class="form-label">${t('joinLinkLabel')}</label>
                         <input class="form-input" id="new-wa-join-${s.id}" placeholder="https://chat.whatsapp.com/..." dir="ltr" style="font-size:13px;" />
                       </div>
                     </div>
                     <div style="display:flex;gap:8px;margin-top:8px;">
-                      <button class="btn btn-ghost btn-sm" onclick="hideAddWaGroup('${s.id}')">ביטול</button>
+                      <button class="btn btn-ghost btn-sm" onclick="hideAddWaGroup('${s.id}')">${t('btnCancel')}</button>
                       <button class="btn btn-primary btn-sm" onclick="saveNewWaGroup('${s.id}')">
-                        <span class="material-symbols-outlined" style="font-size:13px;">save</span>שמור קבוצה
+                        <span class="material-symbols-outlined" style="font-size:13px;">save</span>${t('saveGroup')}
                       </button>
                     </div>
                   </div>
@@ -670,17 +681,17 @@ function renderActiveNicheCard() {
               <details class="niche-cred-section" ${fbEnabled ? 'open' : ''}>
                 <summary class="niche-cred-summary">
                   <span class="material-symbols-outlined" style="color:#4267B2;">thumb_up</span>
-                  <span>הגדרות Facebook</span>
+                  <span>${t('fbSettings')}</span>
                   ${credBadge(!!(s.facebookPageId && s.facebookToken))}
                   <span class="material-symbols-outlined niche-cred-chevron">expand_more</span>
                 </summary>
                 <div class="niche-cred-body">
                   <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;">
                     <button class="btn btn-ghost btn-sm" onclick="checkNicheToken('${s.id}')" style="font-size:11px;padding:4px 12px;border-radius:20px;">
-                      <span class="material-symbols-outlined" style="font-size:14px;">manage_search</span>בדוק טוקן
+                      <span class="material-symbols-outlined" style="font-size:14px;">manage_search</span>${t('checkToken')}
                     </button>
                     <button class="btn btn-ghost btn-sm" onclick="openGenerateTokenModal('${s.id}')" style="font-size:11px;padding:4px 12px;border-radius:20px;background:rgba(112,42,225,0.08);color:#702ae1;">
-                      <span class="material-symbols-outlined" style="font-size:14px;">key</span>צור טוקן קבוע
+                      <span class="material-symbols-outlined" style="font-size:14px;">key</span>${t('createPermanentToken')}
                     </button>
                   </div>
                   <div id="niche-token-info-${s.id}" style="margin-bottom:12px;font-size:12px;color:var(--on-surface-var);min-height:0;"></div>
@@ -691,15 +702,15 @@ function renderActiveNicheCard() {
                     </div>
                     <div class="form-group">
                       <label class="form-label">Access Token ${credBadge(!!s.facebookToken)}</label>
-                      ${passField(`niche-fb-token-${s.id}`, !!s.facebookToken, 'הזן Access Token')}
+                      ${passField(`niche-fb-token-${s.id}`, !!s.facebookToken, t('enterAccessToken'))}
                     </div>
                     <div class="form-group">
                       <label class="form-label">App ID ${credBadge(!!s.facebookAppId)}</label>
-                      ${passField(`niche-fb-app-id-${s.id}`, !!s.facebookAppId, 'הזן App ID')}
+                      ${passField(`niche-fb-app-id-${s.id}`, !!s.facebookAppId, t('enterAppId'))}
                     </div>
                     <div class="form-group">
                       <label class="form-label">App Secret ${credBadge(!!s.facebookAppSecret)}</label>
-                      ${passField(`niche-fb-app-secret-${s.id}`, !!s.facebookAppSecret, 'הזן App Secret')}
+                      ${passField(`niche-fb-app-secret-${s.id}`, !!s.facebookAppSecret, t('enterAppSecret'))}
                     </div>
                   </div>
                 </div>
@@ -709,7 +720,7 @@ function renderActiveNicheCard() {
               <details class="niche-cred-section" ${igEnabled ? 'open' : ''}>
                 <summary class="niche-cred-summary">
                   <span class="material-symbols-outlined" style="color:#C13584;">photo_camera</span>
-                  <span>הגדרות Instagram</span>
+                  <span>${t('igSettings')}</span>
                   ${credBadge(!!s.instagramAccountId)}
                   <span class="material-symbols-outlined niche-cred-chevron">expand_more</span>
                 </summary>
@@ -717,7 +728,7 @@ function renderActiveNicheCard() {
                   <div class="form-group">
                     <label class="form-label">Instagram Business Account ID ${credBadge(!!s.instagramAccountId)}</label>
                     ${passField(`niche-ig-account-${s.id}`, !!s.instagramAccountId, '17841400000000000')}
-                    <div class="form-hint">נמצא ב-Meta Graph API Explorer: GET /me/accounts → Instagram Business Account ID. משתמש באותו Access Token של Facebook.</div>
+                    <div class="form-hint">${t('igHint')}</div>
                   </div>
                 </div>
               </details>
@@ -726,17 +737,17 @@ function renderActiveNicheCard() {
               <details class="niche-cred-section">
                 <summary class="niche-cred-summary">
                   <span class="material-symbols-outlined" style="color:#e4572e;">shopping_bag</span>
-                  <span>הגדרות AliExpress</span>
+                  <span>${t('aliSettingsLabel')}</span>
                   ${s.aliexpressTrackingId
-                    ? '<span class="cred-badge cred-set">✓ מוגדר</span>'
-                    : '<span class="cred-badge" style="background:var(--surface-container);color:var(--on-surface-var);">ברירת מחדל</span>'}
+                    ? `<span class="cred-badge cred-set">${t('credSet')}</span>`
+                    : `<span class="cred-badge" style="background:var(--surface-container);color:var(--on-surface-var);">${t('aliDefault')}</span>`}
                   <span class="material-symbols-outlined niche-cred-chevron">expand_more</span>
                 </summary>
                 <div class="niche-cred-body">
                   <div class="form-group">
                     <label class="form-label">Tracking ID</label>
-                    ${passField(`niche-ali-tracking-${s.id}`, !!s.aliexpressTrackingId, 'הזן Tracking ID (ישתמש בברירת מחדל אם ריק)')}
-                    <div class="form-hint">ה-Tracking ID ישמש בחיפוש מוצרי AliExpress עבור נישה זו. כל לינק שותפים שייווצר יהיה משויך ל-ID זה.</div>
+                    ${passField(`niche-ali-tracking-${s.id}`, !!s.aliexpressTrackingId, t('aliTrackingPh'))}
+                    <div class="form-hint">${t('aliTrackingHint')}</div>
                   </div>
                 </div>
               </details>
@@ -745,10 +756,10 @@ function renderActiveNicheCard() {
 
           <div class="niche-config-footer">
             <button class="btn btn-primary" style="padding:14px 40px;font-size:15px;" onclick="saveNiche('${s.id}')">
-              שמור הגדרות נישה
+              ${t('saveNicheSettings')}
             </button>
             <button class="btn btn-ghost" style="padding:14px 28px;font-size:15px;" onclick="renderSettingsPage()">
-              ביטול שינויים
+              ${t('discardChanges')}
             </button>
             <span id="niche-save-result-${s.id}" style="font-size:13px;"></span>
           </div>
@@ -780,11 +791,11 @@ function renderNicheGrid() {
       <div class="niche-mini-card" onclick="selectSettingsSubject('${s.id}')">
         <div class="niche-mini-card-header">
           <div class="niche-mini-icon" style="background:${bg};">${icon}</div>
-          <span class="niche-status-chip ${isActive ? 'active' : 'inactive'}">${isActive ? 'פעיל' : 'טרם הוגדר'}</span>
+          <span class="niche-status-chip ${isActive ? 'active' : 'inactive'}">${isActive ? t('nicheActive') : t('nicheNotConfigured')}</span>
         </div>
         <div class="niche-mini-name">${escHtml(s.name)}</div>
-        <div class="niche-mini-stat">${channelCount ? `${channelCount} ערוצים מופעלים` : 'אין ערוצים מופעלים'}</div>
-        <button class="niche-mini-edit-btn">ערוך הגדרות</button>
+        <div class="niche-mini-stat">${channelCount ? `${channelCount} ${t('channelsEnabledLabel')}` : t('noChannelsEnabled')}</div>
+        <button class="niche-mini-edit-btn">${t('editSettings')}</button>
       </div>`;
   }).join('');
 
@@ -792,7 +803,7 @@ function renderNicheGrid() {
     <section style="margin-bottom:32px;">
       <div class="niche-section-title">
         <span class="niche-title-bar"></span>
-        נישות נוספות בניהול
+        ${t('moreNiches')}
       </div>
       <div class="niche-mini-grid">${cards}</div>
     </section>`;
@@ -808,7 +819,7 @@ window.selectSettingsSubject = (id) => {
 window.checkNicheToken = async (id) => {
   const el = document.getElementById(`niche-token-info-${id}`);
   if (!el) return;
-  el.textContent = 'בודק טוקן...';
+  el.textContent = t('checkingToken');
   el.style.color = 'var(--on-surface-var)';
   try {
     const d = await api(`/api/facebook/token-info?subjectId=${encodeURIComponent(id)}`);
@@ -816,22 +827,22 @@ window.checkNicheToken = async (id) => {
     const color = daysLeft === null ? '#16a34a' : daysLeft > 14 ? '#16a34a' : daysLeft > 3 ? '#d97706' : '#dc2626';
     const validIcon = d.valid ? '✓' : '✗';
     const expiry = daysLeft === null
-      ? '<span style="color:#16a34a">לא פג תוקף (Page Token ✓)</span>'
-      : `<span style="color:${color}">${d.expires_at} · ${daysLeft} ימים נותרו</span>`;
+      ? `<span style="color:#16a34a">${t('neverExpires')}</span>`
+      : `<span style="color:${color}">${d.expires_at} · ${daysLeft} ${t('daysRemaining')}</span>`;
     el.innerHTML = `
       <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;line-height:1.9;background:rgba(255,255,255,0.7);border-radius:1rem;padding:12px 14px;border:1px solid rgba(112,42,225,0.08);">
-        <span style="color:var(--on-surface-var);">תקף:</span>
-        <span style="color:${d.valid ? '#16a34a' : '#dc2626'};font-weight:700;">${validIcon} ${d.valid ? 'כן' : 'לא'}</span>
-        <span style="color:var(--on-surface-var);">אפליקציה:</span>
+        <span style="color:var(--on-surface-var);">${t('tokenValid')}</span>
+        <span style="color:${d.valid ? '#16a34a' : '#dc2626'};font-weight:700;">${validIcon} ${d.valid ? t('tokenYes').slice(2) : t('tokenNo').slice(2)}</span>
+        <span style="color:var(--on-surface-var);">${t('tokenApp')}</span>
         <span>${escHtml(d.app || '—')}</span>
-        <span style="color:var(--on-surface-var);">תפוגה:</span>
+        <span style="color:var(--on-surface-var);">${t('tokenExpiry')}</span>
         ${expiry}
-        <span style="color:var(--on-surface-var);">הרשאות:</span>
+        <span style="color:var(--on-surface-var);">${t('tokenPermissions')}</span>
         <span style="font-size:10px;font-family:var(--font-mono);">${(d.scopes || []).join(', ')}</span>
       </div>`;
   } catch (err) {
     el.style.color = '#dc2626';
-    el.textContent = `✗ שגיאה: ${err.message}`;
+    el.textContent = `✗ ${t('errGeneral')}${err.message}`;
   }
 };
 
@@ -854,12 +865,12 @@ window.closeGenerateTokenModal = () => {
 window.doGeneratePageToken = async () => {
   const shortToken = document.getElementById('gen-token-input').value.trim();
   const status = document.getElementById('gen-token-status');
-  if (!shortToken) { status.style.color = '#dc2626'; status.textContent = 'נא להזין טוקן'; return; }
+  if (!shortToken) { status.style.color = '#dc2626'; status.textContent = t('enterToken'); return; }
 
   const btn = document.getElementById('gen-token-confirm');
   btn.disabled = true;
   status.style.color = 'var(--on-surface-var)';
-  status.textContent = 'ממיר טוקן...';
+  status.textContent = t('convertingToken');
 
   try {
     const d = await api('/api/facebook/generate-page-token', {
@@ -870,7 +881,7 @@ window.doGeneratePageToken = async () => {
     const tokenInput = document.getElementById(`niche-fb-token-${_genTokenSubjectId}`);
     if (tokenInput) tokenInput.value = d.pageToken;
     status.style.color = '#16a34a';
-    status.innerHTML = `✓ טוקן קבוע נוצר לדף: <strong>${escHtml(d.pageName)}</strong><br><span style="font-size:10px;color:var(--on-surface-var);">הטוקן מולא אוטומטית — לחץ "שמור הגדרות" כדי לשמור</span>`;
+    status.innerHTML = `✓ ${t('tokenCreatedFor')} <strong>${escHtml(d.pageName)}</strong><br><span style="font-size:10px;color:var(--on-surface-var);">${t('tokenAutoFilled')}</span>`;
     btn.disabled = false;
   } catch (err) {
     status.style.color = '#dc2626';
@@ -929,16 +940,16 @@ window.saveNiche = async (id) => {
         waGroup:                 document.getElementById(`niche-wa-group-${id}`)?.value || '',
       },
     });
-    if (result) { result.style.color = '#16a34a'; result.textContent = '✓ נשמר'; }
+    if (result) { result.style.color = '#16a34a'; result.textContent = t('savedOk'); }
     await loadSubjects();
   } catch (err) {
-    if (result) { result.style.color = '#dc2626'; result.textContent = '✗ שגיאה: ' + err.message; }
+    if (result) { result.style.color = '#dc2626'; result.textContent = t('errGeneral') + err.message; }
   }
   setTimeout(() => { if (result) result.textContent = ''; }, 3000);
 };
 
 window.deleteSubject = async (id) => {
-  if (!confirm('למחוק נישה זו? כל הקבוצות והמוצרים המשויכים יינותקו.')) return;
+  if (!confirm(t('confirmDeleteNiche'))) return;
   try {
     await api(`/api/subjects/${id}`, { method: 'DELETE' });
     if (_currentSubject === id) {
@@ -977,12 +988,12 @@ document.getElementById('btn-add-subject').addEventListener('click', async () =>
   const instagramAccountId = document.getElementById('subj-ig-account').value.trim();
   const result = document.getElementById('subject-form-result');
 
-  if (!name) { result.style.color = '#d97706'; result.textContent = '⚠ שם נושא הוא שדה חובה'; return; }
+  if (!name) { result.style.color = '#d97706'; result.textContent = t('nicheNameRequired'); return; }
 
   try {
     const res = await api('/api/subjects', { method: 'POST', body: { name, waGroupName, joinLink, whatsappUrl, facebookPageId, facebookToken, facebookAppId, facebookAppSecret, prompt, instagramAccountId } });
     result.style.color = '#16a34a';
-    result.textContent = '✓ נושא נוסף בהצלחה';
+    result.textContent = t('nicheAddedOk');
     ['subj-name','subj-wa-group-name','subj-join-link','subj-wa-url','subj-fb-page-id','subj-fb-token','subj-fb-app-id','subj-fb-app-secret','subj-prompt','subj-ig-account'].forEach(id => {
       document.getElementById(id).value = '';
     });
@@ -992,7 +1003,7 @@ document.getElementById('btn-add-subject').addEventListener('click', async () =>
     await loadSubjects();
   } catch (err) {
     result.style.color = '#dc2626';
-    result.textContent = '✗ שגיאה: ' + err.message;
+    result.textContent = t('errGeneral') + err.message;
   }
   setTimeout(() => { result.textContent = ''; }, 4000);
 });
@@ -1055,7 +1066,7 @@ function renderProducts(products) {
   updateKPIs(products);
   const tbody = document.getElementById('products-body');
   const sentCount = products.filter(p => p.sent).length;
-  document.getElementById('products-summary').textContent = `${sentCount} נשלחו מתוך ${products.length} סה"כ`;
+  document.getElementById('products-summary').textContent = `${sentCount} ${t('sentOutOf')} ${products.length} ${t('sentTotal')}`;
 
   let filtered;
   if (_currentFilter === 'unsent') filtered = products.filter(p => !p.sent);
@@ -1084,33 +1095,33 @@ function renderProducts(products) {
       ? '<span style="color:var(--label-4);font-size:11px;">—</span>'
       : `<span style="font-weight:600;color:var(--blue);">${p.clicks}</span>`;
     const sendCountBadge = p.send_count > 1
-      ? `<span style="font-size:10px;color:var(--on-surface-var);margin-right:4px;" title="נשלח ${p.send_count} פעמים">(×${p.send_count})</span>`
+      ? `<span style="font-size:10px;color:var(--on-surface-var);margin-right:4px;" title="${t('sentNTimesFmt')} ${p.send_count} ${t('clicksLabel')}">(×${p.send_count})</span>`
       : '';
     return `
     <tr draggable="true" data-id="${p.id}">
       <td><input type="checkbox" class="product-chk" data-id="${p.id}" /></td>
-      <td><span class="drag-handle" title="גרור לסידור מחדש">⠿</span></td>
+      <td><span class="drag-handle" title="${t('dragToReorder')}">⠿</span></td>
       <td style="position:relative;">
         ${p.video_url
           ? `<video src="${escHtml(p.video_url)}" style="width:60px;height:60px;object-fit:cover;border-radius:4px;cursor:pointer;" muted playsinline onmouseover="this.play()" onmouseout="this.pause();this.currentTime=0"></video>`
           : p.image ? `<img class="img-thumb" src="${escHtml(p.image)}" onerror="this.style.display='none'" />` : '—'}
-        ${p.video_url ? `<span onclick="toggleUseVideo('${p.id}',${!p.use_video},this)" title="${p.use_video ? 'שולח וידאו — לחץ לעבור לתמונה' : 'לחץ לשלוח וידאו במקום תמונה'}" style="position:absolute;bottom:2px;left:2px;font-size:16px;cursor:pointer;line-height:1;opacity:${p.use_video ? '1' : '0.4'};">🎬</span>` : ''}
+        ${p.video_url ? `<span onclick="toggleUseVideo('${p.id}',${!p.use_video},this)" title="${p.use_video ? t('videoSendingTitle') : t('videoUseTitle')}" style="position:absolute;bottom:2px;left:2px;font-size:16px;cursor:pointer;line-height:1;opacity:${p.use_video ? '1' : '0.4'};">🎬</span>` : ''}
       </td>
       <td style="max-width:200px;word-break:break-word;">
         ${escHtml(p.Text)}
         ${p.title && p.title !== p.Text ? `<div style="font-size:10px;color:var(--on-surface-var);margin-top:2px;line-height:1.3;" dir="ltr">${escHtml(p.title)}</div>` : ''}
       </td>
-      <td><a href="${escHtml(p.Link)}" target="_blank" style="color:var(--blue);font-size:12px;" dir="ltr">🔗 קישור</a></td>
+      <td><a href="${escHtml(p.Link)}" target="_blank" style="color:var(--blue);font-size:12px;" dir="ltr">${t('linkLabel')}</a></td>
       <td>${escHtml(p.wa_group)}</td>
-      <td>${sendCountBadge}${p.sent ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>` : '<span class="badge badge-unsent">טרם נשלח</span>'}</td>
+      <td>${sendCountBadge}${p.sent ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>` : `<span class="badge badge-unsent">${t('notSentBadge')}</span>`}</td>
       <td>${p.facebook ? `<span class="badge badge-fb">${fmtDate(p.facebook)}</span>` : '—'}</td>
       <td>${clicksCell}</td>
       <td style="white-space:nowrap;display:flex;gap:4px;align-items:center;">
-        <button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct('${p.id}', this)" title="${p.sent ? 'שלח שוב' : 'שלח'}">▶ שלח</button>
-        <button class="btn btn-sm btn-ghost" onclick="editProduct('${p.id}')" title="ערוך טקסט">✏</button>
-        ${p.sent ? `<button class="btn btn-sm btn-ghost" onclick="unsendProduct('${p.id}', this)" title="החזר למוצרים שלא נשלחו" style="font-size:11px;">↩</button>` : ''}
-        <button class="btn btn-sm btn-ghost" onclick="syncProductData('${p.id}', this)" title="סנכרן מ-AliExpress"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">store</span></button>
-        <button class="btn btn-sm btn-ghost" onclick="deleteProduct('${p.id}', this)" title="מחק מוצר" style="color:#f87171;">✕</button>
+        <button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct('${p.id}', this)" title="${p.sent ? t('sendAgainTitle') : t('sendTitle')}">${t('sendBtnLabel')}</button>
+        <button class="btn btn-sm btn-ghost" onclick="editProduct('${p.id}')" title="${t('editTextTitle')}">✏</button>
+        ${p.sent ? `<button class="btn btn-sm btn-ghost" onclick="unsendProduct('${p.id}', this)" title="${t('returnToUnsent')}" style="font-size:11px;">↩</button>` : ''}
+        <button class="btn btn-sm btn-ghost" onclick="syncProductData('${p.id}', this)" title="${t('syncFromAli')}"><span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">store</span></button>
+        <button class="btn btn-sm btn-ghost" onclick="deleteProduct('${p.id}', this)" title="${t('deleteProductTitle')}" style="color:#f87171;">✕</button>
       </td>
     </tr>`;
   }).join('');
@@ -1125,13 +1136,13 @@ function renderProducts(products) {
     } else {
       grid.innerHTML = filtered.map(p => {
         const clicksHtml = p.clicks != null
-          ? `<span class="product-card-clicks">👁 ${p.clicks} קליקים</span>`
+          ? `<span class="product-card-clicks">👁 ${p.clicks} ${t('clicksLabel')}</span>`
           : '';
         const sentBadge = p.sent
           ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>`
-          : `<span class="badge badge-unsent">ממתין</span>`;
+          : `<span class="badge badge-unsent">${t('pendingBadge')}</span>`;
         const sendCountBadge = p.send_count > 1
-          ? `<span class="product-card-send-count" title="נשלח ${p.send_count} פעמים">×${p.send_count}</span>`
+          ? `<span class="product-card-send-count" title="${t('sentNTimesFmt')} ${p.send_count}">×${p.send_count}</span>`
           : '';
         return `
         <div class="product-card">
@@ -1153,12 +1164,12 @@ function renderProducts(products) {
             </div>
           </div>
           <div class="product-card-footer">
-            <a href="${escHtml(p.Link)}" target="_blank" class="product-card-link" dir="ltr">🔗 קישור</a>
+            <a href="${escHtml(p.Link)}" target="_blank" class="product-card-link" dir="ltr">${t('linkLabel')}</a>
             <div class="product-card-actions">
-              <button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct('${p.id}', this)">▶ שלח</button>
-              <button class="btn btn-sm btn-ghost" onclick="editProduct('${p.id}')" title="ערוך טקסט">✏</button>
-              ${p.sent ? `<button class="btn btn-sm btn-ghost btn-unsend" onclick="unsendProduct('${p.id}', this)" title="החזר למוצרים שלא נשלחו">↩</button>` : ''}
-              <button class="btn btn-sm btn-ghost btn-delete" onclick="deleteProduct('${p.id}', this)" title="מחק מוצר">✕</button>
+              <button class="btn btn-sm ${p.sent ? 'btn-ghost' : 'btn-primary'}" onclick="sendProduct('${p.id}', this)">${t('sendBtnLabel')}</button>
+              <button class="btn btn-sm btn-ghost" onclick="editProduct('${p.id}')" title="${t('editTextTitle')}">✏</button>
+              ${p.sent ? `<button class="btn btn-sm btn-ghost btn-unsend" onclick="unsendProduct('${p.id}', this)" title="${t('returnToUnsent')}">↩</button>` : ''}
+              <button class="btn btn-sm btn-ghost btn-delete" onclick="deleteProduct('${p.id}', this)" title="${t('deleteProductTitle')}">✕</button>
             </div>
           </div>
         </div>`;
@@ -1221,7 +1232,7 @@ async function loadProducts() {
     const url = _currentSubject ? `/api/products?subject=${encodeURIComponent(_currentSubject)}` : '/api/products';
     const { products } = await api(url);
     if (!products.length) {
-      tbody.innerHTML = '<tr><td colspan="10" class="empty-state">אין מוצרים בגיליון</td></tr>';
+      tbody.innerHTML = `<tr><td colspan="10" class="empty-state">${t('noProductsInSheet')}</td></tr>`;
       return;
     }
     renderProducts(products);
@@ -1247,7 +1258,7 @@ window.toggleUseVideo = async (id, newValue, el) => {
 };
 
 window.deleteProduct = async (id, btn) => {
-  if (!confirm('למחוק את המוצר לצמיתות?')) return;
+  if (!confirm(t('confirmDeleteProduct'))) return;
   btn.disabled = true;
   try {
     await api(`/api/products/${id}`, { method: 'DELETE' });
@@ -1259,7 +1270,7 @@ window.deleteProduct = async (id, btn) => {
 };
 
 window.unsendProduct = async (id, btn) => {
-  if (!confirm('להחזיר את המוצר לרשימת המוצרים שטרם נשלחו?')) return;
+  if (!confirm(t('confirmReturnProduct'))) return;
   btn.disabled = true;
   try {
     await api(`/api/products/${id}/unsend`, { method: 'POST' });
@@ -1277,7 +1288,7 @@ window.syncProductData = async (id, btn) => {
   try {
     const res = await api(`/api/aliexpress/sync/${id}`, { method: 'POST' });
     if (res.not_found) {
-      btn.innerHTML = '<span style="font-size:11px;color:#f87171;" title="המוצר לא נמצא ב-AliExpress (404)">⚠ 404</span>';
+      btn.innerHTML = `<span style="font-size:11px;color:#f87171;" title="${t('notFoundOnAli')}">⚠ 404</span>`;
     } else {
       btn.innerHTML = '<span style="font-size:12px;color:#4ade80;">✓</span>';
     }
@@ -1315,13 +1326,13 @@ window.editProduct = (id) => {
 
   const onConfirm = async () => {
     const newText = textarea.value.trim();
-    if (!newText) { result.textContent = 'טקסט לא יכול להיות ריק'; result.style.color = '#f87171'; return; }
+    if (!newText) { result.textContent = t('textCannotBeEmpty'); result.style.color = '#f87171'; return; }
     confirmBtn.disabled = true;
-    result.textContent = 'שומר...';
+    result.textContent = t('savingEllipsis');
     result.style.color = 'var(--on-surface-var)';
     try {
       await api(`/api/products/${id}`, { method: 'PUT', body: { Text: newText, skip_ai: skipAi.checked } });
-      result.textContent = '✓ נשמר';
+      result.textContent = t('savedOk');
       result.style.color = '#4ade80';
       await loadProducts();
       setTimeout(cleanup, 800);
@@ -1369,7 +1380,7 @@ window.sendProduct = async (rowNumber, btn) => {
       alert(t('errGeneral') + err.message);
     } finally {
       btn.disabled = false;
-      btn.textContent = '▶ שלח';
+      btn.textContent = t('sendBtnLabel');
     }
   };
 
@@ -1478,7 +1489,7 @@ function syncShowProgress(done, total, succeeded, notFound, failed) {
   _syncUI.fill.style.width    = `${Math.round((done / total) * 100)}%`;
   const parts = [];
   if (succeeded) parts.push(`✓ ${succeeded}`);
-  if (notFound)  parts.push(`⚠ ${notFound} לא נמצאו`);
+  if (notFound)  parts.push(`⚠ ${notFound} ${t('notFoundCount')}`);
   if (failed)    parts.push(`✗ ${failed}`);
   _syncUI.text.textContent = `${done} / ${total}${parts.length ? ' · ' + parts.join(' · ') : ''}`;
 }
@@ -1512,14 +1523,14 @@ document.getElementById('btn-delete-all-404').addEventListener('click', async fu
     alert(t('errGeneral') + err.message);
   } finally {
     this.disabled = false;
-    this.textContent = 'מחק הכל';
+    this.textContent = t('deleteAll404');
   }
 });
 
 document.getElementById('btn-sync-aliexpress-bulk').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   const ids = [...document.querySelectorAll('.product-chk:checked')].map(el => el.dataset.id);
-  if (!ids.length) { alert('יש לבחור לפחות מוצר אחד לסנכרון'); return; }
+  if (!ids.length) { alert(t('noProductsToSync')); return; }
 
   btn.disabled = true;
   btn.innerHTML = '<span class="material-symbols-outlined" style="animation:spin 1s linear infinite;font-size:17px;">sync</span>';
@@ -1547,7 +1558,7 @@ document.getElementById('btn-sync-aliexpress-bulk').addEventListener('click', as
     syncShowProgress(i + 1, ids.length, succeeded, notFound, failed);
   }
 
-  _syncUI.text.textContent += ' · סנכרון הסתיים';
+  _syncUI.text.textContent += ` · ${t('syncDone')}`;
   syncShow404Panel(notFoundProducts);
   await loadProducts();
 
@@ -1565,7 +1576,7 @@ document.getElementById('btn-clean-404').addEventListener('click', async (e) => 
 
   // Scan all products regardless of checkbox selection
   const allIds = _lastProducts.map(p => p.id);
-  if (!allIds.length) { alert('אין מוצרים לסריקה'); return; }
+  if (!allIds.length) { alert(t('noProductsToScan')); return; }
 
   btn.disabled = true;
   btn.innerHTML = '<span class="material-symbols-outlined" style="animation:spin 1s linear infinite;font-size:17px;">link_off</span>';
@@ -1594,16 +1605,16 @@ document.getElementById('btn-clean-404').addEventListener('click', async (e) => 
     _syncUI.panel.style.display = '';
     _syncUI.fill.style.width = `${Math.round((checked / allIds.length) * 100)}%`;
     const parts = [];
-    if (notFound) parts.push(`⚠ ${notFound} שבורים`);
+    if (notFound) parts.push(`⚠ ${notFound} ${t('brokenLabel')}`);
     if (failed)   parts.push(`✗ ${failed}`);
-    _syncUI.text.textContent = `בודק ${checked} / ${allIds.length}${parts.length ? ' · ' + parts.join(' · ') : ''}`;
+    _syncUI.text.textContent = `${t('checkingToken').replace('...', '')} ${checked} / ${allIds.length}${parts.length ? ' · ' + parts.join(' · ') : ''}`;
   }
 
   if (!notFoundProducts.length) {
-    _syncUI.text.textContent = `✓ כל ${allIds.length} הקישורים תקינים`;
-    btn.innerHTML = '<span style="font-size:12px;font-weight:700;color:#4ade80;">✓ הכל תקין</span>';
+    _syncUI.text.textContent = `✓ ${allIds.length} ${t('allLinksOk')}`;
+    btn.innerHTML = `<span style="font-size:12px;font-weight:700;color:#4ade80;">${t('allOkLabel')}</span>`;
   } else {
-    _syncUI.text.textContent = `נמצאו ${notFoundProducts.length} קישורים שבורים`;
+    _syncUI.text.textContent = `${t('brokenLinksFound')}: ${notFoundProducts.length}`;
     syncShow404Panel(notFoundProducts);
     btn.innerHTML = `<span style="font-size:11px;font-weight:700;">⚠ ${notFoundProducts.length}</span>`;
   }
@@ -1617,7 +1628,7 @@ async function loadSchedules() {
   try {
     const { schedules } = await api('/api/schedules');
     if (!schedules.length) {
-      container.innerHTML = '<div class="empty-state">אין לוחות זמנים</div>';
+      container.innerHTML = `<div class="empty-state">${t('noSchedules')}</div>`;
       return;
     }
     const subjectOptions = _subjects.map(s =>
@@ -1628,7 +1639,7 @@ async function loadSchedules() {
       const subj = s.subject ? _subjects.find(x => x.id === s.subject) : null;
       const subjChip = subj
         ? `<span style="font-size:10.5px;background:rgba(2,132,199,0.12);color:#0284c7;padding:2px 8px;border-radius:20px;font-weight:600;">${escHtml(subj.name)}</span>`
-        : `<span style="font-size:10.5px;background:rgba(100,116,139,0.1);color:#64748b;padding:2px 8px;border-radius:20px;">כל הנישות</span>`;
+        : `<span style="font-size:10.5px;background:rgba(100,116,139,0.1);color:#64748b;padding:2px 8px;border-radius:20px;">${t('allNiches')}</span>`;
       return `
       <div class="schedule-item" id="sched-${s.id}">
         <div style="flex:1;min-width:0;">
@@ -1637,7 +1648,7 @@ async function loadSchedules() {
           <div style="display:flex;align-items:center;gap:6px;">
             <select class="form-input" style="font-size:11px;padding:3px 6px;height:28px;width:auto;max-width:160px;"
               onchange="assignScheduleSubject('${s.id}', this.value)">
-              <option value="">כל הנישות</option>
+              <option value="">${t('allNiches')}</option>
               ${subjectOptions}
             </select>
             <span id="sched-assign-ok-${s.id}" style="font-size:11px;color:#16a34a;min-width:40px;"></span>
@@ -1648,7 +1659,7 @@ async function loadSchedules() {
           <button class="btn btn-sm" style="background:rgba(112,42,225,0.08);color:var(--primary);border:1px solid rgba(112,42,225,0.2);padding:4px 8px;" onclick="openEditSchedule('${s.id}', ${JSON.stringify(s.label)}, ${JSON.stringify(s.cron)})" title="ערוך">
             <span class="material-symbols-outlined" style="font-size:15px;line-height:1;">edit</span>
           </button>
-          <label class="toggle" title="${s.enabled ? 'פעיל' : 'לא פעיל'}">
+          <label class="toggle" title="${s.enabled ? t('enabledLabel') : t('disabledLabel')}">
             <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleSchedule('${s.id}', this.checked)" />
             <span class="slider"></span>
           </label>
@@ -1671,7 +1682,7 @@ window.assignScheduleSubject = async (id, subject) => {
   try {
     await api(`/api/schedules/${id}`, { method: 'PUT', body: { subject } });
     const ok = document.getElementById(`sched-assign-ok-${id}`);
-    if (ok) { ok.textContent = '✓ נשמר'; setTimeout(() => { ok.textContent = ''; }, 2000); }
+    if (ok) { ok.textContent = t('savedOk'); setTimeout(() => { ok.textContent = ''; }, 2000); }
     await loadSchedules();
   } catch (err) {
     alert(t('errGeneral') + err.message);
@@ -1688,7 +1699,7 @@ window.toggleSchedule = async (id, enabled) => {
 };
 
 window.deleteSchedule = async (id) => {
-  if (!confirm('למחוק לוח זמנים זה?')) return;
+  if (!confirm(t('confirmDeleteSchedule'))) return;
   try {
     await api(`/api/schedules/${id}`, { method: 'DELETE' });
     await loadSchedules();
@@ -1712,7 +1723,7 @@ document.getElementById('btn-add-schedule').addEventListener('click', async () =
   const label   = document.getElementById('sched-label').value.trim();
   const cron    = document.getElementById('sched-cron').value.trim();
   const subject = document.getElementById('sched-subject').value;
-  if (!label || !cron) return alert('יש למלא שם וביטוי cron');
+  if (!label || !cron) return alert(t('scheduleRequired'));
   try {
     await api('/api/schedules', { method: 'POST', body: { label, cron, subject } });
     document.getElementById('sched-label').value = '';
@@ -1735,18 +1746,18 @@ async function loadBroadcasts() {
     _broadcasts = data.broadcasts || [];
     window._broadcasts = _broadcasts;
     if (!_broadcasts.length) {
-      container.innerHTML = '<div class="empty-state">אין הודעות שידור</div>';
+      container.innerHTML = `<div class="empty-state">${t('noBroadcasts')}</div>`;
       return;
     }
-    const DAYS_HE = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
     function bcastRecurrenceLabel(b) {
       if (b.recurrenceLabel) return b.recurrenceLabel;
       const r = b.recurrence;
       if (!r) return b.cron || '';
       const hh = String(r.hour ?? 0).padStart(2, '0');
-      if (r.frequency === 'daily')        return `כל יום ב-${hh}:00`;
-      if (r.frequency === 'weekly')       return `כל ${DAYS_HE[r.day ?? 0]} ב-${hh}:00`;
-      if (r.frequency === 'every_n_days') return `כל ${r.n ?? 2} ימים ב-${hh}:00`;
+      const BCAST_DAYS = [t('weekdaySun'), t('weekdayMon'), t('weekdayTue'), t('weekdayWed'), t('weekdayThu'), t('weekdayFri'), t('weekdaySat')];
+      if (r.frequency === 'daily')        return `${t('bcastFreqDaily')} ${hh}:00`;
+      if (r.frequency === 'weekly')       return `${t('bcastEvery')} ${BCAST_DAYS[r.day ?? 0]} ${hh}:00`;
+      if (r.frequency === 'every_n_days') return `${t('bcastEvery')} ${r.n ?? 2} ${t('bcastDays')} ${hh}:00`;
       return b.cron || '';
     }
     container.innerHTML = _broadcasts.map(b => {
@@ -1761,7 +1772,7 @@ async function loadBroadcasts() {
       const preview = escHtml((b.text || '').slice(0, 80)) + ((b.text || '').length > 80 ? '…' : '');
       const schedLabel = bcastRecurrenceLabel(b);
       const imgIcon = b.imageUrl
-        ? `<span class="material-symbols-outlined" title="יש תמונה" style="font-size:14px;color:var(--on-surface-var);vertical-align:middle;">image</span>`
+        ? `<span class="material-symbols-outlined" title="${t('hasImageTitle')}" style="font-size:14px;color:var(--on-surface-var);vertical-align:middle;">image</span>`
         : '';
       return `
       <div class="schedule-item" id="bcast-${escHtml(String(b.id))}">
@@ -1771,14 +1782,14 @@ async function loadBroadcasts() {
           </div>
           <div class="bcast-msg-preview">${preview}</div>
           <div class="schedule-cron">${escHtml(schedLabel)}</div>
-          ${b.nextRunAt ? `<div style="font-size:11px;color:var(--on-surface-var);">הבא: ${fmtDate(b.nextRunAt)}</div>` : ''}
+          ${b.nextRunAt ? `<div style="font-size:11px;color:var(--on-surface-var);">${t('nextRunLabel')} ${fmtDate(b.nextRunAt)}</div>` : ''}
         </div>
         <div class="schedule-actions">
-          <button class="btn btn-sm" style="background:rgba(22,163,74,0.12);color:#16a34a;border:1px solid rgba(22,163,74,0.2);font-size:13px;padding:4px 10px;" onclick="fireBroadcastNow('${escHtml(String(b.id))}')" title="שלח עכשיו">▶</button>
+          <button class="btn btn-sm" style="background:rgba(22,163,74,0.12);color:#16a34a;border:1px solid rgba(22,163,74,0.2);font-size:13px;padding:4px 10px;" onclick="fireBroadcastNow('${escHtml(String(b.id))}')" title="${t('sendNowTitle')}">▶</button>
           <button class="btn btn-sm" style="background:rgba(112,42,225,0.08);color:var(--primary);border:1px solid rgba(112,42,225,0.2);padding:4px 8px;" onclick="openEditBroadcast('${escHtml(String(b.id))}')" title="ערוך">
             <span class="material-symbols-outlined" style="font-size:15px;line-height:1;">edit</span>
           </button>
-          <label class="toggle" title="${b.enabled ? 'פעיל' : 'לא פעיל'}">
+          <label class="toggle" title="${b.enabled ? t('enabledLabel') : t('disabledLabel')}">
             <input type="checkbox" ${b.enabled ? 'checked' : ''} onchange="toggleBroadcast('${escHtml(String(b.id))}', this.checked)" />
             <span class="slider"></span>
           </label>
@@ -1796,11 +1807,11 @@ window.fireBroadcastNow = async (id) => {
     const data = await api(`/api/broadcasts/${id}/fire-now`, { method: 'POST' });
     const wa = data.result?.whatsapp;
     if (wa?.success === false) {
-      alert(`שגיאה בוואטסאפ: ${wa.error}`);
+      alert(`${t('waSendError')} ${wa.error}`);
     } else if (wa?.success) {
-      alert(`✓ נשלח (${wa.chatName || wa.group || ''})`);
+      alert(`${t('waSentOk')} (${wa.chatName || wa.group || ''})`);
     } else {
-      alert('ההודעה נשלחה!');
+      alert(t('broadcastSentMsg'));
     }
   } catch (err) {
     alert(t('errGeneral') + err.message);
@@ -1817,7 +1828,7 @@ window.toggleBroadcast = async (id, enabled) => {
 };
 
 window.deleteBroadcast = async (id) => {
-  if (!confirm('למחוק הודעת שידור זו?')) return;
+  if (!confirm(t('confirmDeleteBroadcast'))) return;
   try {
     await api(`/api/broadcasts/${id}`, { method: 'DELETE' });
     await loadBroadcasts();
@@ -1834,11 +1845,11 @@ document.getElementById('btn-add-broadcast').addEventListener('click', () => ope
 // ── Scraper ───────────────────────────────────────────────────────────────────
 document.getElementById('btn-scrape').addEventListener('click', async (btn) => {
   const url = document.getElementById('scrape-url').value.trim();
-  if (!url) return alert('יש להזין קישור');
+  if (!url) return alert(t('urlRequired'));
 
   const button = document.getElementById('btn-scrape');
   button.disabled = true;
-  button.textContent = 'סורק...';
+  button.textContent = t('scanningEllipsis');
 
   const resultDiv = document.getElementById('scrape-result');
   resultDiv.style.display = 'none';
@@ -1866,7 +1877,7 @@ document.getElementById('btn-scrape').addEventListener('click', async (btn) => {
       const p = result.product;
       resultDiv.style.display = 'block';
       resultDiv.innerHTML = `
-        <strong style="color:#4ade80;">✓ מוצר נוסף לגיליון</strong><br/>
+        <strong style="color:#4ade80;">${t('productAddedToSheet')}</strong><br/>
         <div style="margin-top:8px;display:flex;gap:12px;align-items:flex-start;">
           ${p.image ? `<img src="${escHtml(p.image)}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;">` : ''}
           <div>
@@ -1879,10 +1890,10 @@ document.getElementById('btn-scrape').addEventListener('click', async (btn) => {
     }
   } catch (err) {
     resultDiv.style.display = 'block';
-    resultDiv.innerHTML = `<span style="color:#f87171;">שגיאה: ${escHtml(err.message)}</span>`;
+    resultDiv.innerHTML = `<span style="color:#f87171;">${t('errGeneral')}${escHtml(err.message)}</span>`;
   } finally {
     button.disabled = false;
-    button.textContent = 'סרוק ושמור';
+    button.textContent = t('scraperScanBtn');
   }
 });
 
@@ -1897,15 +1908,15 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
   const waGroupSel      = document.getElementById('new-wa-group-select');
   const whatsappGroupId = waGroupSel ? waGroupSel.value : '';
 
-  if (!Text || !Link) { result.textContent = '⚠ שם מוצר וקישור הם שדות חובה'; result.style.color='#d97706'; return; }
+  if (!Text || !Link) { result.textContent = t('productRequired'); result.style.color='#d97706'; return; }
 
   try {
     await api('/api/products', { method: 'POST', body: { Link, image, Text, subject, whatsappGroupId } });
-    result.textContent = '✓ מוצר נוסף בהצלחה';
+    result.textContent = t('productAddedOk');
     result.style.color = '#16a34a';
     ['new-text','new-link','new-image'].forEach(id => document.getElementById(id).value = '');
   } catch (err) {
-    result.textContent = '✗ שגיאה: ' + err.message;
+    result.textContent = '✗ ' + t('errGeneral') + err.message;
     result.style.color = '#dc2626';
   }
 });
@@ -1915,10 +1926,10 @@ document.getElementById('btn-refresh-fb').addEventListener('click', async () => 
   const el = document.getElementById('fb-token-result');
   try {
     const data = await api('/api/facebook/refresh-token', { method: 'POST' });
-    el.textContent = `✓ טוקן חדש: ${data.access_token}\n${data.note}`;
+    el.textContent = `✓ ${t('fbTokenNew')} ${data.access_token}\n${data.note}`;
     el.style.color = '#4ade80';
   } catch (err) {
-    el.textContent = '✗ שגיאה: ' + err.message;
+    el.textContent = t('errGeneral') + err.message;
     el.style.color = '#f87171';
   }
 });
@@ -1949,7 +1960,7 @@ document.getElementById('btn-fishing-search').addEventListener('click', async ()
   const btn       = document.getElementById('btn-fishing-search');
 
   btn.disabled = true;
-  status.textContent = 'מחפש מוצרים... (עשוי לקחת 1-2 דקות)';
+  status.textContent = t('fishingSearching');
   result.style.display = 'none';
 
   try {
@@ -1961,13 +1972,13 @@ document.getElementById('btn-fishing-search').addEventListener('click', async ()
     status.textContent = '';
     result.style.display = 'block';
     result.style.color = '#4ade80';
-    result.innerHTML = `✓ נוספו <strong>${data.saved}</strong> מוצרים לגוגל שיטס${data.skipped ? ` (${data.skipped} דולגו)` : ''}`;
+    result.innerHTML = `✓ ${t('fishingAdded')} <strong>${data.saved}</strong>${data.skipped ? ` (${data.skipped} ${t('fishingSkipped')})` : ''}`;
     loadProducts();
   } catch (err) {
     status.textContent = '';
     result.style.display = 'block';
     result.style.color = '#f87171';
-    result.textContent = `✗ שגיאה: ${err.message || err}`;
+    result.textContent = `✗ ${t('errGeneral')}${err.message || err}`;
   } finally {
     btn.disabled = false;
   }
@@ -1982,17 +1993,17 @@ async function loadTokenInfo() {
     const daysLeft = d.days_left;
     const color = daysLeft === null ? '#4ade80' : daysLeft > 14 ? '#4ade80' : daysLeft > 3 ? '#fbbf24' : '#f87171';
     const expiry = daysLeft === null
-      ? '<span style="color:#4ade80">לא פג תוקף (Page Token ✓)</span>'
-      : `<span style="color:${color}">${d.expires_at} (${daysLeft} ימים נותרו)</span>`;
+      ? `<span style="color:#4ade80">${t('neverExpires')}</span>`
+      : `<span style="color:${color}">${d.expires_at} (${daysLeft} ${t('daysRemaining')})</span>`;
     el.innerHTML = `
       <div style="display:grid;grid-template-columns:120px 1fr;gap:6px 12px;line-height:1.8;">
-        <span style="color:#64748b;">תקף:</span><span style="color:${d.valid ? '#4ade80' : '#f87171'}">${d.valid ? '✓ כן' : '✗ לא'}</span>
-        <span style="color:#64748b;">אפליקציה:</span><span>${d.app || '—'}</span>
-        <span style="color:#64748b;">תפוגה:</span>${expiry}
-        <span style="color:#64748b;">הרשאות:</span><span style="font-size:11px;font-family:monospace;">${(d.scopes || []).join(', ')}</span>
+        <span style="color:#64748b;">${t('tokenValid')}:</span><span style="color:${d.valid ? '#4ade80' : '#f87171'}">${d.valid ? t('tokenYes') : t('tokenNo')}</span>
+        <span style="color:#64748b;">${t('tokenApp')}:</span><span>${d.app || '—'}</span>
+        <span style="color:#64748b;">${t('tokenExpiry')}:</span>${expiry}
+        <span style="color:#64748b;">${t('tokenPermissions')}:</span><span style="font-size:11px;font-family:monospace;">${(d.scopes || []).join(', ')}</span>
       </div>`;
   } catch (e) {
-    el.innerHTML = `<span style="color:#f87171">שגיאה: ${e.message}</span>`;
+    el.innerHTML = `<span style="color:#f87171">${t('errGeneral')}${e.message}</span>`;
   }
 }
 
@@ -2026,12 +2037,12 @@ async function loadWWebjsStatus() {
 
     if (status.state === 'CONNECTED') {
       dot.style.background = '#22c55e';
-      label.textContent    = 'מחובר';
+      label.textContent    = t('waConnected');
       groupsWrap.style.display = 'block';
       loadWWebjsGroups();
     } else if (status.state === 'QR_READY') {
       dot.style.background = '#f59e0b';
-      label.textContent    = 'ממתין לסריקת QR';
+      label.textContent    = t('waWaitingQr');
       if (status.qr) {
         qrImg.src = status.qr;
         qrWrap.style.display = 'block';
@@ -2041,18 +2052,18 @@ async function loadWWebjsStatus() {
       const isDisconnected = status.state === 'DISCONNECTED';
       dot.style.background = isDisconnected ? '#ef4444' : '#94a3b8';
       label.textContent    = isDisconnected
-        ? (status.error ? `שגיאה: ${status.error}` : 'מנותק — מנסה להתחבר מחדש...')
-        : 'מאתחל...';
+        ? (status.error ? `${t('errGeneral')}${status.error}` : t('waDisconnected'))
+        : t('waInitializing');
       // Fetch debug info to show exactly what Chrome is doing
       loadWWebjsDebug();
       setTimeout(loadWWebjsStatus, 5000);
     }
   } catch (err) {
     dot.style.background   = '#ef4444';
-    label.textContent      = 'שגיאת חיבור לשירות';
+    label.textContent      = t('waServiceError');
     if (err.message?.includes('not configured')) {
       noConfig.style.display = 'block';
-      label.textContent      = 'שירות לא מוגדר';
+      label.textContent      = t('waServiceNotConfig');
     }
   }
 }
@@ -2069,26 +2080,26 @@ async function loadWWebjsDebug() {
 }
 
 window.resetWWebjsSession = async function resetWWebjsSession() {
-  if (!confirm('איפוס הסשן ימחק את נתוני החיבור הקיימים ויחייב סריקת QR מחדש.\nלהמשיך?')) return;
+  if (!confirm(t('confirmResetSession'))) return;
   const btn = document.getElementById('btn-wwebjs-reset-session');
   const origHtml = btn.innerHTML;
   const debugPre = document.getElementById('wwebjs-debug-pre');
   const debugWrap = document.getElementById('wwebjs-debug-wrap');
   btn.disabled = true;
-  btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:13px;">hourglass_empty</span>מוחק...';
+  btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:13px;">hourglass_empty</span>${t('deletingEllipsis')}`;
   console.log('[WA] Sending DELETE /api/whatsapp-service/session...');
   try {
     const result = await api('/api/whatsapp-service/session', { method: 'DELETE' });
     console.log('[WA] Session reset response:', result);
-    showToast('✅ הסשן אופס — ממתין ל-QR');
+    showToast(t('sessionResetOk'));
     setTimeout(loadWWebjsStatus, 3000);
   } catch (e) {
     console.error('[WA] Session reset failed:', e);
     if (debugWrap && debugPre) {
       debugWrap.style.display = 'block';
-      debugPre.textContent = `❌ שגיאת איפוס סשן:\n${e.message}`;
+      debugPre.textContent = `${t('sessionResetError')}\n${e.message}`;
     }
-    showToast(`❌ שגיאה: ${e.message}`, 5000);
+    showToast(`❌ ${t('errGeneral')}${e.message}`, 5000);
   } finally {
     btn.disabled = false;
     btn.innerHTML = origHtml;
@@ -2098,11 +2109,11 @@ window.resetWWebjsSession = async function resetWWebjsSession() {
 async function loadWWebjsGroups() {
   const list = document.getElementById('wwebjs-groups-list');
   if (!list) return;
-  list.innerHTML = '<div style="font-size:12px;color:var(--on-surface-var);">טוען קבוצות...</div>';
+  list.innerHTML = `<div style="font-size:12px;color:var(--on-surface-var);">${t('waLoadingGroups')}</div>`;
   try {
     const groups = await api('/api/whatsapp-service/groups');
     if (!groups.length) {
-      list.innerHTML = '<div style="font-size:12px;color:var(--on-surface-var);">אין קבוצות זמינות</div>';
+      list.innerHTML = `<div style="font-size:12px;color:var(--on-surface-var);">${t('waNoGroups')}</div>`;
       return;
     }
     list.innerHTML = groups.map(g => `
@@ -2112,17 +2123,17 @@ async function loadWWebjsGroups() {
           <div style="font-size:10px;color:var(--on-surface-var);direction:ltr;">${escHtml(g.id)}</div>
         </div>
         <button class="btn btn-ghost btn-sm" onclick="copyToClipboard('${escHtml(g.id)}')" style="font-size:11px;flex-shrink:0;">
-          <span class="material-symbols-outlined" style="font-size:13px;">content_copy</span>העתק ID
+          <span class="material-symbols-outlined" style="font-size:13px;">content_copy</span>${t('waCopyId')}
         </button>
       </div>
     `).join('');
   } catch (err) {
-    list.innerHTML = `<div style="font-size:12px;color:#ef4444;">שגיאה: ${escHtml(err.message)}</div>`;
+    list.innerHTML = `<div style="font-size:12px;color:#ef4444;">${t('errGeneral')}${escHtml(err.message)}</div>`;
   }
 }
 
 function copyToClipboard(text) {
-  navigator.clipboard.writeText(text).then(() => showToast('ID הועתק ללוח'));
+  navigator.clipboard.writeText(text).then(() => showToast(t('waIdCopied')));
 }
 
 function showToast(msg, durationMs = 2000) {
@@ -2166,19 +2177,19 @@ async function renderDashboard() {
   cards.push(`
     <div class="dashboard-subject-card" onclick="navigateTo('products','')">
       <div class="dashboard-subject-icon" style="background:rgba(112,42,225,0.1);">🌐</div>
-      <div class="dashboard-subject-name">כלל הנושאים</div>
-      <div class="dashboard-subject-stat">${allProducts.length} מוצרים</div>
+      <div class="dashboard-subject-name">${t('allSubjectsLabel')}</div>
+      <div class="dashboard-subject-stat">${allProducts.length} ${t('productsCountLabel')}</div>
       <div class="dashboard-subject-kpi">
         <div class="dashboard-kpi-item">
-          <div class="dashboard-kpi-label">ממתינים</div>
+          <div class="dashboard-kpi-label">${t('pendingLabel')}</div>
           <div class="dashboard-kpi-val" style="color:#ea580c;">${totalUnsent}</div>
         </div>
         <div class="dashboard-kpi-item">
-          <div class="dashboard-kpi-label">נשלחו</div>
+          <div class="dashboard-kpi-label">${t('sentLabel')}</div>
           <div class="dashboard-kpi-val" style="color:#16a34a;">${totalSent}</div>
         </div>
         <div class="dashboard-kpi-item">
-          <div class="dashboard-kpi-label">קליקים</div>
+          <div class="dashboard-kpi-label">${t('clicksLabel')}</div>
           <div class="dashboard-kpi-val" style="color:#702ae1;">${totalClicks}</div>
         </div>
       </div>
@@ -2189,7 +2200,7 @@ async function renderDashboard() {
     cards.push(`
       <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--on-surface-var);">
         <span class="material-symbols-outlined" style="font-size:48px;opacity:0.3;display:block;margin-bottom:12px;">category</span>
-        <div style="font-size:14px;">אין נושאים מוגדרים — הוסף נושאים בהגדרות</div>
+        <div style="font-size:14px;">${t('noSubjectsDefined')}</div>
       </div>
     `);
   } else {
@@ -2205,18 +2216,18 @@ async function renderDashboard() {
         <div class="dashboard-subject-card" onclick="navigateTo('products','${escHtml(s.id)}')">
           <div class="dashboard-subject-icon" style="background:${bg};">${icon}</div>
           <div class="dashboard-subject-name">${escHtml(s.name)}</div>
-          <div class="dashboard-subject-stat">${subProds.length} מוצרים</div>
+          <div class="dashboard-subject-stat">${subProds.length} ${t('productsCountLabel')}</div>
           <div class="dashboard-subject-kpi">
             <div class="dashboard-kpi-item">
-              <div class="dashboard-kpi-label">ממתינים</div>
+              <div class="dashboard-kpi-label">${t('pendingLabel')}</div>
               <div class="dashboard-kpi-val" style="color:#ea580c;">${unsent}</div>
             </div>
             <div class="dashboard-kpi-item">
-              <div class="dashboard-kpi-label">נשלחו</div>
+              <div class="dashboard-kpi-label">${t('sentLabel')}</div>
               <div class="dashboard-kpi-val" style="color:#16a34a;">${sent}</div>
             </div>
             <div class="dashboard-kpi-item">
-              <div class="dashboard-kpi-label">קליקים</div>
+              <div class="dashboard-kpi-label">${t('clicksLabel')}</div>
               <div class="dashboard-kpi-val" style="color:${color};">${clicks}</div>
             </div>
           </div>
@@ -2328,14 +2339,14 @@ function renderAliCard(p, originalIdx) {
   const vol      = p.lastest_volume  != null ? Number(p.lastest_volume).toLocaleString('he-IL') : '—';
   const stock    = (p.available_stock != null && p.available_stock !== '')
     ? Number(p.available_stock).toLocaleString('he-IL')
-    : '<span style="color:var(--on-surface-var)">אין כמות</span>';
+    : `<span style="color:var(--on-surface-var)">${t('noStock')}</span>`;
   const imgHtml  = p.product_main_image_url
     ? `<img src="${escHtml(p.product_main_image_url)}" alt="" style="width:100%;height:180px;object-fit:cover;border-radius:10px 10px 0 0;display:block;" loading="lazy" />`
     : `<div style="width:100%;height:180px;background:rgba(112,42,225,0.07);border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:center;"><span class="material-symbols-outlined" style="font-size:48px;color:var(--primary);opacity:0.3;">image</span></div>`;
 
   const scoreColor = score >= 70 ? '#16a34a' : score >= 45 ? '#d97706' : '#dc2626';
   const ownedBadge = isOwned
-    ? `<div style="position:absolute;top:8px;right:8px;background:#16a34a;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:0.3px;">✓ ברשימה</div>`
+    ? `<div style="position:absolute;top:8px;right:8px;background:#16a34a;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:0.3px;">✓ ${t('alreadyInList')}</div>`
     : '';
   const scoreBadge = `<div style="position:absolute;top:8px;left:8px;background:${scoreColor};color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;">${score}</div>`;
   const videoBadge = p.product_video_url
@@ -2343,11 +2354,11 @@ function renderAliCard(p, originalIdx) {
     : '';
 
   const addBtn = isOwned
-    ? `<button class="btn btn-ghost btn-sm btn-ali-add" style="justify-content:center;font-size:12px;opacity:0.6;" title="כבר ברשימה">
-         <span class="material-symbols-outlined" style="font-size:13px;">check_circle</span>כבר ברשימה
+    ? `<button class="btn btn-ghost btn-sm btn-ali-add" style="justify-content:center;font-size:12px;opacity:0.6;" title="${t('alreadyInList')}">
+         <span class="material-symbols-outlined" style="font-size:13px;">check_circle</span>${t('alreadyInList')}
        </button>`
     : `<button class="btn btn-primary btn-sm btn-ali-add" style="justify-content:center;font-size:12px;">
-         <span class="material-symbols-outlined" style="font-size:13px;">add_circle</span>הוסף לנישה
+         <span class="material-symbols-outlined" style="font-size:13px;">add_circle</span>${t('addToNicheBtn')}
        </button>`;
 
   return `
@@ -2363,12 +2374,12 @@ function renderAliCard(p, originalIdx) {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px;color:var(--on-surface-var);margin-top:2px;">
           <span>💰 ${price}</span>
           <span>⭐ ${rate}</span>
-          <span>🛒 ${vol} רכישות</span>
+          <span>🛒 ${vol} ${t('purchasesLabel')}</span>
           <span>📦 ${stock}</span>
         </div>
         <div style="margin-top:auto;padding-top:10px;display:flex;flex-direction:column;gap:6px;">
           <a href="${escHtml(p.promotion_link || '#')}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="justify-content:center;font-size:12px;">
-            <span class="material-symbols-outlined" style="font-size:13px;">open_in_new</span>קישור אפיליאציה
+            <span class="material-symbols-outlined" style="font-size:13px;">open_in_new</span>${t('affiliateLink')}
           </a>
           ${addBtn}
           <div class="ali-add-feedback" style="font-size:11px;min-height:14px;text-align:center;"></div>
@@ -2382,7 +2393,7 @@ function renderAliGrid() {
   const sorted  = sortAliProducts(_aliLastProducts, _aliSort);
 
   if (sorted.length === 0) {
-    grid.innerHTML = '<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--on-surface-var);">לא נמצאו מוצרים העומדים בקריטריונים</div>';
+    grid.innerHTML = `<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--on-surface-var);">${t('noProductsMeetCriteria')}</div>`;
     return;
   }
 
@@ -2393,7 +2404,7 @@ function renderAliGrid() {
   }).join('');
 
   grid.querySelectorAll('.btn-ali-add').forEach(addBtn => {
-    if (addBtn.title === 'כבר ברשימה') return; // skip owned
+    if (addBtn.title === t('alreadyInList')) return; // skip owned
     addBtn.addEventListener('click', async () => {
       const card     = addBtn.closest('[data-product-idx]');
       const idx      = parseInt(card.dataset.productIdx, 10);
@@ -2404,7 +2415,7 @@ function renderAliGrid() {
       const feedback       = card.querySelector('.ali-add-feedback');
 
       addBtn.disabled = true;
-      feedback.textContent = 'שומר...';
+      feedback.textContent = t('savingEllipsis');
       feedback.style.color = 'var(--on-surface-var)';
 
       try {
@@ -2412,13 +2423,13 @@ function renderAliGrid() {
           method: 'POST',
           body: { product, subject, whatsappGroupId },
         });
-        feedback.textContent = '✓ נוסף לנישה';
+        feedback.textContent = t('addedToNiche');
         feedback.style.color = '#16a34a';
-        addBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:13px;">check_circle</span>נוסף';
+        addBtn.innerHTML = `<span class="material-symbols-outlined" style="font-size:13px;">check_circle</span>${t('addedLabel')}`;
         addBtn.style.opacity = '0.5';
         _aliExistingUrls.add(product.promotion_link); // mark as owned locally
       } catch (err) {
-        feedback.textContent = `✗ שגיאה: ${err.message}`;
+        feedback.textContent = `✗ ${t('errGeneral')}${err.message}`;
         feedback.style.color = '#dc2626';
         addBtn.disabled = false;
       }
@@ -2429,7 +2440,7 @@ function renderAliGrid() {
 async function doAliSearch(page) {
   const keywords = document.getElementById('ali-keywords').value.trim();
   if (!keywords) {
-    document.getElementById('ali-search-status').textContent = 'יש להזין מילת מפתח';
+    document.getElementById('ali-search-status').textContent = t('keywordRequired');
     return;
   }
   _aliPage = page;
@@ -2439,7 +2450,7 @@ async function doAliSearch(page) {
   const section   = document.getElementById('ali-results-section');
 
   searchBtn.disabled = true;
-  status.textContent = `מחפש "${keywords}"...`;
+  status.textContent = `${t('loading')} "${keywords}"...`;
   section.style.display = 'none';
 
   try {
@@ -2455,9 +2466,9 @@ async function doAliSearch(page) {
     section.style.display = 'block';
 
     const ownedCount = data.products.filter(p => _aliExistingUrls.has(p.promotion_link)).length;
-    const ownedNote  = ownedCount > 0 ? ` · ${ownedCount} כבר ברשימה` : '';
+    const ownedNote  = ownedCount > 0 ? ` · ${ownedCount} ${t('aliAlreadyInList')}` : '';
     document.getElementById('ali-results-summary').textContent =
-      `נמצאו ${data.filtered} מוצרים (מתוך ${data.total} תוצאות) — עמוד ${page}${ownedNote}`;
+      `${t('aliFoundFmt')} ${data.filtered} (${t('aliOutOf')} ${data.total}) — ${t('aliPage')} ${page}${ownedNote}`;
 
     document.getElementById('btn-ali-next-page').style.display = data.total >= 50 ? '' : 'none';
 
@@ -2468,7 +2479,7 @@ async function doAliSearch(page) {
     section.style.display = 'block';
     document.getElementById('ali-results-summary').textContent = '';
     document.getElementById('ali-products-grid').innerHTML =
-      `<div style="grid-column:1/-1;padding:20px;color:#f87171;">✗ שגיאה: ${escHtml(err.message)}</div>`;
+      `<div style="grid-column:1/-1;padding:20px;color:#f87171;">✗ ${t('errGeneral')}${escHtml(err.message)}</div>`;
   } finally {
     searchBtn.disabled = false;
   }
@@ -2508,8 +2519,8 @@ async function loadAndRenderWaGroups(subjectId) {
   const statusLabel = document.getElementById(`niche-status-label-${subjectId}`);
   if (statusLabel) {
     statusLabel.textContent = groups.length
-      ? `${groups.length} קבוצת WA מחוברת`
-      : 'הגדרות נישה פעילה';
+      ? `${groups.length} ${t('waGroupsConnectedFmt')}`
+      : t('nicheActiveStatus');
   }
 }
 
@@ -2517,7 +2528,7 @@ function renderWaGroupsList(subjectId, groups) {
   const listEl = document.getElementById(`wa-groups-list-${subjectId}`);
   if (!listEl) return;
   if (!groups.length) {
-    listEl.innerHTML = '<div style="font-size:12px;color:var(--on-surface-var);">אין קבוצות עדיין — הוסף קבוצה ראשונה</div>';
+    listEl.innerHTML = `<div style="font-size:12px;color:var(--on-surface-var);">${t('noGroupsYet')}</div>`;
     return;
   }
   listEl.innerHTML = groups.map(g => `
@@ -2525,7 +2536,7 @@ function renderWaGroupsList(subjectId, groups) {
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;">
         <div>
           <div style="font-size:13px;font-weight:600;">${escHtml(g.name)}</div>
-          <div style="font-size:11px;color:var(--on-surface-var);direction:ltr;">${escHtml(g.waGroup)}${g.joinLink ? ' · קישור ✓' : ''}</div>
+          <div style="font-size:11px;color:var(--on-surface-var);direction:ltr;">${escHtml(g.waGroup)}${g.joinLink ? ` · ${t('joinLinkOk')}` : ''}</div>
         </div>
         <div style="display:flex;gap:4px;">
           <button class="btn btn-ghost btn-sm" onclick="showEditWaGroup('${g.id}')" style="padding:4px 8px;">
@@ -2538,13 +2549,13 @@ function renderWaGroupsList(subjectId, groups) {
       </div>
       <div id="wa-group-edit-${g.id}" style="display:none;padding:8px 12px;border-top:1px solid rgba(255,255,255,0.07);">
         <div style="display:flex;flex-direction:column;gap:6px;">
-          <select class="form-input" id="wa-service-pick-edit-${g.id}" style="font-size:12px;"><option value="">טוען קבוצות...</option></select>
-          <input class="form-input" id="edit-wa-name-${g.id}" value="${escHtml(g.name)}" placeholder="שם הקבוצה" style="font-size:13px;" />
-          <input class="form-input" id="edit-wa-group-id-${g.id}" value="${escHtml(g.waGroup)}" placeholder="מזהה קבוצה" dir="ltr" style="font-size:13px;" />
+          <select class="form-input" id="wa-service-pick-edit-${g.id}" style="font-size:12px;"><option value="">${t('loadingGroups')}</option></select>
+          <input class="form-input" id="edit-wa-name-${g.id}" value="${escHtml(g.name)}" placeholder="${t('displayName')}" style="font-size:13px;" />
+          <input class="form-input" id="edit-wa-group-id-${g.id}" value="${escHtml(g.waGroup)}" placeholder="${t('groupId')}" dir="ltr" style="font-size:13px;" />
           <input class="form-input" id="edit-wa-join-${g.id}" value="${escHtml(g.joinLink || '')}" placeholder="https://chat.whatsapp.com/..." dir="ltr" style="font-size:13px;" />
           <div style="display:flex;gap:6px;justify-content:flex-end;">
-            <button class="btn btn-ghost btn-sm" onclick="hideEditWaGroup('${g.id}')">ביטול</button>
-            <button class="btn btn-primary btn-sm" onclick="saveEditWaGroup('${g.id}','${subjectId}')">שמור</button>
+            <button class="btn btn-ghost btn-sm" onclick="hideEditWaGroup('${g.id}')">${t('btnCancel')}</button>
+            <button class="btn btn-primary btn-sm" onclick="saveEditWaGroup('${g.id}','${subjectId}')">${t('btnSave')}</button>
           </div>
         </div>
       </div>
@@ -2557,10 +2568,10 @@ async function loadWaServiceGroupsIntoSelect(selectId, nameFieldId, idFieldId, s
   try {
     const groups = await api('/api/whatsapp-service/groups');
     if (!groups.length) {
-      sel.innerHTML = '<option value="">אין קבוצות מחוברות</option>';
+      sel.innerHTML = `<option value="">${t('noConnectedGroups')}</option>`;
       return;
     }
-    sel.innerHTML = '<option value="">-- בחר קבוצה מחוברת --</option>' +
+    sel.innerHTML = `<option value="">-- ${t('selectGroup')} --</option>` +
       groups.map(g => `<option value="${escHtml(g.id)}" data-name="${escHtml(g.name)}" ${g.id === selectedValue ? 'selected' : ''}>${escHtml(g.name)}</option>`).join('');
     if (nameFieldId || idFieldId) {
       sel.onchange = () => {
@@ -2573,7 +2584,7 @@ async function loadWaServiceGroupsIntoSelect(selectId, nameFieldId, idFieldId, s
       };
     }
   } catch {
-    sel.innerHTML = '<option value="">שגיאה בטעינת קבוצות (WA לא מחובר?)</option>';
+    sel.innerHTML = `<option value="">${t('loadingGroupsError')}</option>`;
   }
 }
 
@@ -2589,7 +2600,7 @@ window.saveNewWaGroup = async (subjectId) => {
   const name    = document.getElementById(`new-wa-name-${subjectId}`).value.trim();
   const waGroup = document.getElementById(`new-wa-group-id-${subjectId}`).value.trim();
   const joinLink= document.getElementById(`new-wa-join-${subjectId}`).value.trim();
-  if (!name || !waGroup) { alert('שם ומזהה קבוצה הם שדות חובה'); return; }
+  if (!name || !waGroup) { alert(t('groupNameRequired')); return; }
   try {
     await api(`/api/subjects/${subjectId}/whatsapp-groups`, {
       method: 'POST',
@@ -2606,18 +2617,18 @@ window.saveNewWaGroup = async (subjectId) => {
 };
 
 window.cleanupInvalidWaGroups = async (subjectId) => {
-  if (!confirm('למחוק את כל הקבוצות עם מזהה לא תקין (לא מסתיים ב-@g.us)?')) return;
+  if (!confirm(t('confirmDeleteInvalid'))) return;
   try {
     const data = await api('/api/subjects/whatsapp-groups-invalid', { method: 'DELETE' });
     await loadAndRenderWaGroups(subjectId);
-    alert(`נמחקו ${data.deleted} קבוצות לא תקינות`);
+    alert(`${t('deletedInvalidFmt')} ${data.deleted}${t('deletedInvalidSuffix')}`);
   } catch (err) {
     alert(t('errGeneral') + err.message);
   }
 };
 
 window.deleteWaGroup = async (groupId, subjectId) => {
-  if (!confirm('למחוק את הקבוצה?')) return;
+  if (!confirm(t('confirmDeleteGroup'))) return;
   try {
     await api(`/api/subjects/whatsapp-groups/${groupId}`, { method: 'DELETE' });
     await loadAndRenderWaGroups(subjectId);
@@ -2637,7 +2648,7 @@ window.saveEditWaGroup = async (groupId, subjectId) => {
   const name     = document.getElementById(`edit-wa-name-${groupId}`).value.trim();
   const waGroup  = document.getElementById(`edit-wa-group-id-${groupId}`).value.trim();
   const joinLink = document.getElementById(`edit-wa-join-${groupId}`).value.trim();
-  if (!name || !waGroup) { alert('שם ומזהה קבוצה הם שדות חובה'); return; }
+  if (!name || !waGroup) { alert(t('groupNameRequired')); return; }
   try {
     await api(`/api/subjects/whatsapp-groups/${groupId}`, {
       method: 'PUT',
@@ -2690,7 +2701,7 @@ async function loadUsers() {
     if (!data.success) throw new Error(data.error);
     renderUsersTable(data.users);
   } catch (err) {
-    wrap.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+    wrap.innerHTML = `<div style="padding:20px;color:#f87171;">${t('errGeneral')}${escHtml(err.message)}</div>`;
   }
 }
 
@@ -2698,7 +2709,7 @@ function renderUsersTable(users) {
   const wrap = document.getElementById('users-table-wrap');
   if (!wrap) return;
   if (!users.length) {
-    wrap.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);">אין משתמשים רשומים</div>';
+    wrap.innerHTML = `<div style="padding:40px;text-align:center;color:var(--on-surface-var);">${t('noRegisteredUsers')}</div>`;
     return;
   }
   const rows = users.map(u => `
@@ -2712,20 +2723,20 @@ function renderUsersTable(users) {
       <td style="direction:ltr;text-align:right;">${escHtml(u.email)}</td>
       <td>
         <span style="padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${u.role === 'admin' ? 'rgba(112,42,225,0.12)' : 'rgba(30,150,90,0.10)'};color:${u.role === 'admin' ? '#702ae1' : '#16a34a'};">
-          ${u.role === 'admin' ? 'אדמין' : 'משתמש'}
+          ${u.role === 'admin' ? t('adminRole') : t('userRole')}
         </span>
       </td>
       <td>
         <span style="padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${u.status === 'active' ? 'rgba(22,163,74,0.10)' : 'rgba(220,38,38,0.10)'};color:${u.status === 'active' ? '#16a34a' : '#dc2626'};">
-          ${u.status === 'active' ? 'פעיל' : 'מושעה'}
+          ${u.status === 'active' ? t('activeStatus') : t('suspendedStatus')}
         </span>
       </td>
       <td style="white-space:nowrap;">
         ${u.status === 'active'
-          ? `<button class="btn btn-ghost btn-sm" onclick="setUserStatus('${u.id}','suspended')" style="color:#dc2626;">השעה</button>`
-          : `<button class="btn btn-ghost btn-sm" onclick="setUserStatus('${u.id}','active')" style="color:#16a34a;">הפעל</button>`}
+          ? `<button class="btn btn-ghost btn-sm" onclick="setUserStatus('${u.id}','suspended')" style="color:#dc2626;">${t('suspendAction')}</button>`
+          : `<button class="btn btn-ghost btn-sm" onclick="setUserStatus('${u.id}','active')" style="color:#16a34a;">${t('activateAction')}</button>`}
         ${u.role !== 'admin'
-          ? `<button class="btn btn-ghost btn-sm" onclick="deleteUserConfirm('${u.id}','${escHtml(u.name || u.email)}')" style="color:#dc2626;margin-right:4px;">מחק</button>`
+          ? `<button class="btn btn-ghost btn-sm" onclick="deleteUserConfirm('${u.id}','${escHtml(u.name || u.email)}')" style="color:#dc2626;margin-right:4px;">${t('deleteAction')}</button>`
           : ''}
       </td>
     </tr>`).join('');
@@ -2735,7 +2746,7 @@ function renderUsersTable(users) {
       <table>
         <thead><tr>
           <th style="width:40px;"></th>
-          <th>שם</th><th>מייל</th><th>תפקיד</th><th>סטטוס</th><th>פעולות</th>
+          <th>${t('nameHeader')}</th><th>${t('emailHeader')}</th><th>${t('roleHeader')}</th><th>${t('statusHeader')}</th><th>${t('actionsHeader')}</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -2758,7 +2769,7 @@ window.setUserStatus = async (id, status) => {
 };
 
 window.deleteUserConfirm = async (id, name) => {
-  if (!confirm(`למחוק את המשתמש "${name}"? פעולה זו תמחק את כל הנתונים שלו.`)) return;
+  if (!confirm(t('confirmDeleteUser'))) return;
   try {
     const res  = await fetch(`/api/users/${id}`, { method: 'DELETE' });
     const data = await res.json();
@@ -2779,7 +2790,7 @@ async function loadInvites() {
     if (!data.success) throw new Error(data.error);
     renderInvitesTable(data.invitations);
   } catch (err) {
-    wrap.innerHTML = `<div style="padding:20px;color:#f87171;">שגיאה: ${escHtml(err.message)}</div>`;
+    wrap.innerHTML = `<div style="padding:20px;color:#f87171;">${t('errGeneral')}${escHtml(err.message)}</div>`;
   }
 }
 
@@ -2788,7 +2799,7 @@ function renderInvitesTable(invites) {
   if (!wrap) return;
   const pending = invites.filter(i => !i.used_at && new Date(i.expires_at) > new Date());
   if (!pending.length) {
-    wrap.innerHTML = '<div style="padding:40px;text-align:center;color:var(--on-surface-var);">אין הזמנות פעילות</div>';
+    wrap.innerHTML = `<div style="padding:40px;text-align:center;color:var(--on-surface-var);">${t('noActiveInvites')}</div>`;
     return;
   }
   const baseUrl = window.location.origin;
@@ -2800,14 +2811,14 @@ function renderInvitesTable(invites) {
       </td>
       <td style="font-size:12px;">${new Date(i.expires_at).toLocaleDateString('he-IL')}</td>
       <td>
-        <button class="btn btn-ghost btn-sm" onclick="deleteInvite('${i.id}')" style="color:#dc2626;">בטל</button>
+        <button class="btn btn-ghost btn-sm" onclick="deleteInvite('${i.id}')" style="color:#dc2626;">${t('cancelInvite')}</button>
       </td>
     </tr>`).join('');
 
   wrap.innerHTML = `
     <div class="table-wrap">
       <table>
-        <thead><tr><th>מייל</th><th>קישור הזמנה</th><th>תפוגה</th><th>פעולות</th></tr></thead>
+        <thead><tr><th>${t('emailHeader')}</th><th>${t('inviteLinkHeader')}</th><th>${t('expiryHeader')}</th><th>${t('actionsHeader')}</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
@@ -2837,7 +2848,7 @@ document.getElementById('btn-invite-cancel')?.addEventListener('click', () => {
 document.getElementById('btn-invite-submit')?.addEventListener('click', async () => {
   const email  = document.getElementById('invite-email-input').value.trim();
   const result = document.getElementById('invite-result');
-  if (!email) { result.style.color = '#dc2626'; result.textContent = 'נדרשת כתובת מייל'; return; }
+  if (!email) { result.style.color = '#dc2626'; result.textContent = t('emailRequired'); return; }
 
   try {
     const res  = await fetch('/api/users/invites', {
@@ -2849,12 +2860,12 @@ document.getElementById('btn-invite-submit')?.addEventListener('click', async ()
     if (!data.success) throw new Error(data.error);
 
     result.style.color = '#16a34a';
-    result.innerHTML = `קישור נוצר: <a href="${escHtml(data.invitation.inviteUrl)}" target="_blank" style="direction:ltr;word-break:break-all;">${escHtml(data.invitation.inviteUrl)}</a>`;
+    result.innerHTML = `${t('linkCreated')} <a href="${escHtml(data.invitation.inviteUrl)}" target="_blank" style="direction:ltr;word-break:break-all;">${escHtml(data.invitation.inviteUrl)}</a>`;
     document.getElementById('invite-email-input').value = '';
     loadInvites();
   } catch (err) {
     result.style.color = '#dc2626';
-    result.textContent = 'שגיאה: ' + err.message;
+    result.textContent = t('inviteError') + ' ' + err.message;
   }
 });
 
@@ -2868,21 +2879,21 @@ document.getElementById('btn-migrate-products')?.addEventListener('click', async
   const btn    = document.getElementById('btn-migrate-products');
   const result = document.getElementById('migrate-products-result');
   btn.disabled = true;
-  btn.textContent = 'מייבא...';
+  btn.textContent = t('importingEllipsis');
   result.textContent = '';
   result.style.color = 'var(--on-surface-var)';
   try {
     const data = await fetch('/api/users/migrate-products', { method: 'POST' }).then(r => r.json());
     if (!data.success) throw new Error(data.error);
     result.style.color = 'var(--success, #4caf50)';
-    result.textContent = `✓ יובאו ${data.inserted} מוצרים, דולגו ${data.skipped} קיימים.`;
+    result.textContent = `✓ ${t('migrateProducts')}: ${data.inserted}, ${data.skipped}`;
     if (data.inserted > 0) loadProducts();
   } catch (err) {
     result.style.color = 'var(--error, #f44336)';
-    result.textContent = `✗ שגיאה: ${err.message}`;
+    result.textContent = `✗ ${t('errGeneral')}${err.message}`;
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">table_rows</span> ייבא מוצרים';
+    btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:15px;">table_rows</span> ${t('btnMigrateProducts')}`;
   }
 });
 
@@ -2891,24 +2902,24 @@ document.getElementById('btn-migrate-subjects')?.addEventListener('click', async
   const btn = document.getElementById('btn-migrate-subjects');
   const result = document.getElementById('migrate-subjects-result');
   btn.disabled = true;
-  btn.textContent = 'מייבא...';
+  btn.textContent = t('importingEllipsis');
   result.textContent = '';
   result.style.color = 'var(--on-surface-var)';
   try {
     const data = await fetch('/api/users/migrate-subjects', { method: 'POST' }).then(r => r.json());
     if (!data.success) throw new Error(data.error);
     result.style.color = 'var(--success, #4caf50)';
-    result.textContent = `✓ יובאו ${data.inserted} נישות, דולגו ${data.skipped} קיימות.`;
+    result.textContent = `✓ ${t('migrateSubjects')}: ${data.inserted}, ${data.skipped}`;
     if (data.inserted > 0) {
       // Refresh niches list
       loadSubjects();
     }
   } catch (err) {
     result.style.color = 'var(--error, #f44336)';
-    result.textContent = `✗ שגיאה: ${err.message}`;
+    result.textContent = `✗ ${t('errGeneral')}${err.message}`;
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">cloud_download</span> הפעל ייבוא';
+    btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:15px;">cloud_download</span> ${t('btnMigrateSubjects')}`;
   }
 });
 
@@ -3887,7 +3898,7 @@ document.getElementById('btn-manual-sync').addEventListener('click', () => {
         ${t('anManualSyncDesc')}
       </div>
       <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Tracking ID</label>
-      <input id="manual-tracking-id" class="form-input" style="width:100%;margin-bottom:14px;" placeholder="לדוגמה: affheav123" />
+      <input id="manual-tracking-id" class="form-input" style="width:100%;margin-bottom:14px;" placeholder="${t('aliTrackingPh')}" />
       <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">${t('anAssignNiche')}</label>
       <select id="manual-subject-id" class="form-input" style="width:100%;margin-bottom:14px;">${opts}</select>
       <div style="display:flex;gap:10px;margin-bottom:14px;">
@@ -3992,7 +4003,7 @@ async function loadReachSummary() {
           ${fb ? `<div style="background:rgba(59,130,246,0.1);color:#3b82f6;padding:3px 8px;border-radius:20px;">FB: ${parseInt(fb.total_reach,10).toLocaleString()} ${t('anReachLabel')} · ${fb.posts_tracked} ${t('anPostsShort')}</div>` : ''}
           ${ig ? `<div style="background:rgba(168,85,247,0.1);color:#a855f7;padding:3px 8px;border-radius:20px;">IG: ${parseInt(ig.total_reach,10).toLocaleString()} ${t('anReachLabel')} · ${ig.posts_tracked} ${t('anPostsShort')}</div>` : ''}
         </div>
-        ${parseFloat(ctr) > 0 ? `<div style="margin-top:8px;font-size:11px;color:var(--on-surface-var);">CTR: <strong style="color:var(--on-surface);">${parseFloat(ctr).toFixed(2)}%</strong> (קליקים / חשיפה)</div>` : ''}
+        ${parseFloat(ctr) > 0 ? `<div style="margin-top:8px;font-size:11px;color:var(--on-surface-var);">CTR: <strong style="color:var(--on-surface);">${parseFloat(ctr).toFixed(2)}%</strong> (${t('anClicks')} / ${t('anReachLabel')})</div>` : ''}
       </div>`;
     }).join('');
   } catch (err) {
@@ -4193,25 +4204,25 @@ async function loadInsights() {
         icon: 'conversion_path', label: t('anAvgConvRate'),
         assumed: '2.0%', real: avgRealConv != null ? `${avgRealConv.toFixed(2)}%` : null,
         badge: diffBadge(2, avgRealConv),
-        hint: 'אחוז הקליקים שהפכו להזמנה בפועל',
+        hint: t('anHintConvRate'),
       },
       {
         icon: 'percent', label: t('anAvgAliComm'),
         assumed: '8.0%', real: avgRealComm != null ? `${avgRealComm.toFixed(1)}%` : null,
         badge: diffBadge(8, avgRealComm),
-        hint: 'ממוצע אחוז העמלה מהזמנות שהתקבלו',
+        hint: t('anHintAliComm'),
       },
       {
         icon: 'ads_click', label: t('anRevenuePerClick'),
         assumed: '—', real: overallRpc != null ? `$${overallRpc.toFixed(4)}` : null,
-        badge: overallRpc != null ? `<span style="color:#16a34a;font-weight:700;">$${(overallRpc * 1000).toFixed(2)} לאלף קליקים</span>` : '',
-        hint: 'כמה $ מרווח בפועל על כל קליק',
+        badge: overallRpc != null ? `<span style="color:#16a34a;font-weight:700;">$${(overallRpc * 1000).toFixed(2)} ${t('anPerThousandClicks')}</span>` : '',
+        hint: t('anHintRpc'),
       },
       {
         icon: 'target', label: t('anModelAccuracy'),
         assumed: '100%', real: modelAccuracy != null ? `${modelAccuracy.toFixed(0)}%` : null,
-        badge: modelAccuracy != null ? diffBadge(100, modelAccuracy, '%', true) : '<span style="color:var(--on-surface-var);font-size:11px;">חסר מחיר מוצר</span>',
-        hint: 'יחס עמלה אמיתית לעמלה משוערת בהנחות ברירת מחדל',
+        badge: modelAccuracy != null ? diffBadge(100, modelAccuracy, '%', true) : `<span style="color:var(--on-surface-var);font-size:11px;">${t('anMissingPrice')}</span>`,
+        hint: t('anHintModelAccuracy'),
       },
     ];
 
@@ -4256,22 +4267,22 @@ async function loadInsights() {
 
       const convCell = realConv != null
         ? `<span style="font-weight:700;">${(realConv * 100).toFixed(2)}%</span>
-           <span style="font-size:10px;color:${realConv > 0.02 ? '#16a34a' : '#ef4444'};margin-right:4px;">${realConv > 0.02 ? '↑' : '↓'} ℅ הנחה 2%</span>`
+           <span style="font-size:10px;color:${realConv > 0.02 ? '#16a34a' : '#ef4444'};margin-right:4px;">${realConv > 0.02 ? '↑' : '↓'} ${t('anVsBaseline2')}</span>`
         : '<span style="color:var(--on-surface-var);">—</span>';
 
       const commCell = realComm != null
         ? `<span style="font-weight:700;color:${realComm > 0.08 ? '#16a34a' : '#ef4444'};">${(realComm * 100).toFixed(1)}%</span>
-           <span style="font-size:10px;color:var(--on-surface-var);">℅ הנחה 8%</span>`
+           <span style="font-size:10px;color:var(--on-surface-var);">${t('anVsBaseline8')}</span>`
         : '<span style="color:var(--on-surface-var);">—</span>';
 
       const rpcCell = rpc != null
         ? `<span style="font-weight:700;color:#16a34a;">$${rpc.toFixed(4)}</span>
-           <small style="color:var(--on-surface-var);display:block;font-size:10px;">$${(rpc * 1000).toFixed(2)} / 1K קליקים</small>`
+           <small style="color:var(--on-surface-var);display:block;font-size:10px;">$${(rpc * 1000).toFixed(2)} / 1K ${t('anClicks')}</small>`
         : '<span style="color:var(--on-surface-var);">—</span>';
 
       // Projection: clicks * real rpc * 30-day extrapolation hint
       const projMonthly = rpc != null && clicks > 0
-        ? `<span style="font-size:11px;color:var(--on-surface-var);">+50% קליקים → +$${(clicks * 0.5 * rpc).toFixed(2)}</span>`
+        ? `<span style="font-size:11px;color:var(--on-surface-var);">+50% ${t('anClicks')} → +$${(clicks * 0.5 * rpc).toFixed(2)}</span>`
         : '—';
 
       return `
@@ -4281,7 +4292,7 @@ async function loadInsights() {
               <div style="width:3px;height:36px;border-radius:2px;background:${color};flex-shrink:0;"></div>
               <div>
                 <div style="font-weight:700;font-size:13px;">${escHtml(n.name)}</div>
-                <div style="font-size:11px;color:var(--on-surface-var);">${orders} הזמנות · ${clicks.toLocaleString()} קליקים</div>
+                <div style="font-size:11px;color:var(--on-surface-var);">${orders} ${t('anOrders')} · ${clicks.toLocaleString()} ${t('anClicks')}</div>
               </div>
             </div>
           </td>
@@ -4330,7 +4341,7 @@ async function loadInsights() {
             <span style="font-size:11px;background:rgba(22,163,74,0.1);color:#16a34a;padding:2px 8px;border-radius:20px;">${t('anBasedOnReal')}</span>
           </div>
           <div style="font-size:13px;color:var(--on-surface-var);margin-bottom:16px;">
-            הכנסה לקליק: <strong style="color:var(--on-surface);">$${overallRpc.toFixed(4)}</strong> — כמה קליקים תצטרך כדי להגיע ליעד?
+            ${t('anRpcLabel')} <strong style="color:var(--on-surface);">$${overallRpc.toFixed(4)}</strong> — ${t('anGoalQuestion')}
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
             ${[
@@ -4346,8 +4357,7 @@ async function loadInsights() {
               </div>`).join('')}
           </div>
           <div style="font-size:12px;color:var(--on-surface-var);border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;">
-            💡 כדי להגיע ל-$1,000/חודש תצטרך בממוצע <strong>${Math.ceil(clicksPer1k / 30).toLocaleString()} קליקים ביום</strong> —
-            כלומר בערך ${Math.ceil(clicksPer1k / 30 / (totals.sent_products || 1)).toFixed(0)} קליקים לפוסט אם שולחים ${totals.sent_products || '?'} פוסטים פעילים.
+            💡 ${t('anGoalHint1')} <strong>${Math.ceil(clicksPer1k / 30).toLocaleString()} ${t('anClicksPerDay')}</strong> — ${t('anGoalHint2')} ${Math.ceil(clicksPer1k / 30 / (totals.sent_products || 1)).toFixed(0)} ${t('anClicksPerPost')} ${totals.sent_products || '?'} ${t('anActivePosts')}.
           </div>
         </div>`;
     }
@@ -4374,15 +4384,15 @@ async function loadInsights() {
                   </div>
                   <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;">
                     <div style="display:flex;justify-content:space-between;padding:6px 10px;background:rgba(22,163,74,0.06);border-radius:8px;">
-                      <span style="color:var(--on-surface-var);">+50% קליקים</span>
+                      <span style="color:var(--on-surface-var);">+50% ${t('anClicks')}</span>
                       <span style="color:#16a34a;font-weight:700;">+$${(clicks * 0.5 * rpc).toFixed(2)}</span>
                     </div>
                     <div style="display:flex;justify-content:space-between;padding:6px 10px;background:rgba(22,163,74,0.06);border-radius:8px;">
-                      <span style="color:var(--on-surface-var);">+100% קליקים</span>
+                      <span style="color:var(--on-surface-var);">+100% ${t('anClicks')}</span>
                       <span style="color:#16a34a;font-weight:700;">+$${(clicks * rpc).toFixed(2)}</span>
                     </div>
                     <div style="font-size:11px;color:var(--on-surface-var);padding-top:4px;">
-                      בסיס: ${clicks.toLocaleString()} קליקים · $${rpc.toFixed(4)}/קליק
+                      ${t('anBase')}: ${clicks.toLocaleString()} ${t('anClicks')} · $${rpc.toFixed(4)}/${t('anPerClick')}
                     </div>
                   </div>
                 </div>`;
@@ -4435,7 +4445,7 @@ async function loadSuggestedProducts(container) {
                 <span style="width:7px;height:7px;border-radius:50%;background:${color};"></span>
                 ${escHtml(p.subject_name || '—')}
               </span>
-              <span style="font-size:11px;color:var(--on-surface-var);">${(p.clicks || 0).toLocaleString()} קליקים · ${sends} שליחות</span>
+              <span style="font-size:11px;color:var(--on-surface-var);">${(p.clicks || 0).toLocaleString()} ${t('anClicks')} · ${sends} ${t('anSends')}</span>
               ${staleTag}
             </div>
           </div>
@@ -4586,13 +4596,13 @@ async function loadJoinLinkStats() {
 
 async function sendProductById(productId) {
   if (!productId) return;
-  if (!confirm('לשלוח את המוצר הזה עכשיו לכל הקבוצות של הנישה?')) return;
+  if (!confirm(t('confirmSendProduct'))) return;
   try {
     const res = await api('/api/send', { method: 'POST', body: JSON.stringify({ productId }), headers: { 'Content-Type': 'application/json' } });
-    alert(res.message || 'המוצר נשלח בהצלחה ✓');
+    alert(res.message || t('productSentOk'));
     loadSalesDashboard();
   } catch (err) {
-    alert('שגיאה בשליחה: ' + err.message);
+    alert(t('waSendError') + err.message);
   }
 }
 
@@ -4804,7 +4814,7 @@ async function loadSalesDashboard() {
             </div>
           </div>
           <div style="font-size:11px;color:var(--on-surface-var);margin-top:12px;">
-            ${hotOrd > regOrd ? '✅ תעדף פרסום מוצרים חמים — הם ממירים טוב יותר' : '💡 המוצרים הרגילים שלך מצליחים — תמשיך לגוון'}
+            ${hotOrd > regOrd ? `✅ ${t('anHotProductsWin')}` : `💡 ${t('anRegularProductsWin')}`}
           </div>
         </div>
 
@@ -4832,7 +4842,7 @@ async function loadSalesDashboard() {
             </div>
           </div>
           <div style="font-size:11px;color:var(--on-surface-var);margin-top:12px;">
-            ${retCnt > newCnt ? '💪 הלקוחות שלך חוזרים לקנות — הם סומכים על הפלטפורמה' : '🌱 רוב הקונים הם חדשים — הפוטנציאל לצמיחה גבוה'}
+            ${retCnt > newCnt ? `💪 ${t('anReturnBuyersWin')}` : `🌱 ${t('anNewBuyersMost')}`}
           </div>
         </div>
       </div>`;
@@ -4857,18 +4867,18 @@ async function renderDiscoverTab() {
     renderDiscoverSettings(s);
   } catch (_) {}
 
-  grid.innerHTML = '<div style="color:var(--on-surface-var);font-size:13px;">טוען הצעות...</div>';
+  grid.innerHTML = `<div style="color:var(--on-surface-var);font-size:13px;">${t('discoverLoading')}</div>`;
   try {
     const { suggestions } = await api('/api/discover');
     if (!suggestions || suggestions.length === 0) {
-      grid.innerHTML = '<div style="color:var(--on-surface-var);font-size:13px;padding:20px 0;">אין הצעות כרגע. לחץ על "רענן הצעות" כדי לחפש מוצרים.</div>';
+      grid.innerHTML = `<div style="color:var(--on-surface-var);font-size:13px;padding:20px 0;">${t('discoverNone')}</div>`;
       if (status) status.textContent = '';
       return;
     }
     grid.innerHTML = suggestions.map(s => renderSuggestionCard(s)).join('');
-    if (status) status.textContent = `${suggestions.length} הצעות ממתינות`;
+    if (status) status.textContent = `${suggestions.length} ${t('discoverPending')}`;
   } catch (err) {
-    grid.innerHTML = `<div style="color:#ef4444;font-size:13px;">שגיאה: ${escHtml(err.message)}</div>`;
+    grid.innerHTML = `<div style="color:#ef4444;font-size:13px;">${t('errGeneral')}${escHtml(err.message)}</div>`;
   }
 }
 
@@ -4881,7 +4891,7 @@ function renderDiscoverSettings({ aiEnabled, aiPrompt, defaultPrompt }) {
         <span class="material-symbols-outlined" style="font-size:18px;color:var(--primary);">auto_awesome</span>
         <span style="font-weight:600;font-size:14px;">AI Keyword Generation</span>
         <label style="margin-right:auto;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
-          <span style="color:var(--on-surface-var);">${aiEnabled ? 'פעיל' : 'כבוי'}</span>
+          <span style="color:var(--on-surface-var);">${aiEnabled ? t('enabledLabel') : t('disabledLabel')}</span>
           <div class="ai-toggle${aiEnabled ? ' on' : ''}" id="ai-toggle-btn" onclick="toggleDiscoverAI(this)"
                style="width:40px;height:22px;border-radius:11px;background:${aiEnabled ? 'var(--primary)' : 'var(--surface-3, #444)'};
                       position:relative;cursor:pointer;transition:background 0.2s;flex-shrink:0;">
@@ -4893,7 +4903,7 @@ function renderDiscoverSettings({ aiEnabled, aiPrompt, defaultPrompt }) {
       ${aiEnabled ? `
       <div>
         <label style="font-size:12px;color:var(--on-surface-var);display:block;margin-bottom:6px;">
-          פרומפט (השאר ריק לשימוש בברירת המחדל)
+          ${t('discoverAiPromptLabel')}
         </label>
         <textarea id="discover-ai-prompt" rows="6"
           style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--border);
@@ -4903,10 +4913,10 @@ function renderDiscoverSettings({ aiEnabled, aiPrompt, defaultPrompt }) {
         >${escHtml(aiPrompt)}</textarea>
         <div style="display:flex;gap:8px;margin-top:8px;">
           <button class="btn btn-primary btn-sm" onclick="saveDiscoverAISettings()" style="font-size:12px;">
-            שמור פרומפט
+            ${t('discoverSavePrompt')}
           </button>
           <button class="btn btn-sm" onclick="resetDiscoverAIPrompt()" style="font-size:12px;background:var(--surface-2);color:var(--on-surface-var);">
-            אפס לברירת מחדל
+            ${t('discoverResetPrompt')}
           </button>
         </div>
       </div>` : ''}
@@ -4921,7 +4931,7 @@ async function toggleDiscoverAI(toggleEl) {
     const s = await api('/api/discover/settings');
     renderDiscoverSettings(s);
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 }
 
@@ -4933,7 +4943,7 @@ async function saveDiscoverAISettings() {
     promptEl.style.border = '1px solid #22c55e';
     setTimeout(() => { if (promptEl) promptEl.style.border = '1px solid var(--border)'; }, 1500);
   } catch (err) {
-    alert('שגיאה בשמירה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 }
 
@@ -4943,14 +4953,14 @@ async function resetDiscoverAIPrompt() {
     const s = await api('/api/discover/settings');
     renderDiscoverSettings(s);
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   }
 }
 
 function renderSuggestionCard(s) {
   const price = s.sale_price ? `₪${parseFloat(s.sale_price).toFixed(2)}` : '';
   const rating = s.evaluate_rate ? `${s.evaluate_rate}` : '';
-  const volume = s.lastest_volume ? `${s.lastest_volume.toLocaleString()} מכירות` : '';
+  const volume = s.lastest_volume ? `${s.lastest_volume.toLocaleString()} ${t('anSalesCount')}` : '';
   const subject = s.subject_name ? `<span class="suggestion-subject-badge">${escHtml(s.subject_name)}</span>` : '';
   const img = s.image_url
     ? `<img src="${escHtml(s.image_url)}" alt="" style="width:100%;height:160px;object-fit:cover;border-radius:8px 8px 0 0;">`
@@ -4978,11 +4988,11 @@ function renderSuggestionCard(s) {
         <div style="display:flex;gap:8px;margin-top:10px;">
           <button class="btn btn-primary btn-sm" style="flex:1;font-size:12px;"
             onclick="addSuggestion(this)">
-            הוסף
+            ${t('discoverAdd')}
           </button>
           <button class="btn btn-sm" style="flex:1;font-size:12px;background:var(--surface-2);color:var(--on-surface-var);"
             onclick="dismissSuggestion(this)">
-            דחה
+            ${t('discoverDismiss')}
           </button>
         </div>
       </div>
@@ -4995,22 +5005,22 @@ async function runDiscovery() {
   const status = document.getElementById('discover-status');
   if (runBtn) {
     runBtn.disabled = true;
-    runBtn.textContent = 'מחפש...';
+    runBtn.textContent = t('discoverSearching');
   }
-  if (status) status.textContent = 'מחפש מוצרים ב-AliExpress...';
+  if (status) status.textContent = t('discoverSearchingAli');
   try {
     const result = await api('/api/discover/run', { method: 'POST' });
     const aiNote = result.aiEnabled ? ' (AI)' : '';
     if (status) status.textContent = result.newCount > 0
-      ? `נמצאו ${result.newCount} מוצרים חדשים${aiNote}`
-      : `לא נמצאו מוצרים חדשים${aiNote}`;
+      ? `${t('discoverFoundNew')} ${result.newCount}${aiNote}`
+      : `${t('discoverNoneNew')}${aiNote}`;
     await renderDiscoverTab();
   } catch (err) {
-    if (status) status.textContent = 'שגיאה: ' + err.message;
+    if (status) status.textContent = t('errGeneral') + err.message;
   } finally {
     if (runBtn) {
       runBtn.disabled = false;
-      runBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;">refresh</span> רענן הצעות';
+      runBtn.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;">refresh</span> ${t('discoverRefreshBtn')}`;
     }
   }
 }
@@ -5059,14 +5069,14 @@ window.resetDiscoverAIPrompt  = resetDiscoverAIPrompt;
 async function renderPendingApprovals() {
   const container = document.getElementById('pending-approvals-content');
   if (!container) return;
-  container.innerHTML = '<p>טוען...</p>';
+  container.innerHTML = `<p>${t('loadingEllipsis')}</p>`;
   try {
     const res  = await fetch('/api/users/pending');
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
 
     if (data.users.length === 0) {
-      container.innerHTML = '<p style="color:var(--on-surface-var)">אין משתמשים הממתינים לאישור</p>';
+      container.innerHTML = `<p style="color:var(--on-surface-var)">${t('pendingNone')}</p>`;
       return;
     }
 
@@ -5079,19 +5089,19 @@ async function renderPendingApprovals() {
               <div>
                 <div style="font-weight:700;font-size:15px;">${escHtml(u.name)}</div>
                 <div style="font-size:12px;color:var(--on-surface-var);">${escHtml(u.email)}</div>
-                <div style="font-size:11px;color:var(--on-surface-var);">נרשם: ${new Date(u.created_at).toLocaleDateString('he-IL')}</div>
+                <div style="font-size:11px;color:var(--on-surface-var);">${t('pendingRegistered')}: ${new Date(u.created_at).toLocaleDateString('he-IL')}</div>
               </div>
             </div>
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
               <select id="role-${u.id}" class="form-input" style="width:auto;" onchange="toggleMaxUsers('${u.id}')">
-                <option value="group_admin">מנהל קבוצה</option>
-                <option value="group_user">משתמש קבוצה</option>
+                <option value="group_admin">${t('pendingRoleGroupAdmin')}</option>
+                <option value="group_user">${t('pendingRoleGroupUser')}</option>
               </select>
               <span id="max-users-wrap-${u.id}" style="display:inline-flex;align-items:center;gap:6px;">
-                <label style="font-size:13px;">מקסימום משתמשים:</label>
+                <label style="font-size:13px;">${t('pendingMaxUsers')}:</label>
                 <input type="number" id="max-${u.id}" value="5" min="0" max="100" class="form-input" style="width:70px;">
               </span>
-              <button class="btn btn-primary btn-sm" onclick="approveUser('${u.id}')">אשר</button>
+              <button class="btn btn-primary btn-sm" onclick="approveUser('${u.id}')">${t('pendingApprove')}</button>
               <span id="approve-status-${u.id}" style="font-size:13px;"></span>
             </div>
           </div>
@@ -5099,7 +5109,7 @@ async function renderPendingApprovals() {
       </div>
     `;
   } catch (err) {
-    container.innerHTML = `<p style="color:#f87171;">שגיאה: ${escHtml(err.message)}</p>`;
+    container.innerHTML = `<p style="color:#f87171;">${t('errGeneral')}${escHtml(err.message)}</p>`;
   }
 }
 
@@ -5113,7 +5123,7 @@ window.approveUser = async function approveUser(userId) {
   const role          = document.getElementById(`role-${userId}`).value;
   const maxGroupUsers = parseInt(document.getElementById(`max-${userId}`)?.value || '0', 10);
   const statusEl      = document.getElementById(`approve-status-${userId}`);
-  statusEl.textContent = 'שומר...';
+  statusEl.textContent = t('savingEllipsis');
   try {
     const res  = await fetch(`/api/users/${userId}/approve`, {
       method:  'POST',
@@ -5124,27 +5134,27 @@ window.approveUser = async function approveUser(userId) {
     if (!data.success) throw new Error(data.error);
     document.getElementById(`pending-${userId}`)?.remove();
   } catch (err) {
-    statusEl.textContent = `שגיאה: ${escHtml(err.message)}`;
+    statusEl.textContent = `${t('errGeneral')}${escHtml(err.message)}`;
     statusEl.style.color = '#e74c3c';
   }
 };
 
 // ─── MY TEAM (Group Admin) ──────────────────────────────────────────────────
 
-const PERM_LABELS = {
-  add_products:     'הוספת מוצרים',
-  edit_products:    'עריכת מוצרים',
-  delete_products:  'מחיקת מוצרים',
-  view_logs:        'צפייה ביומן',
-  trigger_send:     'שליחה ידנית',
-  manage_schedules: 'ניהול לוח זמנים',
-  view_settings:    'צפייה בהגדרות',
-};
+const PERM_LABELS = () => ({
+  add_products:     t('permAddProducts'),
+  edit_products:    t('permEditProducts'),
+  delete_products:  t('permDeleteProducts'),
+  view_logs:        t('permViewLogs'),
+  trigger_send:     t('permTriggerSend'),
+  manage_schedules: t('permManageSchedules'),
+  view_settings:    t('permViewSettings'),
+});
 
 async function renderMyTeam() {
   const container = document.getElementById('my-team-content');
   if (!container) return;
-  container.innerHTML = '<p>טוען...</p>';
+  container.innerHTML = `<p>${t('loadingEllipsis')}</p>`;
   try {
     const res  = await fetch('/api/users/group');
     const data = await res.json();
@@ -5152,7 +5162,7 @@ async function renderMyTeam() {
 
     const max      = (window._currentUser || {}).max_group_users || 0;
     const count    = data.users.length;
-    const capLabel = max > 0 ? `${count} / ${max} משתמשים` : `${count} משתמשים`;
+    const capLabel = max > 0 ? `${count} / ${max} ${t('teamUsersLabel')}` : `${count} ${t('teamUsersLabel')}`;
 
     container.innerHTML = `
       <div class="card" style="margin-bottom:16px;">
@@ -5160,19 +5170,19 @@ async function renderMyTeam() {
           <div style="font-size:15px;font-weight:700;">${escHtml(capLabel)}</div>
           <button class="btn btn-primary btn-sm" onclick="showInviteFormTeam()">
             <span class="material-symbols-outlined" style="font-size:14px;">person_add</span>
-            הזמן משתמש
+            ${t('teamInviteBtn')}
           </button>
         </div>
         <div id="invite-form-team" style="display:none;margin-bottom:16px;padding:12px;background:rgba(255,255,255,0.04);border-radius:10px;">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <input type="email" id="invite-email-team" class="form-input" placeholder="כתובת אימייל" style="flex:1;min-width:200px;" dir="ltr">
-            <button class="btn btn-primary btn-sm" onclick="inviteTeamMember()">שלח הזמנה</button>
+            <input type="email" id="invite-email-team" class="form-input" placeholder="${t('inviteEmailPh')}" style="flex:1;min-width:200px;" dir="ltr">
+            <button class="btn btn-primary btn-sm" onclick="inviteTeamMember()">${t('teamSendInvite')}</button>
           </div>
           <div id="invite-status-team" style="font-size:13px;margin-top:8px;min-height:18px;"></div>
         </div>
         <div class="members-list">
           ${data.users.length === 0
-            ? '<p style="color:var(--on-surface-var)">אין חברי צוות עדיין</p>'
+            ? `<p style="color:var(--on-surface-var)">${t('teamNone')}</p>`
             : data.users.map(u => `
               <div style="border-top:1px solid rgba(255,255,255,0.06);padding:16px 0;" id="member-${u.id}">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
@@ -5183,10 +5193,10 @@ async function renderMyTeam() {
                       <div style="font-size:12px;color:var(--on-surface-var);">${escHtml(u.email)}</div>
                     </div>
                   </div>
-                  <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="removeTeamMember('${u.id}', '${escHtml(u.name)}', '${u.role}')">הסר</button>
+                  <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="removeTeamMember('${u.id}', '${escHtml(u.name)}', '${u.role}')">${t('teamRemoveBtn')}</button>
                 </div>
                 <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:6px;">
-                  ${Object.entries(PERM_LABELS).map(([key, label]) => `
+                  ${Object.entries(PERM_LABELS()).map(([key, label]) => `
                     <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
                       <input type="checkbox" id="perm-${u.id}-${key}"
                         ${u.permissions?.[key] ? 'checked' : ''}
@@ -5202,7 +5212,7 @@ async function renderMyTeam() {
       </div>
     `;
   } catch (err) {
-    container.innerHTML = `<p style="color:#f87171;">שגיאה: ${escHtml(err.message)}</p>`;
+    container.innerHTML = `<p style="color:#f87171;">${t('errGeneral')}${escHtml(err.message)}</p>`;
   }
 }
 
@@ -5215,8 +5225,8 @@ window.showInviteFormTeam = function showInviteFormTeam() {
 window.inviteTeamMember = async function inviteTeamMember() {
   const email    = document.getElementById('invite-email-team').value.trim();
   const statusEl = document.getElementById('invite-status-team');
-  if (!email) { statusEl.textContent = 'נא להזין אימייל'; return; }
-  statusEl.textContent = 'שולח...';
+  if (!email) { statusEl.textContent = t('emailRequired'); return; }
+  statusEl.textContent = t('teamSending');
   statusEl.style.color = '';
   try {
     const res  = await fetch('/api/users/invites', {
@@ -5227,27 +5237,27 @@ window.inviteTeamMember = async function inviteTeamMember() {
     const data = await res.json();
     if (!data.success) {
       statusEl.textContent = data.limitReached
-        ? `הגעת למגבלת המשתמשים (${data.current}/${data.max})`
-        : `שגיאה: ${data.error}`;
+        ? `${t('teamLimitReached')} (${data.current}/${data.max})`
+        : `${t('errGeneral')}${data.error}`;
       statusEl.style.color = '#e74c3c';
       return;
     }
-    statusEl.textContent = 'ההזמנה נשלחה בהצלחה';
+    statusEl.textContent = t('teamInviteSent');
     statusEl.style.color = '#4ecca3';
     document.getElementById('invite-email-team').value = '';
   } catch (err) {
-    statusEl.textContent = `שגיאה: ${escHtml(err.message)}`;
+    statusEl.textContent = `${t('errGeneral')}${escHtml(err.message)}`;
     statusEl.style.color = '#e74c3c';
   }
 };
 
 window.savePermissions = async function savePermissions(userId) {
   const permissions = {};
-  for (const key of Object.keys(PERM_LABELS)) {
+  for (const key of Object.keys(PERM_LABELS())) {
     permissions[key] = document.getElementById(`perm-${userId}-${key}`)?.checked || false;
   }
   const statusEl = document.getElementById(`perm-status-${userId}`);
-  statusEl.textContent = 'שומר...';
+  statusEl.textContent = t('savingEllipsis');
   statusEl.style.color = '';
   try {
     const res  = await fetch(`/api/users/${userId}/permissions`, {
@@ -5257,11 +5267,11 @@ window.savePermissions = async function savePermissions(userId) {
     });
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
-    statusEl.textContent = 'נשמר';
+    statusEl.textContent = t('savedOk');
     statusEl.style.color = '#4ecca3';
     setTimeout(() => { statusEl.textContent = ''; }, 2000);
   } catch (err) {
-    statusEl.textContent = `שגיאה: ${escHtml(err.message)}`;
+    statusEl.textContent = `${t('errGeneral')}${escHtml(err.message)}`;
     statusEl.style.color = '#e74c3c';
   }
 };
@@ -5271,11 +5281,11 @@ window.removeTeamMember = async function removeTeamMember(userId, userName, user
 
   if (userRole === 'group_admin') {
     const decision = confirm(
-      `האם להסיר את ${userName}?\n\nהמשתמש הוא מנהל קבוצה.\nלחץ אישור כדי להעביר את המוצרים שלהם אליך.\nלחץ ביטול כדי למחוק את המוצרים.`
+      `${t('teamConfirmRemoveAdmin')} ${userName}?\n\n${t('teamRemoveAdminNote')}`
     );
     keepProducts = decision;
   } else {
-    if (!confirm(`האם להסיר את ${userName} מהצוות?`)) return;
+    if (!confirm(`${t('teamConfirmRemove')} ${userName}?`)) return;
   }
 
   try {
@@ -5284,7 +5294,7 @@ window.removeTeamMember = async function removeTeamMember(userId, userName, user
     if (!data.success) throw new Error(data.error);
     document.getElementById(`member-${userId}`)?.remove();
   } catch (err) {
-    alert(`שגיאה בהסרת משתמש: ${err.message}`);
+    alert(`${t('teamRemoveError')} ${err.message}`);
   }
 };
 
