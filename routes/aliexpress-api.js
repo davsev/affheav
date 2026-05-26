@@ -19,7 +19,7 @@ async function searchProducts(keywords, pageNo = 1, trackingId = DEFAULT_TRACKIN
     sort:            'LAST_VOLUME_DESC',
     page_no:         String(pageNo),
     page_size:       '50',
-    fields:          'product_id,product_title,product_main_image_url,promotion_link,app_sale_price,evaluate_rate,lastest_volume,available_stock',
+    fields:          'product_id,product_title,product_main_image_url,product_video_url,promotion_link,app_sale_price,evaluate_rate,lastest_volume,available_stock',
   });
 }
 
@@ -100,14 +100,15 @@ router.post('/add', async (req, res) => {
     const shortLink = await shortenUrl(product.promotion_link);
     const salePrice      = parseFloat(product.app_sale_price) || null;
     const commissionRate = salePrice ? 0.08 : null; // AliExpress standard 8%
+    const videoUrl       = product.product_video_url || null;
     await query(
       `INSERT INTO products
-         (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, whatsapp_group_id, sort_order, sale_price, commission_rate)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+         (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, whatsapp_group_id, sort_order, sale_price, commission_rate, video_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [req.user.id, subject || null, product.promotion_link, shortLink,
        product.product_main_image_url || '', product.product_title,
        join_link, wa_group, resolvedGroupId, maxRow[0].next_order,
-       salePrice, commissionRate]
+       salePrice, commissionRate, videoUrl]
     );
     workflow.log(`✓ Product added to DB${salePrice ? ` (price: $${salePrice})` : ''}`);
     res.json({ success: true });
