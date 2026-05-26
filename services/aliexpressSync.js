@@ -45,7 +45,7 @@ async function fetchViaApi(productId, trackingId) {
     target_currency: 'ILS',
     target_language: 'HE',
     tracking_id:     trackingId,
-    fields:          'product_id,product_title,product_main_image_url,app_sale_price,original_price',
+    fields:          'product_id,product_title,product_main_image_url,app_sale_price,original_price,product_video_url',
   });
 
   const products =
@@ -58,6 +58,7 @@ async function fetchViaApi(productId, trackingId) {
     title:      p.product_title              || null,
     image:      p.product_main_image_url     || null,
     sale_price: parseFloat(p.app_sale_price) || null,
+    video_url:  p.product_video_url          || null,
   };
 }
 
@@ -78,6 +79,14 @@ async function fetchViaScraper(url) {
 
   const $ = cheerio.load(res.data);
 
+  const html = res.data;
+
+  // Also check for videoUrl in any embedded JSON blob (applies to all tiers)
+  function extractVideoUrl(rawHtml) {
+    const m = rawHtml.match(/"videoUrl"\s*:\s*"([^"]+)"/);
+    return m ? m[1] : null;
+  }
+
   // Tier 1: JSON-LD structured data
   const scripts = $('script[type="application/ld+json"]').toArray();
   for (const el of scripts) {
@@ -90,6 +99,7 @@ async function fetchViaScraper(url) {
             title:      entry.name || null,
             image:      (Array.isArray(entry.image) ? entry.image[0] : entry.image) || null,
             sale_price: entry.offers?.price ? parseFloat(entry.offers.price) : null,
+            video_url:  extractVideoUrl(html),
           };
         }
       }
@@ -97,27 +107,21 @@ async function fetchViaScraper(url) {
   }
 
   // Tier 2: window.runParams embedded state
-  const html  = res.data;
   const match = html.match(/window\.runParams\s*=\s*(\{[\s\S]+?\});\s*(?:window|var|let|const)/);
   if (match) {
     try {
       const state    = JSON.parse(match[1]);
       const title    = state?.data?.titleModule?.subject || state?.titleModule?.subject;
       const image    = state?.data?.imageModule?.imagePathList?.[0] || state?.imageModule?.imagePathList?.[0];
-      const videoUrl = state?.data?.videoModule?.videoUrl || state?.videoModule?.videoUrl || null;
+      const videoUrl = state?.data?.videoModule?.videoUrl || state?.videoModule?.videoUrl || extractVideoUrl(html) || null;
       if (title || image) return { title: title || null, image: image || null, sale_price: null, video_url: videoUrl };
     } catch { /* fall through */ }
   }
 
-  // Also try extracting videoUrl from any embedded JSON blobs
-  let video_url = null;
-  const videoMatch = html.match(/"videoUrl"\s*:\s*"([^"]+)"/);
-  if (videoMatch) video_url = videoMatch[1];
-
   // Tier 3: og meta tags
   const title = $('meta[property="og:title"]').attr('content') || $('title').text() || null;
   const image = $('meta[property="og:image"]').attr('content') || null;
-  return { title, image, sale_price: null, video_url };
+  return { title, image, sale_price: null, video_url: extractVideoUrl(html) };
 }
 
 // Returns { data } on success, { deleted: true } if the product was 404'd and removed.
@@ -156,6 +160,14 @@ async function syncProduct(dbProductId, userId) {
   }
 
   if (!data) throw new Error('Could not fetch product data');
+
+  // API doesn't always return video URLs — also try the HTTP scraper for video_url
+  if (!data.video_url) {
+    try {
+      const scraped = await fetchViaScraper(finalUrl);
+      if (scraped.video_url) data.video_url = scraped.video_url;
+    } catch { /* ignore — video_url is optional */ }
+  }
 
   const sets   = [];
   const values = [];
