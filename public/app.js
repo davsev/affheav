@@ -1091,7 +1091,9 @@ function renderProducts(products) {
       <td><input type="checkbox" class="product-chk" data-id="${p.id}" /></td>
       <td><span class="drag-handle" title="גרור לסידור מחדש">⠿</span></td>
       <td style="position:relative;">
-        ${p.image ? `<img class="img-thumb" src="${escHtml(p.image)}" onerror="this.style.display='none'" />` : '—'}
+        ${p.video_url
+          ? `<video src="${escHtml(p.video_url)}" style="width:60px;height:60px;object-fit:cover;border-radius:4px;cursor:pointer;" muted playsinline onmouseover="this.play()" onmouseout="this.pause();this.currentTime=0"></video>`
+          : p.image ? `<img class="img-thumb" src="${escHtml(p.image)}" onerror="this.style.display='none'" />` : '—'}
         ${p.video_url ? `<span onclick="toggleUseVideo('${p.id}',${!p.use_video},this)" title="${p.use_video ? 'שולח וידאו — לחץ לעבור לתמונה' : 'לחץ לשלוח וידאו במקום תמונה'}" style="position:absolute;bottom:2px;left:2px;font-size:16px;cursor:pointer;line-height:1;opacity:${p.use_video ? '1' : '0.4'};">🎬</span>` : ''}
       </td>
       <td style="max-width:200px;word-break:break-word;">
@@ -1135,9 +1137,11 @@ function renderProducts(products) {
         <div class="product-card">
           <input type="checkbox" class="product-chk product-card-chk" data-id="${p.id}" />
           <div style="position:relative;">
-            ${p.image
-              ? `<img class="product-card-img" src="${escHtml(p.image)}" onerror="this.style.display='none'" loading="lazy" />`
-              : `<div class="product-card-img-placeholder">📦</div>`}
+            ${p.video_url
+              ? `<video src="${escHtml(p.video_url)}" class="product-card-img" style="object-fit:cover;" muted playsinline onmouseover="this.play()" onmouseout="this.pause();this.currentTime=0"></video>`
+              : p.image
+                ? `<img class="product-card-img" src="${escHtml(p.image)}" onerror="this.style.display='none'" loading="lazy" />`
+                : `<div class="product-card-img-placeholder">📦</div>`}
             ${p.video_url ? `<span onclick="toggleUseVideo('${p.id}',${!p.use_video},this)" title="${p.use_video ? 'שולח וידאו — לחץ לעבור לתמונה' : 'לחץ לשלוח וידאו במקום תמונה'}" style="position:absolute;bottom:4px;left:4px;font-size:20px;cursor:pointer;line-height:1;opacity:${p.use_video ? '1' : '0.4'};">🎬</span>` : ''}
           </div>
           <div class="product-card-body">

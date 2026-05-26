@@ -176,7 +176,11 @@ async function syncProduct(dbProductId, userId) {
   if (data.title      != null) { sets.push(`title = $${idx++}`);      values.push(data.title); }
   if (data.image      != null) { sets.push(`image = $${idx++}`);      values.push(data.image); }
   if (data.sale_price != null) { sets.push(`sale_price = $${idx++}`); values.push(data.sale_price); }
-  if (data.video_url  != null) { sets.push(`video_url = $${idx++}`);  values.push(data.video_url); }
+  if (data.video_url  != null) {
+    sets.push(`video_url = $${idx++}`);
+    values.push(data.video_url);
+    if (data.video_url) sets.push(`use_video = true`); // auto-enable when a video is found
+  }
 
   if (!sets.length) throw new Error('No product data returned');
 

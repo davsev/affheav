@@ -110,20 +110,20 @@ router.post('/add', async (req, res) => {
     try {
       await query(
         `INSERT INTO products
-           (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, whatsapp_group_id, sort_order, sale_price, commission_rate, video_url)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-        [...baseParams, videoUrl]
+           (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, whatsapp_group_id, sort_order, sale_price, commission_rate, video_url, use_video)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        [...baseParams, videoUrl, !!videoUrl]
       );
     } catch (insertErr) {
-      // video_url column may not exist yet if migration hasn't run — retry without it
-      if (insertErr.message?.includes('video_url')) {
+      // video_url/use_video columns may not exist yet if migration hasn't run — retry without them
+      if (insertErr.message?.includes('video_url') || insertErr.message?.includes('use_video')) {
         await query(
           `INSERT INTO products
              (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, whatsapp_group_id, sort_order, sale_price, commission_rate)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
           baseParams
         );
-        workflow.log('⚠ video_url column missing — restart server to run migration');
+        workflow.log('⚠ video_url/use_video columns missing — restart server to run migration');
       } else {
         throw insertErr;
       }
