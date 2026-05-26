@@ -2334,6 +2334,9 @@ function renderAliCard(p, originalIdx) {
     ? `<div style="position:absolute;top:8px;right:8px;background:#16a34a;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:0.3px;">✓ ברשימה</div>`
     : '';
   const scoreBadge = `<div style="position:absolute;top:8px;left:8px;background:${scoreColor};color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;">${score}</div>`;
+  const videoBadge = p.product_video_url
+    ? `<div style="position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,0.65);color:#fff;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;display:flex;align-items:center;gap:4px;">🎬 יש וידאו</div>`
+    : '';
 
   const addBtn = isOwned
     ? `<button class="btn btn-ghost btn-sm btn-ali-add" style="justify-content:center;font-size:12px;opacity:0.6;" title="כבר ברשימה">
@@ -2349,6 +2352,7 @@ function renderAliCard(p, originalIdx) {
         ${imgHtml}
         ${scoreBadge}
         ${ownedBadge}
+        ${videoBadge}
       </div>
       <div style="padding:14px;flex:1;display:flex;flex-direction:column;gap:8px;">
         <div style="font-size:13px;font-weight:600;color:var(--on-surface);line-height:1.4;">${title}</div>
