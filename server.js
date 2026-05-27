@@ -277,6 +277,18 @@ setInterval(async () => {
   await appendLogs(batch);
 }, 60 * 1000);
 
+// Purge logs older than 7 days — runs once on startup then every 24 hours
+async function purgeOldLogs() {
+  try {
+    const { rowCount } = await dbQuery(`DELETE FROM logs WHERE ts < NOW() - INTERVAL '7 days'`);
+    if (rowCount > 0) console.log(`[logs] Purged ${rowCount} entries older than 7 days`);
+  } catch (err) {
+    console.error('[logs] Purge failed:', err.message);
+  }
+}
+purgeOldLogs();
+setInterval(purgeOldLogs, 24 * 60 * 60 * 1000);
+
 // Flush on graceful shutdown
 process.on('SIGTERM', async () => {
   if (_pendingLogs.length > 0) {
