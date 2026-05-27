@@ -99,13 +99,23 @@ function createApp({
         let media = null;
         try {
           media = await MessageMedia.fromUrl(videoUrl, { unsafeMime: true });
-          if (!media.mimetype?.startsWith('video/')) media = null;
-        } catch (_) { media = null; }
+          const mime = media?.mimetype || '';
+          if (!mime.startsWith('video/') && mime !== 'application/octet-stream') {
+            console.log(`[whatsapp] video rejected — unexpected MIME type: ${mime}`);
+            media = null;
+          }
+        } catch (err) {
+          console.log(`[whatsapp] video download failed: ${err.message}`);
+          media = null;
+        }
 
         if (media) {
           try {
             message = await withRetry(() => client.sendMessage(groupId, media, { caption: text }), { attempts: retryAttempts, delayMs: retryDelayMs });
-          } catch (_) { /* fall through to image */ }
+            console.log(`[whatsapp] video sent OK to ${groupId}`);
+          } catch (err) {
+            console.log(`[whatsapp] video send failed: ${err.message} — falling back to image`);
+          }
         }
       }
 

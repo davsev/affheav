@@ -12,7 +12,7 @@ async function send({ text, image, videoUrl, wa_group }) {
       { groupId: wa_group, text, imageUrl: image || undefined, videoUrl: videoUrl || undefined },
       {
         headers: { 'X-API-Key': process.env.WHATSAPP_API_KEY || '' },
-        timeout: 60000,
+        timeout: videoUrl ? 120000 : 60000,
         validateStatus: () => true,
       }
     );
