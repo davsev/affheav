@@ -3,6 +3,7 @@
 
 import { api }               from './utils.js';
 import { createCronBuilder } from './cron-builder.js';
+import { t }                 from './i18n/index.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let _addCronExpr    = '0 12 * * *';
@@ -54,18 +55,18 @@ window.closeEditModal = function() {
 window.saveEditSchedule = async function() {
   const label = document.getElementById('edit-sched-label').value.trim();
   const cron  = _editCronExpr;
-  if (!label || !cron) return alert('יש למלא שם וביטוי cron');
+  if (!label || !cron) return alert(t('scheduleRequired'));
   const btn = document.getElementById('btn-save-edit-sched');
-  btn.disabled = true; btn.textContent = 'שומר...';
+  btn.disabled = true; btn.textContent = t('savingEllipsis');
   try {
     await api(`/api/schedules/${_editScheduleId}`, { method: 'PUT', body: { label, cron } });
     window.closeEditModal();
     await _refreshList();
   } catch (err) {
-    alert('שגיאה: ' + err.message);
+    alert(t('errGeneral') + err.message);
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">check</span>שמור';
+    btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:15px;">check</span>${t('btnSave')}`;
   }
 };
 

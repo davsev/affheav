@@ -2,13 +2,14 @@
 // Follows schedule-modal.js module pattern
 
 import { api, escHtml } from './utils.js';
+import { t } from './i18n/index.js';
 
 // ── Module state ───────────────────────────────────────────────────────────────
 let _editId = null;          // null = create mode, string = edit mode (broadcast id)
 let _hasNewImage = false;    // true if user selected a new file in this session
 let _onSaved = null;         // callback: called after successful save (loadBroadcasts)
 
-const DAYS_HE = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+const DAYS = () => [t('weekdaySun'), t('weekdayMon'), t('weekdayTue'), t('weekdayWed'), t('weekdayThu'), t('weekdayFri'), t('weekdaySat')];
 const MAX_CHARS = 500;
 
 // ── DOM helpers ────────────────────────────────────────────────────────────────
@@ -45,14 +46,14 @@ function updateRecurrencePreview() {
   el('bcast-skip-row').style.display = freq === 'weekly' ? 'none' : 'flex';
 
   let skip = '';
-  if (skipFri && skipSat) skip = ' (לא שישי ושבת)';
-  else if (skipFri)       skip = ' (לא שישי)';
-  else if (skipSat)       skip = ' (לא שבת)';
+  if (skipFri && skipSat) skip = t('bcastSkipBoth');
+  else if (skipFri)       skip = t('bcastSkipFriday');
+  else if (skipSat)       skip = t('bcastSkipSaturday');
 
   let preview = '';
-  if (freq === 'daily')        preview = `כל יום ב-${hh}:${mm}${skip}`;
-  if (freq === 'weekly')       preview = `כל ${DAYS_HE[day]} ב-${hh}:${mm}`;
-  if (freq === 'every_n_days') preview = `כל ${n} ימים ב-${hh}:${mm}${skip}`;
+  if (freq === 'daily')        preview = `${t('bcastFreqDaily')} ${hh}:${mm}${skip}`;
+  if (freq === 'weekly')       preview = `${t('bcastEvery')} ${DAYS()[day]} ${hh}:${mm}`;
+  if (freq === 'every_n_days') preview = `${t('bcastEvery')} ${n} ${t('bcastDays')} ${hh}:${mm}${skip}`;
   el('bcast-recurrence-preview').textContent = preview;
 }
 
@@ -105,11 +106,11 @@ function openModal(broadcast = null) {
   _hasNewImage = false;
 
   // Set title
-  el('broadcast-modal-title').textContent = broadcast ? 'עריכת הודעת שידור' : 'הוסף הודעת שידור';
+  el('broadcast-modal-title').textContent = broadcast ? t('bcastEditTitle') : t('bcastAddTitle2');
 
   // Populate niche select from window._subjects
   const subjSel = el('bcast-subject');
-  subjSel.innerHTML = '<option value="" disabled selected>בחר נישה</option>';
+  subjSel.innerHTML = `<option value="" disabled selected>${t('bcastSubjectPh')}</option>`;
   (window._subjects || []).forEach(s => {
     const opt = document.createElement('option');
     opt.value = s.id;
@@ -148,7 +149,7 @@ function openModal(broadcast = null) {
       el('bcast-image-preview').style.display = 'block';
       el('bcast-image-remove').style.display = '';
     } else {
-      el('bcast-existing-image').textContent = `תמונה קיימת: ${broadcast.imageUrl}`;
+      el('bcast-existing-image').textContent = `${t('bcastExistingImageFmt')} ${broadcast.imageUrl}`;
       el('bcast-existing-image').style.display = 'block';
       el('bcast-image-remove').style.display = '';
     }
@@ -204,10 +205,10 @@ async function saveBroadcast() {
   const sendFacebook  = el('bcast-send-facebook').classList.contains('active');
 
   // Validation
-  if (!label)     { alert('יש להזין שם להודעה'); return; }
-  if (!subjectId) { alert('יש לבחור נישה'); return; }
-  if (!text)      { alert('יש להזין תוכן הודעה'); return; }
-  if (text.length > MAX_CHARS) { alert(`ההודעה ארוכה מדי (מקסימום ${MAX_CHARS} תווים)`); return; }
+  if (!label)     { alert(t('bcastValidLabel')); return; }
+  if (!subjectId) { alert(t('bcastValidNiche')); return; }
+  if (!text)      { alert(t('bcastValidText')); return; }
+  if (text.length > MAX_CHARS) { alert(`${t('bcastValidTooLong')} ${MAX_CHARS} תווים)`); return; }
 
   const recurrence = { mode: freq, hour, minute };
   if (freq === 'weekly')       recurrence.day = day;
@@ -218,7 +219,7 @@ async function saveBroadcast() {
   const btn = el('btn-save-broadcast');
   const origText = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = '<span style="font-size:12px;">שומר...</span>';
+  btn.innerHTML = `<span style="font-size:12px;">${t('bcastSaving')}</span>`;
 
   try {
     const hasFile = fileInput.files && fileInput.files[0];
@@ -270,7 +271,7 @@ async function saveBroadcast() {
     if (typeof _onSaved === 'function') await _onSaved();
 
   } catch (err) {
-    alert('שגיאה בשמירה: ' + err.message);
+    alert(t('bcastSaveError') + ' ' + err.message);
   } finally {
     btn.disabled = false;
     btn.innerHTML = origText;
@@ -306,7 +307,7 @@ export function initBroadcastModal({ loadBroadcasts }) {
   window.openAddBroadcast  = () => openModal(null);
   window.openEditBroadcast = (id) => {
     const b = (window._broadcasts || []).find(x => String(x.id) === String(id));
-    if (!b) { alert('לא נמצאה הודעה'); return; }
+    if (!b) { alert(t('bcastNotFound')); return; }
     openModal(b);
   };
   window.closeBroadcastModal = closeModal;
