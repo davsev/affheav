@@ -53,7 +53,8 @@ router.post('/', upload.single('image'), async (req, res) => {
       ? `/uploads/broadcasts/${req.file.filename}`
       : (req.body.imageUrl || undefined);
     const sendFacebook = req.body.sendFacebook !== 'false' && req.body.sendFacebook !== false;
-    const msg = await create(req.user.id, { subjectId, label, text, recurrence, imageUrl, sendFacebook });
+    const timezone = req.body.timezone || 'UTC';
+    const msg = await create(req.user.id, { subjectId, label, text, recurrence, imageUrl, sendFacebook, timezone });
     await scheduler.startBroadcasts(); // register new broadcast in cron
     res.status(201).json({ success: true, broadcast: msg });
   } catch (err) {
@@ -87,6 +88,7 @@ router.put('/:id', upload.single('image'), async (req, res) => {
     if (req.file) fields.imageUrl = `/uploads/broadcasts/${req.file.filename}`;
     else if (req.body.imageUrl !== undefined) fields.imageUrl = req.body.imageUrl || null;
     if (req.body.sendFacebook !== undefined) fields.sendFacebook = req.body.sendFacebook !== 'false' && req.body.sendFacebook !== false;
+    if (req.body.timezone     !== undefined) fields.timezone     = req.body.timezone;
     const msg = await update(req.params.id, req.user.id, fields);
     if (!msg) return res.status(404).json({ success: false, error: 'Not found' });
     await scheduler.startBroadcasts(); // re-register in case recurrence changed
