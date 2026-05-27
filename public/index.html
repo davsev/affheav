@@ -456,6 +456,10 @@
             <label class="form-label">נישה</label>
             <select class="form-input" id="sched-subject"><option value="">כל הנישות</option></select>
           </div>
+          <div class="form-group">
+            <label class="form-label">אזור זמן</label>
+            <select class="form-input" id="sched-timezone"></select>
+          </div>
         </div>
         <div style="margin-top:10px;font-size:11px;color:var(--on-surface-var);font-family:var(--font-mono);">
           0 11 * * * = כל יום ב-11:00 &nbsp;|&nbsp; 0 17 * * * = כל יום ב-17:00 &nbsp;|&nbsp; 0 11 * * 5 = כל שישי
@@ -1324,6 +1328,10 @@
           </div>
         </div>
       </div>
+      <div class="form-group" style="margin-top:16px;">
+        <label class="form-label">אזור זמן</label>
+        <select class="form-input" id="edit-sched-timezone"></select>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeEditModal()">ביטול</button>
@@ -1448,6 +1456,11 @@
         </div>
         <!-- Live preview -->
         <div style="font-size:13px;color:var(--primary);font-weight:600;min-height:20px;" id="bcast-recurrence-preview"></div>
+      </div>
+      <!-- Timezone -->
+      <div class="form-group" style="margin-top:14px;">
+        <label class="form-label">אזור זמן</label>
+        <select class="form-input" id="bcast-timezone" style="width:auto;"></select>
       </div>
       <!-- Platforms -->
       <div style="display:flex;align-items:center;gap:10px;padding:10px 0 2px;">

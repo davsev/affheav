@@ -11,12 +11,13 @@ router.get('/', async (req, res) => {
     );
     const activeJobs = scheduler.getActiveJobs();
     const schedules = rows.map(s => ({
-      id:      s.id,
-      label:   s.label,
-      cron:    s.cron,
-      enabled: s.enabled,
-      subject: s.subject_id || '',
-      active:  s.enabled && !!activeJobs[s.id],
+      id:       s.id,
+      label:    s.label,
+      cron:     s.cron,
+      timezone: s.timezone || 'UTC',
+      enabled:  s.enabled,
+      subject:  s.subject_id || '',
+      active:   s.enabled && !!activeJobs[s.id],
     }));
     res.json({ success: true, schedules });
   } catch (err) {
@@ -25,13 +26,14 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { label, cron, enabled, subject } = req.body;
+  const { label, cron, timezone, enabled, subject } = req.body;
   if (!label || !cron) return res.status(400).json({ success: false, error: 'label and cron are required' });
   try {
     const entry = await scheduler.add({
       userId:    req.user.id,
       label,
       cron,
+      timezone:  timezone || 'UTC',
       enabled,
       subjectId: subject || null,
     });

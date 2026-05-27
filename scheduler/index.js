@@ -42,8 +42,8 @@ async function startBroadcasts() {
       log(`Invalid cron for broadcast "${b.label}": "${b.cron}"`, 'warn');
       continue;
     }
-    activeBroadcastJobs[b.id] = cron.schedule(b.cron, () => runBroadcastJob(b), { timezone: 'Asia/Jerusalem' });
-    log(`Broadcast registered: "${b.label}" → ${b.cron}`);
+    activeBroadcastJobs[b.id] = cron.schedule(b.cron, () => runBroadcastJob(b), { timezone: b.timezone || 'UTC' });
+    log(`Broadcast registered: "${b.label}" → ${b.cron} (${b.timezone || 'UTC'})`);
   }
 
   if (broadcasts.length) {
@@ -106,8 +106,8 @@ async function startAll() {
       console.warn(`[scheduler] Invalid cron: "${s.cron}" (id: ${s.id})`);
       continue;
     }
-    activeJobs[s.id] = cron.schedule(s.cron, () => runJob(s), { timezone: 'Asia/Jerusalem' });
-    log(`Registered: "${s.label}" → ${s.cron}`);
+    activeJobs[s.id] = cron.schedule(s.cron, () => runJob(s), { timezone: s.timezone || 'UTC' });
+    log(`Registered: "${s.label}" → ${s.cron} (${s.timezone || 'UTC'})`);
   }
 
   if (schedules.length) {
@@ -143,27 +143,28 @@ async function fireNow(id, userId) {
 
 function _formatRow(s) {
   return {
-    id:      s.id,
-    label:   s.label,
-    cron:    s.cron,
-    enabled: s.enabled,
-    subject: s.subject_id || '',
-    active:  s.enabled && !!activeJobs[s.id],
+    id:       s.id,
+    label:    s.label,
+    cron:     s.cron,
+    timezone: s.timezone || 'UTC',
+    enabled:  s.enabled,
+    subject:  s.subject_id || '',
+    active:   s.enabled && !!activeJobs[s.id],
   };
 }
 
-async function add({ userId, label, cron: cronExpr, enabled = true, subjectId = null }) {
+async function add({ userId, label, cron: cronExpr, timezone = 'UTC', enabled = true, subjectId = null }) {
   if (!cron.validate(cronExpr)) throw new Error(`Invalid cron expression: ${cronExpr}`);
   const { rows } = await query(
-    `INSERT INTO schedules (user_id, subject_id, label, cron, enabled)
-     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-    [userId, subjectId, label, cronExpr, enabled]
+    `INSERT INTO schedules (user_id, subject_id, label, cron, timezone, enabled)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [userId, subjectId, label, cronExpr, timezone, enabled]
   );
   await startAll();
   return _formatRow(rows[0]);
 }
 
-async function update(id, userId, { label, cron: cronExpr, enabled, subject }) {
+async function update(id, userId, { label, cron: cronExpr, timezone, enabled, subject }) {
   const { rows: existing } = await query(
     'SELECT * FROM schedules WHERE id = $1 AND user_id = $2',
     [id, userId]
@@ -176,14 +177,16 @@ async function update(id, userId, { label, cron: cronExpr, enabled, subject }) {
     `UPDATE schedules SET
        label      = COALESCE($1, label),
        cron       = COALESCE($2, cron),
-       enabled    = COALESCE($3, enabled),
-       subject_id = $4,
+       timezone   = COALESCE($3, timezone),
+       enabled    = COALESCE($4, enabled),
+       subject_id = $5,
        updated_at = NOW()
-     WHERE id = $5 AND user_id = $6
+     WHERE id = $6 AND user_id = $7
      RETURNING *`,
     [
-      label   ?? null,
+      label    ?? null,
       cronExpr ?? null,
+      timezone ?? null,
       enabled  ?? null,
       subject !== undefined ? (subject || null) : cur.subject_id,
       id, userId,

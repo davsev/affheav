@@ -3,6 +3,7 @@
 
 import { api, escHtml } from './utils.js';
 import { t } from './i18n/index.js';
+import { populateTimezoneSelect } from './timezones.js';
 
 // ── Module state ───────────────────────────────────────────────────────────────
 let _editId = null;          // null = create mode, string = edit mode (broadcast id)
@@ -155,6 +156,13 @@ function openModal(broadcast = null) {
     }
   }
 
+  // Timezone
+  const tzSel = el('bcast-timezone');
+  if (tzSel) {
+    const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    populateTimezoneSelect(tzSel, broadcast ? (broadcast.timezone || 'UTC') : localTz);
+  }
+
   // Recurrence
   const r = broadcast && broadcast.recurrence;
   el('bcast-freq').value        = r ? (r.mode       || 'daily') : 'daily';
@@ -203,6 +211,7 @@ async function saveBroadcast() {
   const fileInput     = el('bcast-image-input');
   const externalUrl   = el('bcast-image-url').value.trim();
   const sendFacebook  = el('bcast-send-facebook').classList.contains('active');
+  const timezone      = el('bcast-timezone')?.value || 'UTC';
 
   // Validation
   if (!label)     { alert(t('bcastValidLabel')); return; }
@@ -226,7 +235,7 @@ async function saveBroadcast() {
 
     if (_editId) {
       // ── Edit mode ──────────────────────────────────────────────────────
-      const putBody = { label, text, subjectId, recurrence, sendFacebook };
+      const putBody = { label, text, subjectId, recurrence, sendFacebook, timezone };
       if (!hasFile && externalUrl) putBody.imageUrl = externalUrl;
       await api(`/api/broadcasts/${_editId}`, { method: 'PUT', body: putBody });
 
@@ -251,6 +260,7 @@ async function saveBroadcast() {
       fd.append('subjectId',  subjectId);
       fd.append('recurrence',    JSON.stringify(recurrence));
       fd.append('sendFacebook',  String(sendFacebook));
+      fd.append('timezone',      timezone);
       if (hasFile) {
         fd.append('image', fileInput.files[0]);
       } else if (externalUrl) {

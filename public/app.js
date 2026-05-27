@@ -1644,7 +1644,7 @@ async function loadSchedules() {
       <div class="schedule-item" id="sched-${s.id}">
         <div style="flex:1;min-width:0;">
           <div class="schedule-label" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">${escHtml(s.label)}${subjChip}</div>
-          <div class="schedule-cron" dir="ltr" style="margin-bottom:6px;">${escHtml(s.cron)}</div>
+          <div class="schedule-cron" dir="ltr" style="margin-bottom:6px;">${escHtml(s.cron)} <span style="font-size:10px;color:#64748b;">${escHtml(s.timezone || 'UTC')}</span></div>
           <div style="display:flex;align-items:center;gap:6px;">
             <select class="form-input" style="font-size:11px;padding:3px 6px;height:28px;width:auto;max-width:160px;"
               onchange="assignScheduleSubject('${s.id}', this.value)">

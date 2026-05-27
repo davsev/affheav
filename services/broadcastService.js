@@ -220,6 +220,7 @@ function _row(r) {
     text:               r.text,
     imageUrl:           r.image_url,
     sendFacebook:       r.send_facebook ?? true,
+    timezone:           r.timezone || 'UTC',
     recurrence:         r.recurrence,
     cron:               r.cron,
     enabled:            r.enabled,
@@ -269,7 +270,7 @@ async function getById(id, userId) {
  * @returns {Promise<object>}
  */
 async function create(userId, fields) {
-  const { subjectId, label, text, recurrence, imageUrl, sendFacebook } = fields;
+  const { subjectId, label, text, recurrence, imageUrl, sendFacebook, timezone = 'UTC' } = fields;
 
   // Validate subject ownership
   const { rows: subjectRows } = await query(
@@ -285,10 +286,10 @@ async function create(userId, fields) {
 
   const { rows } = await query(
     `INSERT INTO broadcast_messages
-       (user_id, subject_id, label, text, image_url, recurrence, cron, send_facebook)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       (user_id, subject_id, label, text, image_url, recurrence, cron, send_facebook, timezone)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
-    [userId, subjectId, label, text, imageUrl || null, JSON.stringify(recurrence), cronExpr, sendFacebook !== false]
+    [userId, subjectId, label, text, imageUrl || null, JSON.stringify(recurrence), cronExpr, sendFacebook !== false, timezone]
   );
   return _row(rows[0]);
 }
@@ -351,6 +352,10 @@ async function update(id, userId, fields) {
   if (fields.sendFacebook !== undefined) {
     updates.push(`send_facebook = $${i++}`);
     values.push(!!fields.sendFacebook);
+  }
+  if (fields.timezone !== undefined) {
+    updates.push(`timezone = $${i++}`);
+    values.push(fields.timezone);
   }
 
   if (updates.length === 0) return getById(id, userId);
