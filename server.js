@@ -6,7 +6,8 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const workflow = require('./services/workflow');
 const scheduler = require('./scheduler');
-const { appendLogs, getRecentLogs } = require('./services/googleSheets');
+const { appendLogs } = require('./services/googleSheets');
+const { query: dbQuery } = require('./db');
 const { migrate } = require('./db/migrate');
 const { findUser, createUser, updateUser } = require('./services/userService');
 const { validateToken, markUsed } = require('./services/inviteService');
@@ -211,28 +212,41 @@ getSetting('openai_prompt').then(saved => {
 }).catch(() => {});
 
 // ── SSE Log Stream ────────────────────────────────────────────────────────────
-const sseClients = new Set();
-const logHistory = [];
-const LOG_HISTORY_MAX = 500;
+// Map from res → { subjectId: string|null, userId: string }
+const sseClients = new Map();
 
 // Buffer for pending log entries not yet flushed to Google Sheets
 let _pendingLogs = [];
 
 app.get('/api/logs', isAuthenticated, (req, res) => {
+  const subjectId = req.query.subjectId || null;
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
-  for (const entry of logHistory) res.write(`data: ${JSON.stringify(entry)}\n\n`);
-  sseClients.add(res);
+  sseClients.set(res, { subjectId, userId: req.user.id });
   req.on('close', () => sseClients.delete(res));
 });
 
-// Persistent log history from Google Sheets (authenticated)
+// Persistent log history from DB, scoped by user and optionally by subject
 app.get('/api/logs/history', isAuthenticated, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 500, 2000);
-    const logs = await getRecentLogs(limit);
+    const subjectId = req.query.subjectId || null;
+    let sql, params;
+    if (subjectId) {
+      sql = `SELECT ts, level, msg FROM logs WHERE user_id = $1 AND subject_id = $2 ORDER BY ts DESC LIMIT $3`;
+      params = [req.user.id, subjectId, limit];
+    } else {
+      sql = `SELECT ts, level, msg FROM logs WHERE user_id = $1 ORDER BY ts DESC LIMIT $2`;
+      params = [req.user.id, limit];
+    }
+    const { rows } = await dbQuery(sql, params);
+    const logs = rows.reverse().map(r => ({
+      ts: r.ts instanceof Date ? r.ts.toISOString() : r.ts,
+      level: r.level,
+      msg: r.msg,
+    }));
     res.json({ success: true, logs });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -240,14 +254,23 @@ app.get('/api/logs/history', isAuthenticated, async (req, res) => {
 });
 
 function emitLog(entry) {
-  logHistory.push(entry);
-  if (logHistory.length > LOG_HISTORY_MAX) logHistory.shift();
   _pendingLogs.push(entry);
   const data = `data: ${JSON.stringify(entry)}\n\n`;
-  for (const client of sseClients) client.write(data);
+  for (const [client, meta] of sseClients) {
+    // Only send to clients belonging to the same user
+    if (meta.userId !== entry.userId) continue;
+    // If client is filtered to a specific subject, skip non-matching entries
+    if (meta.subjectId && meta.subjectId !== entry.subjectId) continue;
+    client.write(data);
+  }
+  // Persist to DB
+  dbQuery(
+    `INSERT INTO logs(user_id, subject_id, ts, level, msg) VALUES($1,$2,$3,$4,$5)`,
+    [entry.userId || null, entry.subjectId || null, entry.ts, entry.level, entry.msg]
+  ).catch(err => console.error('[logs] DB insert failed:', err.message));
 }
 
-// Flush pending logs to Google Sheets every 60 seconds
+// Flush pending logs to Google Sheets every 60 seconds (backward compat)
 setInterval(async () => {
   if (_pendingLogs.length === 0) return;
   const batch = _pendingLogs.splice(0);

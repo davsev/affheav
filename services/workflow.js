@@ -22,10 +22,15 @@ function sleep(ms) {
 let _emit = null;
 function setEmitter(fn) { _emit = fn; }
 
-function log(msg, level = 'info') {
-  const entry = { ts: new Date().toISOString(), level, msg };
+function log(msg, level = 'info', context = null) {
+  const entry = { ts: new Date().toISOString(), level, msg, ...context };
   console.log(`[${level.toUpperCase()}] ${msg}`);
   if (_emit) _emit(entry);
+}
+
+// Returns a scoped log function that attaches { userId, subjectId } to every entry
+function makeScopedLog(context) {
+  return (msg, level = 'info') => log(msg, level, context);
 }
 
 async function getUserSetting(userId, key) {
@@ -163,6 +168,7 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
   const sendWA = platforms.includes('whatsapp');
   const sendFB = platforms.includes('facebook');
   const sendIG = platforms.includes('instagram');
+  const log = makeScopedLog({ userId: userId || null, subjectId: subject || null });
   log('▶ Workflow started');
 
   // Resolve subject credentials (if subject is specified)

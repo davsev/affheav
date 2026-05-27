@@ -134,6 +134,7 @@ async function migrate() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await query(`ALTER TABLE schedules ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) NOT NULL DEFAULT 'UTC'`);
 
   // ── Settings (per-user key-value) ─────────────────────────────────────────
   await query(`
@@ -149,14 +150,18 @@ async function migrate() {
   // ── Logs ──────────────────────────────────────────────────────────────────
   await query(`
     CREATE TABLE IF NOT EXISTS logs (
-      id      BIGSERIAL PRIMARY KEY,
-      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-      ts      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      level   VARCHAR(20) NOT NULL DEFAULT 'info',
-      msg     TEXT NOT NULL
+      id         BIGSERIAL PRIMARY KEY,
+      user_id    UUID REFERENCES users(id) ON DELETE CASCADE,
+      subject_id UUID REFERENCES subjects(id) ON DELETE SET NULL,
+      ts         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      level      VARCHAR(20) NOT NULL DEFAULT 'info',
+      msg        TEXT NOT NULL
     )
   `);
   await query(`CREATE INDEX IF NOT EXISTS logs_user_ts ON logs(user_id, ts DESC)`);
+  await query(`CREATE INDEX IF NOT EXISTS logs_user_subject_ts ON logs(user_id, subject_id, ts DESC)`);
+  // Idempotent: add subject_id to existing logs tables created before this migration
+  await query(`ALTER TABLE logs ADD COLUMN IF NOT EXISTS subject_id UUID REFERENCES subjects(id) ON DELETE SET NULL`);
 
   // ── Broadcast Messages ────────────────────────────────────────────────────────
   await query(`
@@ -177,6 +182,7 @@ async function migrate() {
   await query(`CREATE INDEX IF NOT EXISTS bcast_user_id    ON broadcast_messages(user_id)`);
   await query(`CREATE INDEX IF NOT EXISTS bcast_subject_id ON broadcast_messages(subject_id)`);
   await query(`ALTER TABLE broadcast_messages ADD COLUMN IF NOT EXISTS send_facebook BOOLEAN NOT NULL DEFAULT true`);
+  await query(`ALTER TABLE broadcast_messages ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) NOT NULL DEFAULT 'UTC'`);
 
   // ── Commission Snapshots (AliExpress affiliate orders) ───────────────────────
   await query(`
