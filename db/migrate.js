@@ -118,6 +118,8 @@ async function migrate() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS title TEXT`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS video_url TEXT`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS use_video BOOLEAN NOT NULL DEFAULT false`);
+  // Enable video for any existing products that already have a video_url stored
+  await query(`UPDATE products SET use_video = true WHERE video_url IS NOT NULL AND video_url != '' AND use_video = false`);
 
   // ── Schedules ─────────────────────────────────────────────────────────────
   await query(`
