@@ -26,27 +26,30 @@ Affiliate Heaven automates affiliate product broadcasting to WhatsApp groups, Fa
 All commit messages **and PR titles** must follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 **This is enforced by CI** — the "Lint PR title" check will fail and block the merge if the PR title does not conform.
 
+> **Agent rule:** Before opening or updating any PR, always rename the title to match `<type>(<scope>): <description>`. Never leave a PR title as a plain sentence.
+
 ### Format
 
 ```
 <type>(<scope>): <description>
 ```
 
-- `type` and `scope` are lowercase
-- `description` is lowercase, no trailing period
+- `type` and `scope` are **lowercase**
+- `description` is **lowercase**, no trailing period
 - `scope` is optional but strongly recommended — it locates the change in the codebase at a glance
+- Keep the description concise (≤ 72 characters total including type and scope)
 
 ### Types
 
 | Type | When to use |
 |---|---|
-| `feat` | New feature or capability |
+| `feat` | New feature or user-visible capability |
 | `fix` | Bug fix |
-| `refactor` | Code change with no behavior change |
+| `refactor` | Code change with no behavior change (e.g. i18n string extraction, restructuring) |
 | `perf` | Performance improvement |
-| `test` | Adding or updating tests |
-| `docs` | Documentation only |
-| `chore` | Tooling, deps, config, scripts |
+| `test` | Adding or updating tests only |
+| `docs` | Documentation only (AGENTS.md, README, comments) |
+| `chore` | Tooling, deps, config, scripts — nothing a user would notice |
 | `ci` | CI/CD pipeline changes |
 
 ### Scopes (use the closest match)
@@ -67,7 +70,8 @@ All commit messages **and PR titles** must follow [Conventional Commits](https:/
 | `aliexpress` | AliExpress API / scraping |
 | `sheets` | Google Sheets sync (legacy) |
 | `db` | Migrations, schema, DB utilities |
-| `ui` | Frontend (public/app.js, index.html) |
+| `ui` | Frontend (public/app.js, index.html, modals, i18n strings) |
+| `i18n` | Translation layer, locale strings, language switching |
 | `logs` | Logging, SSE streaming |
 | `config` | Environment, settings |
 
@@ -76,6 +80,7 @@ All commit messages **and PR titles** must follow [Conventional Commits](https:/
 ```
 feat(discovery): use niche sales history to drive product suggestions
 fix(scheduler): prevent duplicate cron jobs on hot reload
+refactor(ui): replace hardcoded Hebrew strings with i18n t() calls
 refactor(products): extract DB queries into repository layer
 perf(db): add index on products.subject_id for faster joins
 test(auth): add unit tests for invite token validation
@@ -98,6 +103,9 @@ feat(discovery) add niche suggestions
 
 # ❌ Trailing period
 feat(discovery): add niche suggestions.
+
+# ❌ Plain description with no conventional prefix (common agent mistake)
+i18n: replace all hardcoded Hebrew strings in UI with t() calls
 ```
 
 ---
@@ -235,13 +243,34 @@ invitations         — id, email, token, invited_by, accepted_at, expires_at, c
 
 ## Testing
 
+> **Agent rule:** Every PR that adds or changes logic **must** include or update tests. A PR with no test changes for non-trivial logic changes will be rejected. If the change is purely cosmetic (CSS, string extraction, comment) tests are not required — say so explicitly in the PR body.
+
+### Requirements
+
 - **Unit tests are required** for every new function, service method, and utility.
-- Test runner: **Vitest**
+- **Integration tests** are required for any new API route or DB interaction.
+- Test runner: **Vitest** (`npx vitest run`)
 - Test files: co-located next to the source file — `userService.test.ts` beside `userService.ts`
 - Test naming: describe what the function does, not how — `it('returns null when user is not found')`
 - Mock external dependencies (DB, HTTP clients) — unit tests must not make real network calls
 - Aim for edge cases: empty input, invalid types, missing optional fields, error paths
 - Integration tests for service boundaries (DB interactions) use a test database
+
+### What counts as "logic"
+
+Requires tests:
+- New service methods or utilities
+- New API routes
+- Modified business rules (scheduling, delivery, permission checks)
+- Bug fixes — add a regression test that would have caught the bug
+
+Does **not** require tests (state this in the PR body):
+- Pure string/i18n extraction (no logic change)
+- CSS / layout changes
+- Config or env var additions
+- Documentation updates
+
+### Test structure
 
 ```typescript
 // Example structure
@@ -254,8 +283,9 @@ describe('findUser', () => {
 
 ### CI
 - GitHub Actions runs Vitest on every PR targeting `main`
-- PRs cannot be merged if tests fail
+- PRs **cannot be merged** if tests fail
 - CI also runs TypeScript type-check (`tsc --noEmit`)
+- A PR that skips tests without justification in the PR body will be flagged during review
 
 ---
 
