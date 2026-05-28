@@ -58,7 +58,7 @@ router.post('/sync-commissions', async (req, res) => {
     );
 
     if (!subjects.length) {
-      return res.json({ success: true, synced: 0, subjects: [], message: 'אין נישות עם tracking ID מוגדר' });
+      return res.json({ success: true, synced: 0, subjects: [], message: 'No niches with tracking ID configured' });
     }
 
     // The AliExpress API returns ALL account orders regardless of the tracking_id param.
@@ -165,7 +165,7 @@ router.post('/sync-commissions-manual', async (req, res) => {
     const { trackingId, subjectId, startDate, endDate } = req.body;
 
     if (!trackingId || !subjectId) {
-      return res.status(400).json({ success: false, error: 'נדרש trackingId ו-subjectId' });
+      return res.status(400).json({ success: false, error: 'trackingId and subjectId are required' });
     }
 
     // Verify the subject belongs to this user
@@ -173,7 +173,7 @@ router.post('/sync-commissions-manual', async (req, res) => {
       `SELECT id, name FROM subjects WHERE id = $1 AND user_id = $2`,
       [subjectId, userId]
     );
-    if (!subjects.length) return res.status(404).json({ success: false, error: 'נישה לא נמצאה' });
+    if (!subjects.length) return res.status(404).json({ success: false, error: 'Niche not found' });
 
     const now      = new Date();
     const defStart = new Date(now);
@@ -541,7 +541,7 @@ router.post('/sync-reach', async (req, res) => {
   );
 
   if (!products.length) {
-    return res.json({ success: true, synced: 0, message: 'אין פוסטים עם מזהה Meta מוגדר' });
+    return res.json({ success: true, synced: 0, message: 'No posts with Meta ID configured' });
   }
 
   let synced = 0;
@@ -661,7 +661,7 @@ router.post('/spend', async (req, res) => {
   try {
     const { subjectId, platform, spendUsd, periodStart, periodEnd, notes } = req.body;
     if (!subjectId || !platform || !spendUsd || !periodStart || !periodEnd) {
-      return res.status(400).json({ success: false, error: 'חסרים שדות חובה' });
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
 
     const { rows } = await query(
@@ -804,7 +804,7 @@ router.get('/probe-raw-orders', async (req, res) => {
       params
     );
     if (!subjects.length) {
-      return res.json({ success: false, error: 'אין נישה עם tracking ID מוגדר' });
+      return res.json({ success: false, error: 'No niche with tracking ID configured' });
     }
 
     const { aliexpress_tracking_id: trackingId, name: subjectName } = subjects[0];
@@ -986,11 +986,11 @@ router.get('/marketing-insights', async (req, res) => {
     const { rows: priceBuckets } = await query(
       `SELECT
          CASE
-           WHEN order_amount < 5   THEN 'מתחת ל-$5'
+           WHEN order_amount < 5   THEN 'Under $5'
            WHEN order_amount < 15  THEN '$5–$15'
            WHEN order_amount < 30  THEN '$15–$30'
            WHEN order_amount < 60  THEN '$30–$60'
-           ELSE 'מעל $60'
+           ELSE 'Over $60'
          END                                  AS bucket,
          CASE
            WHEN order_amount < 5   THEN 1
@@ -1147,7 +1147,7 @@ router.post('/sync-join-clicks', async (req, res) => {
     );
 
     if (!groups.length) {
-      return res.json({ success: true, synced: 0, message: 'אין קבוצות עם קישורי spoo.me' });
+      return res.json({ success: true, synced: 0, message: 'No groups with spoo.me links' });
     }
 
     const clickStats = await getAllClickStats();

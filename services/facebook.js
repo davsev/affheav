@@ -75,7 +75,7 @@ async function getTokenInfo({ facebookAppId, facebookAppSecret, facebookToken } 
     scopes: data.scopes,
     expires_at: data.expires_at
       ? new Date(data.expires_at * 1000).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })
-      : 'לא פג תוקף (Page Token)',
+      : 'No expiry (Page Token)',
     expires_at_raw: data.expires_at || 0,
     days_left: data.expires_at
       ? Math.ceil((data.expires_at * 1000 - Date.now()) / (1000 * 60 * 60 * 24))
