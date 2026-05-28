@@ -92,16 +92,16 @@
 
 ### Frontend
 
-- [ ] **FE-01**: React 19 + Mantine 9, Hebrew RTL (`DirectionProvider initialDirection="rtl"`), dark mode (`defaultColorScheme="dark"`)
+- [x] **FE-01**: React 19 + Mantine 9, Hebrew RTL (`DirectionProvider initialDirection="rtl"`), dark mode (`defaultColorScheme="dark"`)
 - [ ] **FE-02**: All existing dashboard sections rebuilt: products, schedules, broadcasts, scraper, logs, settings, users
-- [ ] **FE-03**: Auth flow uses JWT Bearer token (not session cookie)
+- [x] **FE-03**: Auth flow uses JWT Bearer token (not session cookie)
 - [ ] **FE-04**: Credential connection screens per platform (Facebook, Instagram, AliExpress, WhatsApp)
 - [ ] **FE-05**: Feature Flags management screen for super admin — toggle per flag with immediate effect
 
 ### Internationalization (i18n)
 
-- [ ] **I18N-01**: All UI strings externalized — no hardcoded text in components
-- [ ] **I18N-02**: System supports Hebrew (RTL) and English (LTR) at launch; architecture supports adding languages without code changes
+- [x] **I18N-01**: All UI strings externalized — no hardcoded text in components
+- [x] **I18N-02**: System supports Hebrew (RTL) and English (LTR) at launch; architecture supports adding languages without code changes
 - [ ] **I18N-03**: User can switch display language from profile settings
 - [ ] **I18N-04**: Translation strings stored in JSON files per language (`locales/he.json`, `locales/en.json`)
 
@@ -219,13 +219,13 @@
 | BROAD-02 | Phase 10 | Pending |
 | BROAD-03 | Phase 10 | Pending |
 | BROAD-04 | Phase 10 | Pending |
-| FE-01 | Phase 11 | Pending |
+| FE-01 | Phase 11 | Complete |
 | FE-02 | Phase 11 | Pending |
-| FE-03 | Phase 11 | Pending |
+| FE-03 | Phase 11 | Complete |
 | FE-04 | Phase 11 | Pending |
 | FE-05 | Phase 11 | Pending |
-| I18N-01 | Phase 11 | Pending |
-| I18N-02 | Phase 11 | Pending |
+| I18N-01 | Phase 11 | Complete |
+| I18N-02 | Phase 11 | Complete |
 | I18N-03 | Phase 11 | Pending |
 | I18N-04 | Phase 11 | Pending |
 | TEST-01 | Phase 12 | Pending |
