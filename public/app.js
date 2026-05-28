@@ -1787,7 +1787,7 @@ async function loadBroadcasts() {
         </div>
         <div class="schedule-actions">
           <button class="btn btn-sm" style="background:rgba(22,163,74,0.12);color:#16a34a;border:1px solid rgba(22,163,74,0.2);font-size:13px;padding:4px 10px;" onclick="fireBroadcastNow('${escHtml(String(b.id))}')" title="${t('sendNowTitle')}">▶</button>
-          <button class="btn btn-sm" style="background:rgba(112,42,225,0.08);color:var(--primary);border:1px solid rgba(112,42,225,0.2);padding:4px 8px;" onclick="openEditBroadcast('${escHtml(String(b.id))}')" title="ערוך">
+          <button class="btn btn-sm" style="background:rgba(112,42,225,0.08);color:var(--primary);border:1px solid rgba(112,42,225,0.2);padding:4px 8px;" onclick="openEditBroadcast('${escHtml(String(b.id))}')" title="${t('editTitle')}">
             <span class="material-symbols-outlined" style="font-size:15px;line-height:1;">edit</span>
           </button>
           <label class="toggle" title="${b.enabled ? t('enabledLabel') : t('disabledLabel')}">
@@ -5037,7 +5037,7 @@ async function addSuggestion(btn) {
     if (card) card.style.animation = 'fadeOut 0.3s ease forwards';
     setTimeout(() => card && card.remove(), 320);
   } catch (err) {
-    alert('שגיאה בהוספת מוצר: ' + err.message);
+    alert(t('errAddProduct') + ': ' + err.message);
     btn.disabled = false;
   }
 }
