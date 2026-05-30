@@ -228,6 +228,16 @@ class InstanceManager {
     if (!client) throw new Error(`Phone ${phoneId} not found`);
     return client.sendMessage(groupJid, text, opts);
   }
+
+  /** Send to a raw WhatsApp group JID via any available connected phone (legacy fallback) */
+  async sendToJid(groupJid, text, { imageUrl, videoUrl } = {}) {
+    for (const [, client] of this._clients) {
+      if (client.isConnected()) {
+        return client.sendMessage(groupJid, text, { imageUrl, videoUrl });
+      }
+    }
+    throw new Error('No connected WhatsApp phone available');
+  }
 }
 
 module.exports = new InstanceManager();

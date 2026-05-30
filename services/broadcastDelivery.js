@@ -3,7 +3,7 @@
 // Called from routes/broadcasts.js (fire-now) and scheduler/index.js (cron).
 
 const { getSubjectById } = require('./subjectService');
-const whatsapp = require('./whatsapp');
+const waManager = require('./whatsapp/instanceManager');
 const facebook = require('./facebook');
 
 // Shared log emitter injected from server.js
@@ -62,10 +62,8 @@ async function send(broadcast, userId) {
   } else {
     try {
       log(`Sending to WhatsApp group: ${subject.waGroup}`);
-      const r = await whatsapp.send({
-        text:     b.text,
-        image:    imageUrl,
-        wa_group: subject.waGroup,
+      const r = await waManager.sendToJid(subject.waGroup, b.text, {
+        imageUrl: imageUrl || undefined,
       });
       results.whatsapp = { ...r, group: subject.name };
       if (r.success) {

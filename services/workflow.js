@@ -1,6 +1,6 @@
 const { query } = require('../db');
 const openai = require('./openai');
-const whatsapp = require('./whatsapp');
+const waManager = require('./whatsapp/instanceManager');
 const facebook = require('./facebook');
 const instagram = require('./instagram');
 const { getSubjectById, getGroupsBySubject } = require('./subjectService');
@@ -262,11 +262,9 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
         }
         try {
           log(`Sending to WhatsApp group: ${group.name} (${group.waGroup})`);
-          const waResult = await whatsapp.send({
-            text:     message,
-            image:    product.image,
+          const waResult = await waManager.sendToGroup(group.id, message, {
+            imageUrl: product.image || undefined,
             videoUrl: (product.use_video && product.video_url) ? product.video_url : undefined,
-            wa_group: group.waGroup,
           });
           results.whatsapp.push({ group: group.name, ...waResult });
           if (waResult.success) {
@@ -288,11 +286,9 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
       } else {
       try {
         log(`Sending to WhatsApp group: ${waGroup}`);
-        const waResult = await whatsapp.send({
-          text:     message,
-          image:    product.image,
+        const waResult = await waManager.sendToJid(waGroup, message, {
+          imageUrl: product.image || undefined,
           videoUrl: (product.use_video && product.video_url) ? product.video_url : undefined,
-          wa_group: waGroup,
         });
         results.whatsapp = waResult;
         if (waResult.success) {
@@ -376,7 +372,7 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
     await markSent(product.id, { sentAt, facebookAt, instagramAt, fbPostId, igMediaId });
     log('✓ DB updated');
   } catch (err) {
-    log(`✗ Failed to update Google Sheet: ${err.message}`, 'error');
+    log(`✗ Failed to update DB: ${err.message}`, 'error');
   }
 
   log('■ Workflow complete');
