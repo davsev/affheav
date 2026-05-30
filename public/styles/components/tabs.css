@@ -1,0 +1,71 @@
+/* ── Tab bar ─────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  border-block-end: 1px solid var(--color-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tabs::-webkit-scrollbar { display: none; }
+
+/* ── Tab button ─────────────────────────────────────────── */
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  padding: var(--space-2-5) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  border-block-end: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+  margin-block-end: -1px;
+}
+
+.tab:hover { color: var(--color-text); }
+
+.tab.is-active {
+  color: var(--color-primary);
+  border-block-end-color: var(--color-primary);
+}
+
+/* ── Pill tabs ──────────────────────────────────────────── */
+.tabs--pills {
+  border-block-end: none;
+  background: var(--color-surface);
+  padding: var(--space-1);
+  border-radius: var(--radius-lg);
+  gap: var(--space-1);
+  width: fit-content;
+}
+
+.tabs--pills .tab {
+  border-block-end: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-1-5) var(--space-3);
+  margin-block-end: 0;
+}
+
+.tabs--pills .tab.is-active {
+  background: var(--color-primary-muted);
+  color: var(--color-link);
+}
+
+/* ── Tab panel ──────────────────────────────────────────── */
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.is-active {
+  display: block;
+  animation: fade-in var(--transition-base) ease;
+}

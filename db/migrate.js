@@ -352,6 +352,37 @@ async function migrate() {
     END $$
   `);
 
+  // ── WhatsApp Instances (multi-phone pool manager) ────────────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS whatsapp_instances (
+      id          SERIAL PRIMARY KEY,
+      user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name        VARCHAR(255) NOT NULL,
+      description TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS wa_instances_user ON whatsapp_instances(user_id)`);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS whatsapp_phones (
+      id            SERIAL PRIMARY KEY,
+      instance_id   INTEGER NOT NULL REFERENCES whatsapp_instances(id) ON DELETE CASCADE,
+      display_name  VARCHAR(255),
+      status        VARCHAR(30) NOT NULL DEFAULT 'pending_qr',
+      session_data  JSONB,
+      last_seen     TIMESTAMPTZ,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS wa_phones_instance ON whatsapp_phones(instance_id)`);
+
+  // Each WhatsApp group can be assigned to a specific phone
+  await query(`ALTER TABLE whatsapp_groups ADD COLUMN IF NOT EXISTS phone_id INTEGER REFERENCES whatsapp_phones(id) ON DELETE SET NULL`);
+  await query(`CREATE INDEX IF NOT EXISTS wa_groups_phone_id ON whatsapp_groups(phone_id)`);
+
   console.log('✓ Database schema up to date');
 }
 

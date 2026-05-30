@@ -1,0 +1,122 @@
+/* ── Cron builder ────────────────────────────────────────── */
+.cron-builder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cron-builder__tabs {
+  display: flex;
+  gap: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.cron-tab {
+  flex: 1;
+  min-width: 80px;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.cron-tab:hover { background: var(--color-surface-hover); color: var(--color-text); }
+
+.cron-tab.is-active {
+  background: var(--color-primary-muted);
+  color: var(--color-link);
+}
+
+.cron-builder__panel {
+  display: none;
+}
+
+.cron-builder__panel.is-active {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ── Time row ────────────────────────────────────────────── */
+.cron-time-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.cron-time-row .select {
+  width: auto;
+  min-width: 72px;
+}
+
+.cron-time-sep {
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--color-text-muted);
+  line-height: 1;
+}
+
+/* ── Day picker ──────────────────────────────────────────── */
+.day-picker {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.day-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-muted);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.day-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.day-btn.is-selected {
+  background: var(--color-primary-muted);
+  color: var(--color-link);
+  border-color: var(--color-primary-border);
+}
+
+/* ── Preview line ────────────────────────────────────────── */
+.cron-preview {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+.cron-preview strong {
+  color: var(--color-link);
+  font-weight: var(--font-normal);
+}

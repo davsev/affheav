@@ -1,0 +1,115 @@
+/* ── Table wrapper ──────────────────────────────────────── */
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+}
+
+/* ── Table ──────────────────────────────────────────────── */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+/* ── Head ───────────────────────────────────────────────── */
+.table__head {
+  background: var(--color-surface);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.table__th {
+  padding: var(--space-3) var(--space-4);
+  text-align: start;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.table__th--center { text-align: center; }
+.table__th--end    { text-align: end; }
+
+/* ── Rows ───────────────────────────────────────────────── */
+.table__row {
+  border-block-end: 1px solid var(--color-border);
+  transition: background var(--transition-fast);
+}
+
+.table__row:last-child { border-block-end: none; }
+
+.table__row:hover { background: var(--color-surface-hover); }
+
+.table__row.is-selected { background: var(--color-primary-muted); }
+
+.table__row.is-dragging {
+  opacity: 0.5;
+  background: var(--color-surface-raised);
+}
+
+/* ── Cells ──────────────────────────────────────────────── */
+.table__td {
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+.table__td--center  { text-align: center; }
+.table__td--end     { text-align: end; }
+.table__td--muted   { color: var(--color-text-muted); }
+.table__td--mono    { font-family: var(--font-mono); font-size: var(--text-xs); }
+.table__td--shrink  { width: 1%; white-space: nowrap; }
+
+/* ── Product thumbnail ──────────────────────────────────── */
+.table__thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+  background: var(--color-surface-raised);
+  flex-shrink: 0;
+}
+
+/* ── Drag handle ────────────────────────────────────────── */
+.drag-handle {
+  cursor: grab;
+  color: var(--color-text-faint);
+  padding: var(--space-1);
+  border-radius: var(--radius-xs);
+  transition: color var(--transition-fast);
+  display: flex;
+  align-items: center;
+}
+
+.drag-handle:hover { color: var(--color-text-muted); }
+.drag-handle:active { cursor: grabbing; }
+
+/* ── Actions cell ───────────────────────────────────────── */
+.table__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  justify-content: flex-end;
+}
+
+/* ── Empty state ────────────────────────────────────────── */
+.table__empty {
+  text-align: center;
+  padding: var(--space-12) var(--space-4);
+  color: var(--color-text-faint);
+  font-size: var(--text-sm);
+}
+
+/* ── Compact ────────────────────────────────────────────── */
+.table--compact .table__th,
+.table--compact .table__td {
+  padding: var(--space-2) var(--space-3);
+}
+
+/* ── Striped ────────────────────────────────────────────── */
+.table--striped .table__row:nth-child(even) {
+  background: var(--color-surface);
+}

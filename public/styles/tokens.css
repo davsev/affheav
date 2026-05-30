@@ -1,0 +1,131 @@
+:root {
+  /* ── Brand ─────────────────────────────────────── */
+  --color-primary:         #702ae1;
+  --color-primary-hover:   #5e1fc7;
+  --color-primary-active:  #4e19a8;
+  --color-primary-muted:   rgba(112, 42, 225, 0.14);
+  --color-primary-border:  rgba(112, 42, 225, 0.35);
+
+  /* ── Surface ────────────────────────────────────── */
+  --color-bg:              #0d0d12;
+  --color-bg-alt:          #111118;
+  --color-surface:         rgba(255, 255, 255, 0.04);
+  --color-surface-hover:   rgba(255, 255, 255, 0.07);
+  --color-surface-raised:  rgba(255, 255, 255, 0.08);
+  --color-surface-overlay: rgba(13, 13, 18, 0.85);
+  --color-border:          rgba(255, 255, 255, 0.09);
+  --color-border-strong:   rgba(255, 255, 255, 0.18);
+
+  /* ── Semantic ───────────────────────────────────── */
+  --color-success:         #16a34a;
+  --color-success-muted:   rgba(22, 163, 74, 0.14);
+  --color-success-border:  rgba(22, 163, 74, 0.30);
+  --color-warning:         #d97706;
+  --color-warning-muted:   rgba(217, 119, 6, 0.14);
+  --color-warning-border:  rgba(217, 119, 6, 0.30);
+  --color-error:           #dc2626;
+  --color-error-muted:     rgba(220, 38, 38, 0.14);
+  --color-error-border:    rgba(220, 38, 38, 0.30);
+  --color-info:            #0ea5e9;
+  --color-info-muted:      rgba(14, 165, 233, 0.14);
+  --color-info-border:     rgba(14, 165, 233, 0.30);
+
+  /* ── Text ───────────────────────────────────────── */
+  --color-text:            #f1f5f9;
+  --color-text-muted:      #94a3b8;
+  --color-text-faint:      #475569;
+  --color-text-inverse:    #0d0d12;
+  --color-link:            #a78bfa;
+  --color-link-hover:      #c4b5fd;
+
+  /* ── Spacing (4px base) ─────────────────────────── */
+  --space-0:   0px;
+  --space-px:  1px;
+  --space-0-5: 2px;
+  --space-1:   4px;
+  --space-1-5: 6px;
+  --space-2:   8px;
+  --space-2-5: 10px;
+  --space-3:   12px;
+  --space-3-5: 14px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-7:   28px;
+  --space-8:   32px;
+  --space-9:   36px;
+  --space-10:  40px;
+  --space-12:  48px;
+  --space-14:  56px;
+  --space-16:  64px;
+  --space-20:  80px;
+
+  /* ── Typography ─────────────────────────────────── */
+  --font-sans:  "Plus Jakarta Sans", "Assistant", system-ui, sans-serif;
+  --font-mono:  "SF Mono", "Fira Code", "Courier New", monospace;
+
+  --text-xs:    0.6875rem;   /* 11px */
+  --text-sm:    0.8125rem;   /* 13px */
+  --text-base:  0.9375rem;   /* 15px */
+  --text-md:    1rem;        /* 16px */
+  --text-lg:    1.125rem;    /* 18px */
+  --text-xl:    1.25rem;     /* 20px */
+  --text-2xl:   1.5rem;      /* 24px */
+  --text-3xl:   1.875rem;    /* 30px */
+  --text-4xl:   2.25rem;     /* 36px */
+
+  --leading-tight:   1.25;
+  --leading-snug:    1.375;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.625;
+
+  --font-normal:   400;
+  --font-medium:   500;
+  --font-semibold: 600;
+  --font-bold:     700;
+
+  /* ── Border radius ──────────────────────────────── */
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+  --radius-2xl:  28px;
+  --radius-full: 9999px;
+
+  /* ── Shadows ────────────────────────────────────── */
+  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-sm:  0 1px 4px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255,255,255,0.04);
+  --shadow-md:  0 4px 12px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255,255,255,0.05);
+  --shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255,255,255,0.06);
+  --shadow-xl:  0 16px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255,255,255,0.07);
+  --shadow-glow: 0 0 24px rgba(112, 42, 225, 0.35);
+
+  /* ── Z-index scale ──────────────────────────────── */
+  --z-below:    -1;
+  --z-base:      0;
+  --z-raised:   10;
+  --z-dropdown: 200;
+  --z-sticky:   250;
+  --z-sidebar:  300;
+  --z-modal:    400;
+  --z-toast:    500;
+  --z-tooltip:  600;
+
+  /* ── Transitions ────────────────────────────────── */
+  --transition-fast:   100ms ease;
+  --transition-base:   160ms ease;
+  --transition-slow:   260ms ease;
+  --transition-spring: 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── Layout ─────────────────────────────────────── */
+  --sidebar-width:         240px;
+  --sidebar-collapsed-width: 64px;
+  --topbar-height:         56px;
+  --content-max-width:     1280px;
+
+  /* ── Blur ───────────────────────────────────────── */
+  --blur-sm:  blur(8px);
+  --blur-md:  blur(16px);
+  --blur-lg:  blur(28px);
+}
