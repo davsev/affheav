@@ -1,0 +1,59 @@
+/* ── Status dot ─────────────────────────────────────────── */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-text-faint);
+  flex-shrink: 0;
+}
+
+.status-dot--green  { background: var(--color-success); box-shadow: 0 0 0 3px var(--color-success-muted); }
+.status-dot--yellow { background: var(--color-warning); box-shadow: 0 0 0 3px var(--color-warning-muted); }
+.status-dot--red    { background: var(--color-error);   box-shadow: 0 0 0 3px var(--color-error-muted); }
+.status-dot--blue   { background: var(--color-info);    box-shadow: 0 0 0 3px var(--color-info-muted); }
+
+.status-dot--pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ── Status row (dot + label) ───────────────────────────── */
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* ── Connection panel (WhatsApp) ────────────────────────── */
+.connection-panel {
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.connection-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.connection-panel__title {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}

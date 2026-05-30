@@ -1,0 +1,49 @@
+/* ── Progress bar ────────────────────────────────────────── */
+.progress {
+  width: 100%;
+  height: 6px;
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.progress__bar {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  transition: width var(--transition-slow);
+}
+
+.progress--sm { height: 4px; }
+.progress--lg { height: 10px; }
+
+.progress--success .progress__bar { background: var(--color-success); }
+.progress--warning .progress__bar { background: var(--color-warning); }
+.progress--error   .progress__bar { background: var(--color-error); }
+.progress--info    .progress__bar { background: var(--color-info); }
+
+/* ── Progress label row ─────────────────────────────────── */
+.progress-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+}
+
+.progress-row__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.progress-row__label {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.progress-row__value {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}

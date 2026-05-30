@@ -314,6 +314,7 @@ app.use('/api/users',             isAuthenticated, require('./routes/users'));
 app.use('/api/broadcasts',        isAuthenticated, require('./routes/broadcasts'));
 app.use('/api/analytics',         isAuthenticated, require('./routes/analytics'));
 app.use('/api/whatsapp-service',  isAuthenticated, require('./routes/whatsapp-service'));
+app.use('/api/whatsapp',          isAuthenticated, require('./routes/whatsapp'));
 app.use('/api/settings',          isAuthenticated, require('./routes/settings'));
 
 // ── Static + SPA Fallback ─────────────────────────────────────────────────────
@@ -322,6 +323,8 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 4562;
+
+const waManager = require('./services/whatsapp/instanceManager');
 
 app.listen(PORT, async () => {
   console.log(`\n🎯 Affiliate Heaven running at http://localhost:${PORT}\n`);
@@ -335,5 +338,14 @@ app.listen(PORT, async () => {
   const count = await scheduler.startAll();
   console.log(`📅 ${count} schedule(s) loaded`);
   const bcount = await scheduler.startBroadcasts();
-  console.log(`📡 ${bcount} broadcast(s) loaded\n`);
+  console.log(`📡 ${bcount} broadcast(s) loaded`);
+
+  // Boot WhatsApp phone pool (only when DB is available)
+  if (process.env.DATABASE_URL) {
+    waManager.setLogger(workflow.log);
+    await waManager.start().catch(err =>
+      console.error('[whatsapp] Instance manager failed to start:', err.message)
+    );
+  }
+  console.log('');
 });

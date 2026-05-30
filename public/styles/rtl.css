@@ -1,0 +1,26 @@
+/* ── RTL overrides applied when <html dir="rtl"> ─────────── */
+
+[dir="rtl"] {
+  text-align: right;
+}
+
+/* Selects have mirrored arrow position (handled in form.css with logical properties) */
+/* Modals, toasts, sidebar - handled with logical properties (inset-inline-start/end) */
+
+/* Flip caret for dropdowns */
+[dir="rtl"] .select {
+  background-position: left var(--space-3) center;
+  padding-inline-start: var(--space-8);
+  padding-inline-end: var(--space-3);
+}
+
+/* Nav */
+[dir="rtl"] .nav-link { text-align: right; }
+
+/* Drag handle cursor (same, no change needed) */
+
+/* Table actions align to start in RTL */
+[dir="rtl"] .table__actions { justify-content: flex-start; }
+
+/* Subject bar right-aligned pill strip */
+[dir="rtl"] .subject-bar { flex-direction: row-reverse; }

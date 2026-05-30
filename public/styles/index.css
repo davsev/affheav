@@ -1,0 +1,40 @@
+/* ── Design System Entry Point ──────────────────────────── */
+
+/* 1. Tokens (CSS custom properties) */
+@import "./tokens.css";
+
+/* 2. Base reset + typography */
+@import "./base.css";
+
+/* 3. Layout */
+@import "./layout.css";
+
+/* 4. Components */
+@import "./components/button.css";
+@import "./components/card.css";
+@import "./components/badge.css";
+@import "./components/form.css";
+@import "./components/modal.css";
+@import "./components/table.css";
+@import "./components/nav.css";
+@import "./components/tabs.css";
+@import "./components/status.css";
+@import "./components/toast.css";
+@import "./components/spinner.css";
+@import "./components/avatar.css";
+@import "./components/chip.css";
+@import "./components/progress.css";
+@import "./components/qr.css";
+@import "./components/cron-builder.css";
+
+/* 5. Utilities */
+@import "./utilities.css";
+
+/* 6. Animations */
+@import "./animations.css";
+
+/* 7. RTL overrides */
+@import "./rtl.css";
+
+/* ── Google Fonts ───────────────────────────────────────── */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&display=swap");

@@ -1,0 +1,49 @@
+/* ── Spinner ─────────────────────────────────────────────── */
+.spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-border-strong);
+  border-top-color: var(--color-primary);
+  border-radius: var(--radius-full);
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.spinner--xs  { width: 12px; height: 12px; border-width: 1.5px; }
+.spinner--sm  { width: 16px; height: 16px; }
+.spinner--lg  { width: 32px; height: 32px; border-width: 3px; }
+.spinner--xl  { width: 48px; height: 48px; border-width: 4px; }
+
+.spinner--white { border-color: rgba(255,255,255,0.3); border-top-color: #fff; }
+
+/* ── Skeleton ────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-raised) 25%,
+    rgba(255,255,255,0.08) 50%,
+    var(--color-surface-raised) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Loading overlay ─────────────────────────────────────── */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-overlay);
+  backdrop-filter: var(--blur-sm);
+  border-radius: inherit;
+  z-index: var(--z-raised);
+}
