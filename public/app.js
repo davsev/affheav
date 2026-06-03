@@ -1287,6 +1287,8 @@ window.syncProductData = async (id, btn) => {
   btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;animation:spin 1s linear infinite;">sync</span>';
   try {
     const res = await api(`/api/aliexpress/sync/${id}`, { method: 'POST' });
+    // DEBUG — remove after diagnosis
+    alert('Sync result:\n' + JSON.stringify(res, null, 2));
     if (res.not_found) {
       btn.innerHTML = `<span style="font-size:11px;color:#f87171;" title="${t('notFoundOnAli')}">⚠ 404</span>`;
     } else {
