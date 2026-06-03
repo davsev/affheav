@@ -157,23 +157,23 @@ async function syncProduct(dbProductId, userId) {
   }
 
   if (!data) {
+    // API completely failed — use scraper as primary source
     try {
       data = await fetchViaScraper(finalUrl);
     } catch (err) {
       if (err.code === 'NOT_FOUND') return { not_found: true };
       throw err;
     }
+  } else if (!data.title || !data.video_url) {
+    // API succeeded but is missing title and/or video_url — fill in from scraper
+    try {
+      const scraped = await fetchViaScraper(finalUrl);
+      if (!data.title     && scraped?.title)     data.title     = scraped.title;
+      if (!data.video_url && scraped?.video_url) data.video_url = scraped.video_url;
+    } catch { /* fill-in is non-fatal */ }
   }
 
   if (!data) throw new Error('Could not fetch product data');
-
-  // API doesn't always return video URLs — also try the HTTP scraper for video_url
-  if (!data.video_url) {
-    try {
-      const scraped = await fetchViaScraper(finalUrl);
-      if (scraped.video_url) data.video_url = scraped.video_url;
-    } catch { /* ignore — video_url is optional */ }
-  }
 
   const sets   = [];
   const values = [];
