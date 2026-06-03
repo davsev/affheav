@@ -162,6 +162,10 @@ router.post('/sync/:id', async (req, res) => {
       workflow.log(`⚠ Product ${req.params.id} returned 404 on AliExpress`);
       return res.json({ success: true, not_found: true });
     }
+    if (result.no_data) {
+      workflow.log(`⚠ Product ${req.params.id}: no data returned from AliExpress (page may be blocked)`);
+      return res.json({ success: true, not_found: false, no_data: true, data: {} });
+    }
     workflow.log(`✓ Synced product ${req.params.id}: ${result.data?.title?.slice(0, 60) || '(no title)'}`);
     res.json({ success: true, not_found: false, data: result.data });
   } catch (err) {
