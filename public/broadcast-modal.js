@@ -217,7 +217,7 @@ async function saveBroadcast() {
   if (!label)     { alert(t('bcastValidLabel')); return; }
   if (!subjectId) { alert(t('bcastValidNiche')); return; }
   if (!text)      { alert(t('bcastValidText')); return; }
-  if (text.length > MAX_CHARS) { alert(`${t('bcastValidTooLong')} ${MAX_CHARS} תווים)`); return; }
+  if (text.length > MAX_CHARS) { alert(`${t('bcastValidTooLong')} ${MAX_CHARS} ${t('charsLabel')}`); return; }
 
   const recurrence = { mode: freq, hour, minute };
   if (freq === 'weekly')       recurrence.day = day;

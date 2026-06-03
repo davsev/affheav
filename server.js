@@ -144,10 +144,10 @@ app.get('/pending', (req, res) => {
   if (req.user.status === 'approved') return res.redirect('/');
   res.send(`
     <!DOCTYPE html>
-    <html lang="he" dir="rtl">
+    <html lang="en">
     <head>
       <meta charset="UTF-8">
-      <title>ממתין לאישור</title>
+      <title>Pending Approval</title>
       <style>
         body { font-family: Arial, sans-serif; background: #1a1a2e; color: #e0e0e0;
                display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
@@ -159,9 +159,9 @@ app.get('/pending', (req, res) => {
     </head>
     <body>
       <div class="card">
-        <h1>בקשתך התקבלה</h1>
-        <p>חשבונך ממתין לאישור מנהל המערכת.<br>תקבל הודעה כשהחשבון יאושר.</p>
-        <a href="/auth/logout">יציאה</a>
+        <h1>Request Received</h1>
+        <p>Your account is pending approval by an administrator.<br>You will be notified once your account is approved.</p>
+        <a href="/auth/logout">Sign out</a>
       </div>
     </body>
     </html>

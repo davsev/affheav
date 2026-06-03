@@ -1153,7 +1153,7 @@ function renderProducts(products) {
               : p.image
                 ? `<img class="product-card-img" src="${escHtml(p.image)}" onerror="this.style.display='none'" loading="lazy" />`
                 : `<div class="product-card-img-placeholder">📦</div>`}
-            ${p.video_url ? `<span onclick="toggleUseVideo('${p.id}',${!p.use_video},this)" title="${p.use_video ? 'שולח וידאו — לחץ לעבור לתמונה' : 'לחץ לשלוח וידאו במקום תמונה'}" style="position:absolute;bottom:4px;left:4px;font-size:20px;cursor:pointer;line-height:1;opacity:${p.use_video ? '1' : '0.4'};">🎬</span>` : ''}
+            ${p.video_url ? `<span onclick="toggleUseVideo('${p.id}',${!p.use_video},this)" title="${p.use_video ? t('videoSendingTitle') : t('videoUseTitle')}" style="position:absolute;bottom:4px;left:4px;font-size:20px;cursor:pointer;line-height:1;opacity:${p.use_video ? '1' : '0.4'};">🎬</span>` : ''}
           </div>
           <div class="product-card-body">
             <div class="product-card-title">${escHtml(p.Text)}</div>
@@ -1246,7 +1246,7 @@ window.toggleUseVideo = async (id, newValue, el) => {
     const res = await api(`/api/products/${id}`, { method: 'PUT', body: { use_video: newValue } });
     if (res.success) {
       el.style.opacity = newValue ? '1' : '0.4';
-      el.title = newValue ? 'שולח וידאו — לחץ לעבור לתמונה' : 'לחץ לשלוח וידאו במקום תמונה';
+      el.title = newValue ? t('videoSendingTitle') : t('videoUseTitle');
       el.onclick = () => window.toggleUseVideo(id, !newValue, el);
       // Update local product data
       const p = _lastProducts.find(p => p.id === id);
@@ -1476,6 +1476,25 @@ document.getElementById('chk-select-all-products').addEventListener('change', fu
   document.querySelectorAll('.product-chk').forEach(chk => { chk.checked = this.checked; });
 });
 
+// ── Bulk delete selected products ──────────────────────────────────────────
+document.getElementById('btn-delete-selected').addEventListener('click', async function () {
+  const ids = [...document.querySelectorAll('.product-chk:checked')].map(el => el.dataset.id);
+  if (!ids.length) { alert(t('noProductsSelected')); return; }
+  if (!confirm(t('confirmDeleteSelectedFmt').replace('{n}', ids.length))) return;
+
+  this.disabled = true;
+  try {
+    await api('/api/products/batch', { method: 'DELETE', body: { ids } });
+    const selectAll = document.getElementById('chk-select-all-products');
+    if (selectAll) selectAll.checked = false;
+    await loadProducts();
+  } catch (err) {
+    alert(t('errGeneral') + err.message);
+  } finally {
+    this.disabled = false;
+  }
+});
+
 // ── Bulk AliExpress sync with progress bar ────────────────────────────────
 const _syncUI = {
   panel:    document.getElementById('sync-progress-panel'),
@@ -1657,8 +1676,8 @@ async function loadSchedules() {
           </div>
         </div>
         <div class="schedule-actions">
-          <button class="btn btn-sm" style="background:rgba(22,163,74,0.12);color:#16a34a;border:1px solid rgba(22,163,74,0.2);font-size:13px;padding:4px 10px;" onclick="fireScheduleNow('${s.id}')" title="הרץ עכשיו">▶</button>
-          <button class="btn btn-sm" style="background:rgba(112,42,225,0.08);color:var(--primary);border:1px solid rgba(112,42,225,0.2);padding:4px 8px;" onclick="openEditSchedule('${s.id}', ${JSON.stringify(s.label)}, ${JSON.stringify(s.cron)}, ${JSON.stringify(s.timezone || 'UTC')})" title="ערוך">
+          <button class="btn btn-sm" style="background:rgba(22,163,74,0.12);color:#16a34a;border:1px solid rgba(22,163,74,0.2);font-size:13px;padding:4px 10px;" onclick="fireScheduleNow('${s.id}')" title="${t('runNowTitle')}">▶</button>
+          <button class="btn btn-sm" style="background:rgba(112,42,225,0.08);color:var(--primary);border:1px solid rgba(112,42,225,0.2);padding:4px 8px;" onclick="openEditSchedule('${s.id}', ${JSON.stringify(s.label)}, ${JSON.stringify(s.cron)}, ${JSON.stringify(s.timezone || 'UTC')})" title="${t('editTitle')}">
             <span class="material-symbols-outlined" style="font-size:15px;line-height:1;">edit</span>
           </button>
           <label class="toggle" title="${s.enabled ? t('enabledLabel') : t('disabledLabel')}">
@@ -1789,7 +1808,7 @@ async function loadBroadcasts() {
         </div>
         <div class="schedule-actions">
           <button class="btn btn-sm" style="background:rgba(22,163,74,0.12);color:#16a34a;border:1px solid rgba(22,163,74,0.2);font-size:13px;padding:4px 10px;" onclick="fireBroadcastNow('${escHtml(String(b.id))}')" title="${t('sendNowTitle')}">▶</button>
-          <button class="btn btn-sm" style="background:rgba(112,42,225,0.08);color:var(--primary);border:1px solid rgba(112,42,225,0.2);padding:4px 8px;" onclick="openEditBroadcast('${escHtml(String(b.id))}')" title="ערוך">
+          <button class="btn btn-sm" style="background:rgba(112,42,225,0.08);color:var(--primary);border:1px solid rgba(112,42,225,0.2);padding:4px 8px;" onclick="openEditBroadcast('${escHtml(String(b.id))}')" title="${t('editTitle')}">
             <span class="material-symbols-outlined" style="font-size:15px;line-height:1;">edit</span>
           </button>
           <label class="toggle" title="${b.enabled ? t('enabledLabel') : t('disabledLabel')}">
@@ -2353,7 +2372,7 @@ function renderAliCard(p, originalIdx) {
     : '';
   const scoreBadge = `<div style="position:absolute;top:8px;left:8px;background:${scoreColor};color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;">${score}</div>`;
   const videoBadge = p.product_video_url
-    ? `<div style="position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,0.65);color:#fff;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;display:flex;align-items:center;gap:4px;">🎬 יש וידאו</div>`
+    ? `<div style="position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,0.65);color:#fff;font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;display:flex;align-items:center;gap:4px;">🎬 ${t('videoHasBadge')}</div>`
     : '';
 
   const addBtn = isOwned
@@ -5039,7 +5058,7 @@ async function addSuggestion(btn) {
     if (card) card.style.animation = 'fadeOut 0.3s ease forwards';
     setTimeout(() => card && card.remove(), 320);
   } catch (err) {
-    alert('שגיאה בהוספת מוצר: ' + err.message);
+    alert(t('errAddProduct') + ': ' + err.message);
     btn.disabled = false;
   }
 }
