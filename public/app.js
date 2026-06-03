@@ -1474,6 +1474,25 @@ document.getElementById('chk-select-all-products').addEventListener('change', fu
   document.querySelectorAll('.product-chk').forEach(chk => { chk.checked = this.checked; });
 });
 
+// ── Bulk delete selected products ──────────────────────────────────────────
+document.getElementById('btn-delete-selected').addEventListener('click', async function () {
+  const ids = [...document.querySelectorAll('.product-chk:checked')].map(el => el.dataset.id);
+  if (!ids.length) { alert(t('noProductsSelected')); return; }
+  if (!confirm(t('confirmDeleteSelectedFmt').replace('{n}', ids.length))) return;
+
+  this.disabled = true;
+  try {
+    await api('/api/products/batch', { method: 'DELETE', body: { ids } });
+    const selectAll = document.getElementById('chk-select-all-products');
+    if (selectAll) selectAll.checked = false;
+    await loadProducts();
+  } catch (err) {
+    alert(t('errGeneral') + err.message);
+  } finally {
+    this.disabled = false;
+  }
+});
+
 // ── Bulk AliExpress sync with progress bar ────────────────────────────────
 const _syncUI = {
   panel:    document.getElementById('sync-progress-panel'),
