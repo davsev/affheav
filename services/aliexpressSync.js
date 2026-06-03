@@ -173,7 +173,10 @@ async function syncProduct(dbProductId, userId) {
   const values = [];
   let   idx    = 1;
 
-  if (data.title      != null) { sets.push(`title = $${idx++}`);      values.push(data.title); }
+  if (data.title      != null) {
+    sets.push(`title = $${idx++}`); values.push(data.title);
+    sets.push(`text = $${idx++}`);  values.push(data.title);
+  }
   if (data.image      != null) { sets.push(`image = $${idx++}`);      values.push(data.image); }
   if (data.sale_price != null) { sets.push(`sale_price = $${idx++}`); values.push(data.sale_price); }
   if (data.video_url  != null) {
