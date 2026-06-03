@@ -7,7 +7,7 @@ const DEFAULT_TRACKING_ID = process.env.ALIEXPRESS_TRACKING_ID || 'TechSalebuy';
 
 const SCRAPE_HEADERS = {
   'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept-Language': 'en-US,en;q=0.9',
+  'Accept-Language': 'he,en;q=0.9',
   'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 };
 
@@ -15,6 +15,12 @@ function notFound() {
   const e = new Error('Product not found (404)');
   e.code  = 'NOT_FOUND';
   return e;
+}
+
+// Strip the trailing " - AliExpress[ NN]" suffix AliExpress appends to page titles.
+function cleanTitle(title) {
+  if (!title) return title;
+  return title.replace(/\s*[-–|]\s*ali\s*express\b.*$/i, '').trim() || null;
 }
 
 function extractProductId(url) {
@@ -55,7 +61,7 @@ async function fetchViaApi(productId, trackingId) {
 
   const p = products[0];
   return {
-    title:      p.product_title              || null,
+    title:      cleanTitle(p.product_title)  || null,
     image:      p.product_main_image_url     || null,
     sale_price: parseFloat(p.app_sale_price) || null,
     video_url:  p.product_video_url          || null,
@@ -96,7 +102,7 @@ async function fetchViaScraper(url) {
       for (const entry of entries) {
         if (entry['@type'] === 'Product' && entry.name) {
           return {
-            title:      entry.name || null,
+            title:      cleanTitle(entry.name) || null,
             image:      (Array.isArray(entry.image) ? entry.image[0] : entry.image) || null,
             sale_price: entry.offers?.price ? parseFloat(entry.offers.price) : null,
             video_url:  extractVideoUrl(html),
@@ -114,12 +120,12 @@ async function fetchViaScraper(url) {
       const title    = state?.data?.titleModule?.subject || state?.titleModule?.subject;
       const image    = state?.data?.imageModule?.imagePathList?.[0] || state?.imageModule?.imagePathList?.[0];
       const videoUrl = state?.data?.videoModule?.videoUrl || state?.videoModule?.videoUrl || extractVideoUrl(html) || null;
-      if (title || image) return { title: title || null, image: image || null, sale_price: null, video_url: videoUrl };
+      if (title || image) return { title: cleanTitle(title) || null, image: image || null, sale_price: null, video_url: videoUrl };
     } catch { /* fall through */ }
   }
 
   // Tier 3: og meta tags
-  const title = $('meta[property="og:title"]').attr('content') || $('title').text() || null;
+  const title = cleanTitle($('meta[property="og:title"]').attr('content') || $('title').text() || null);
   const image = $('meta[property="og:image"]').attr('content') || null;
   return { title, image, sale_price: null, video_url: extractVideoUrl(html) };
 }
