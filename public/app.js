@@ -1285,19 +1285,22 @@ window.syncProductData = async (id, btn) => {
   const orig = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;animation:spin 1s linear infinite;">sync</span>';
+  // DEBUG v2 — raw fetch so alert fires even on 4xx/5xx
   try {
-    const res = await api(`/api/aliexpress/sync/${id}`, { method: 'POST' });
-    // DEBUG — remove after diagnosis
-    alert('Sync result:\n' + JSON.stringify(res, null, 2));
-    if (res.not_found) {
+    const rawRes = await fetch(`/api/aliexpress/sync/${id}`, { method: 'POST' });
+    const res = await rawRes.json().catch(() => ({}));
+    alert(`HTTP ${rawRes.status}\n` + JSON.stringify(res, null, 2));
+    if (!rawRes.ok) {
+      btn.innerHTML = '<span style="font-size:12px;color:#f87171;">✗</span>';
+    } else if (res.not_found) {
       btn.innerHTML = `<span style="font-size:11px;color:#f87171;" title="${t('notFoundOnAli')}">⚠ 404</span>`;
     } else {
       btn.innerHTML = '<span style="font-size:12px;color:#4ade80;">✓</span>';
     }
     await loadProducts();
   } catch (err) {
+    alert('Fetch error: ' + err.message);
     btn.innerHTML = '<span style="font-size:12px;color:#f87171;">✗</span>';
-    console.error('Sync failed:', err.message);
   }
   setTimeout(() => { btn.disabled = false; btn.innerHTML = orig; }, 2500);
 };
