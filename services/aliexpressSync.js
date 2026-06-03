@@ -133,7 +133,7 @@ async function fetchViaScraper(url) {
 // Returns { data } on success, { deleted: true } if the product was 404'd and removed.
 async function syncProduct(dbProductId, userId) {
   const { rows } = await query(
-    `SELECT p.id, p.long_url, s.aliexpress_tracking_id
+    `SELECT p.id, p.long_url, p.short_link, s.aliexpress_tracking_id
      FROM products p
      LEFT JOIN subjects s ON s.id = p.subject_id
      WHERE p.id = $1 AND p.user_id = $2`,
@@ -143,13 +143,16 @@ async function syncProduct(dbProductId, userId) {
 
   const product    = rows[0];
   const trackingId = product.aliexpress_tracking_id || DEFAULT_TRACKING_ID;
-  if (!product.long_url) throw new Error('Product has no URL');
+  const rawUrl     = product.long_url || product.short_link;
+  if (!rawUrl) throw new Error('Product has no URL');
 
-  const { finalUrl, status } = await resolveUrl(product.long_url);
+  const { finalUrl, status } = await resolveUrl(rawUrl);
 
   if (status === 404) return { not_found: true };
 
-  const productId = extractProductId(finalUrl);
+  // Try to extract product ID from both the resolved URL and the original URL.
+  // Some affiliate links only reveal the product ID after redirect resolution.
+  const productId = extractProductId(finalUrl) || extractProductId(rawUrl);
   let data = null;
 
   if (productId) {
@@ -173,6 +176,17 @@ async function syncProduct(dbProductId, userId) {
     } catch { /* fill-in is non-fatal */ }
   }
 
+  // If we still have no title/image, try a clean direct product URL as last resort.
+  // The resolved URL may have hit a bot-check page; the canonical item URL often doesn't.
+  if (productId && data && !data.title && !data.image) {
+    try {
+      const direct = await fetchViaScraper(`https://www.aliexpress.com/item/${productId}.html`);
+      if (direct?.title) data.title = direct.title;
+      if (direct?.image) data.image = direct.image;
+      if (direct?.video_url) data.video_url = direct.video_url;
+    } catch { /* ignore */ }
+  }
+
   if (!data) throw new Error('Could not fetch product data');
 
   const sets   = [];
@@ -191,7 +205,8 @@ async function syncProduct(dbProductId, userId) {
     if (data.video_url) sets.push(`use_video = true`); // auto-enable when a video is found
   }
 
-  if (!sets.length) throw new Error('No product data returned');
+  // If nothing was fetched, return no_data instead of throwing a 500.
+  if (!sets.length) return { data: {}, no_data: true };
 
   sets.push('updated_at = NOW()');
   await query(
