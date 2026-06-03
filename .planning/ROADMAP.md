@@ -33,7 +33,16 @@ Nine phases decompose the Node.js/Express monolith into independently deployable
   3. GitHub Actions CI runs `tsc --noEmit`, Vitest, and ESLint on every PR; a PR with a non-Conventional Commits title fails CI
   4. A new service added to the monorepo can import from `packages/types` and `packages/config` without path resolution errors in both `ts-node` and the Docker build context
   5. `RUN_MIGRATIONS=true` gate is enforced — Drizzle migrations do not auto-run on service startup; a migration can be reviewed and applied manually in under 5 minutes
-**Plans**: TBD
+**Plans**: 8 plans
+Plans:
+- [ ] 11-01-PLAN.md — Vite+React+Mantine scaffold, auth store, axios interceptors, i18n init
+- [ ] 11-02-PLAN.md — Architecture doc + full component catalog
+- [ ] 11-03-PLAN.md — Complete he.json / en.json locale files from strings.js migration
+- [ ] 11-04-PLAN.md — App shell: AppShell, Sidebar, Topbar, SubjectPillBar, tab router
+- [ ] 11-05-PLAN.md — Shared design system: KpiCard, StatusBadge, CronBuilder, 5 modals, SseLogViewer
+- [ ] 11-06-PLAN.md — Core pages: Dashboard, Products, Schedules, Logs
+- [ ] 11-07-PLAN.md — Secondary pages: Scraper, AddProduct, AliExpressSearch, Discover, Analytics
+- [ ] 11-08-PLAN.md — Admin pages: Settings, Credentials, Users, FeatureFlags
 
 ### Phase 5: API Gateway + Feature Flag System
 **Goal**: All API traffic flows through the gateway; feature flags stored in DB allow the gateway to switch any route from monolith to microservice without redeployment
@@ -60,7 +69,16 @@ Plans:
   2. JWT key rotation (new signing key with new `kid`) does not log out any active user — tokens signed with the old `kid` continue to validate against the key registry during the overlap window
   3. The monolith's `isAuthenticated` middleware accepts a valid JWT Bearer token with the same access as a session cookie — an authenticated API call succeeds with either credential for at least 30 days after Phase 6 ships
   4. Admin can generate an invite link; an invited user follows the link, authenticates via Google OAuth, and receives an account with the `user` role
-**Plans**: TBD
+**Plans**: 8 plans
+Plans:
+- [ ] 11-01-PLAN.md — Vite+React+Mantine scaffold, auth store, axios interceptors, i18n init
+- [ ] 11-02-PLAN.md — Architecture doc + full component catalog
+- [ ] 11-03-PLAN.md — Complete he.json / en.json locale files from strings.js migration
+- [ ] 11-04-PLAN.md — App shell: AppShell, Sidebar, Topbar, SubjectPillBar, tab router
+- [ ] 11-05-PLAN.md — Shared design system: KpiCard, StatusBadge, CronBuilder, 5 modals, SseLogViewer
+- [ ] 11-06-PLAN.md — Core pages: Dashboard, Products, Schedules, Logs
+- [ ] 11-07-PLAN.md — Secondary pages: Scraper, AddProduct, AliExpressSearch, Discover, Analytics
+- [ ] 11-08-PLAN.md — Admin pages: Settings, Credentials, Users, FeatureFlags
 
 ### Phase 7: User Service + Permissions + Credential Storage
 **Goal**: User accounts, roles, and per-user platform credentials are managed by the user service; credentials are encrypted at rest and never returned to the client in plaintext
@@ -72,7 +90,16 @@ Plans:
   3. Super admin can create a named custom role with per-resource read/write/delete permissions, assign it to a user, and the affected user's next request is governed by the new permissions without a re-login
   4. A request that would be rejected by the assigned role returns `403 Forbidden` from the service layer — not from client-side role claims
   5. All tables in the redesigned Drizzle schema have `id UUID`, `created_at TIMESTAMPTZ`, `updated_at TIMESTAMPTZ`, and explicit FK constraints; Google Sheets is no longer queried as a data source
-**Plans**: TBD
+**Plans**: 8 plans
+Plans:
+- [ ] 11-01-PLAN.md — Vite+React+Mantine scaffold, auth store, axios interceptors, i18n init
+- [ ] 11-02-PLAN.md — Architecture doc + full component catalog
+- [ ] 11-03-PLAN.md — Complete he.json / en.json locale files from strings.js migration
+- [ ] 11-04-PLAN.md — App shell: AppShell, Sidebar, Topbar, SubjectPillBar, tab router
+- [ ] 11-05-PLAN.md — Shared design system: KpiCard, StatusBadge, CronBuilder, 5 modals, SseLogViewer
+- [ ] 11-06-PLAN.md — Core pages: Dashboard, Products, Schedules, Logs
+- [ ] 11-07-PLAN.md — Secondary pages: Scraper, AddProduct, AliExpressSearch, Discover, Analytics
+- [ ] 11-08-PLAN.md — Admin pages: Settings, Credentials, Users, FeatureFlags
 
 ### Phase 8: Subjects + Products Services
 **Goal**: Users can manage niches and products through their own extracted services; each is gated behind a feature flag and falls back to the monolith when disabled
@@ -83,7 +110,16 @@ Plans:
   2. User can create, read, update, and delete products scoped to a subject; each product tracks `sent_at` timestamp and `is_sent` flag
   3. User can trigger an AliExpress affiliate API import using their stored AliExpress credentials; imported products appear in the products list with affiliate URLs populated
   4. Toggling the `subjects-service` feature flag off routes subjects traffic back to the monolith with no data loss; toggling the `products-service` flag off has the same behavior independently
-**Plans**: TBD
+**Plans**: 8 plans
+Plans:
+- [ ] 11-01-PLAN.md — Vite+React+Mantine scaffold, auth store, axios interceptors, i18n init
+- [ ] 11-02-PLAN.md — Architecture doc + full component catalog
+- [ ] 11-03-PLAN.md — Complete he.json / en.json locale files from strings.js migration
+- [ ] 11-04-PLAN.md — App shell: AppShell, Sidebar, Topbar, SubjectPillBar, tab router
+- [ ] 11-05-PLAN.md — Shared design system: KpiCard, StatusBadge, CronBuilder, 5 modals, SseLogViewer
+- [ ] 11-06-PLAN.md — Core pages: Dashboard, Products, Schedules, Logs
+- [ ] 11-07-PLAN.md — Secondary pages: Scraper, AddProduct, AliExpressSearch, Discover, Analytics
+- [ ] 11-08-PLAN.md — Admin pages: Settings, Credentials, Users, FeatureFlags
 
 ### Phase 9: AI Writer + Channels Services
 **Goal**: AI-generated Hebrew messages are produced by the AI writer service; WhatsApp, Facebook, and Instagram sends are handled by the channels service with circuit breakers preventing cross-platform failure propagation
@@ -95,7 +131,16 @@ Plans:
   3. A Facebook send succeeds via Graph API using the user's stored (decrypted) Facebook credentials; an Instagram publish completes the two-phase container-then-publish flow without blocking any BullMQ worker slot
   4. Failure on one channel (e.g. Facebook circuit breaker open) does not block or skip delivery to the remaining channels (WhatsApp, Instagram) in the same broadcast job
   5. A channel adapter that fails 3 times with exponential backoff moves the job to the dead letter queue; the other channels in that job are not retried unnecessarily
-**Plans**: TBD
+**Plans**: 8 plans
+Plans:
+- [ ] 11-01-PLAN.md — Vite+React+Mantine scaffold, auth store, axios interceptors, i18n init
+- [ ] 11-02-PLAN.md — Architecture doc + full component catalog
+- [ ] 11-03-PLAN.md — Complete he.json / en.json locale files from strings.js migration
+- [ ] 11-04-PLAN.md — App shell: AppShell, Sidebar, Topbar, SubjectPillBar, tab router
+- [ ] 11-05-PLAN.md — Shared design system: KpiCard, StatusBadge, CronBuilder, 5 modals, SseLogViewer
+- [ ] 11-06-PLAN.md — Core pages: Dashboard, Products, Schedules, Logs
+- [ ] 11-07-PLAN.md — Secondary pages: Scraper, AddProduct, AliExpressSearch, Discover, Analytics
+- [ ] 11-08-PLAN.md — Admin pages: Settings, Credentials, Users, FeatureFlags
 
 ### Phase 10: Scheduler + Broadcaster Services
 **Goal**: Cron schedules trigger BullMQ jobs that the broadcaster consumes to run the full pipeline — with idempotency guards preventing duplicate sends even on retry
@@ -107,7 +152,16 @@ Plans:
   3. The broadcaster checks the DB `is_sent` flag before each platform API call — if already sent, the call is skipped without error (idempotency guard holds on retry)
   4. Each broadcast result is written to the logs table with per-channel `success` / `fail` status and error message if applicable
   5. Exhausted jobs (retries exceeded) appear in the dead letter queue and are retrievable by the admin for inspection; they do not silently disappear
-**Plans**: TBD
+**Plans**: 8 plans
+Plans:
+- [ ] 11-01-PLAN.md — Vite+React+Mantine scaffold, auth store, axios interceptors, i18n init
+- [ ] 11-02-PLAN.md — Architecture doc + full component catalog
+- [ ] 11-03-PLAN.md — Complete he.json / en.json locale files from strings.js migration
+- [ ] 11-04-PLAN.md — App shell: AppShell, Sidebar, Topbar, SubjectPillBar, tab router
+- [ ] 11-05-PLAN.md — Shared design system: KpiCard, StatusBadge, CronBuilder, 5 modals, SseLogViewer
+- [ ] 11-06-PLAN.md — Core pages: Dashboard, Products, Schedules, Logs
+- [ ] 11-07-PLAN.md — Secondary pages: Scraper, AddProduct, AliExpressSearch, Discover, Analytics
+- [ ] 11-08-PLAN.md — Admin pages: Settings, Credentials, Users, FeatureFlags
 
 ### Phase 11: Frontend Rebuild + i18n
 **Goal**: The React + Mantine frontend replaces the vanilla JS SPA — all dashboard sections are rebuilt with Hebrew RTL dark theme and full i18n support; the frontend authenticates via JWT, not session cookie
@@ -120,7 +174,16 @@ Plans:
   4. Credential connection screens exist for Facebook, Instagram, AliExpress, and WhatsApp — connecting a credential shows `connected: true`; disconnecting shows `connected: false`
   5. Super admin can view the Feature Flags screen, toggle any flag on or off, and observe immediate routing behavior change without page reload or server restart
   6. User can switch display language between Hebrew and English from profile settings; all UI strings come from `locales/he.json` or `locales/en.json` — no hardcoded text in components
-**Plans**: TBD
+**Plans**: 8 plans
+Plans:
+- [ ] 11-01-PLAN.md — Vite+React+Mantine scaffold, auth store, axios interceptors, i18n init
+- [ ] 11-02-PLAN.md — Architecture doc + full component catalog
+- [ ] 11-03-PLAN.md — Complete he.json / en.json locale files from strings.js migration
+- [ ] 11-04-PLAN.md — App shell: AppShell, Sidebar, Topbar, SubjectPillBar, tab router
+- [ ] 11-05-PLAN.md — Shared design system: KpiCard, StatusBadge, CronBuilder, 5 modals, SseLogViewer
+- [ ] 11-06-PLAN.md — Core pages: Dashboard, Products, Schedules, Logs
+- [ ] 11-07-PLAN.md — Secondary pages: Scraper, AddProduct, AliExpressSearch, Discover, Analytics
+- [ ] 11-08-PLAN.md — Admin pages: Settings, Credentials, Users, FeatureFlags
 
 ### Phase 12: E2E & Visual Regression Testing
 **Goal**: Critical user flows are covered by Playwright E2E tests; visual snapshots baseline the stable UI and block regressions on merge to `main`
@@ -133,7 +196,16 @@ Plans:
   4. Feature flag tests run each critical flow in both states: flag on (new microservice path) and flag off (monolith fallback path) — both must pass
   5. `CI-04` Playwright suite runs automatically on merge to `main` via GitHub Actions; a failure blocks the merge
 
-**Plans**: TBD
+**Plans**: 8 plans
+Plans:
+- [ ] 11-01-PLAN.md — Vite+React+Mantine scaffold, auth store, axios interceptors, i18n init
+- [ ] 11-02-PLAN.md — Architecture doc + full component catalog
+- [ ] 11-03-PLAN.md — Complete he.json / en.json locale files from strings.js migration
+- [ ] 11-04-PLAN.md — App shell: AppShell, Sidebar, Topbar, SubjectPillBar, tab router
+- [ ] 11-05-PLAN.md — Shared design system: KpiCard, StatusBadge, CronBuilder, 5 modals, SseLogViewer
+- [ ] 11-06-PLAN.md — Core pages: Dashboard, Products, Schedules, Logs
+- [ ] 11-07-PLAN.md — Secondary pages: Scraper, AddProduct, AliExpressSearch, Discover, Analytics
+- [ ] 11-08-PLAN.md — Admin pages: Settings, Credentials, Users, FeatureFlags
 
 ## Progress
 
@@ -149,5 +221,5 @@ Phases execute in numeric order: 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 �
 | 8. Subjects + Products Services | 0/? | Not started | - |
 | 9. AI Writer + Channels Services | 0/? | Not started | - |
 | 10. Scheduler + Broadcaster Services | 0/? | Not started | - |
-| 11. Frontend Rebuild + i18n | 0/? | Not started | - |
+| 11. Frontend Rebuild + i18n | 3/8 | In Progress|  |
 | 12. E2E & Visual Regression Testing | 0/? | Not started | - |
