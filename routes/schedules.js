@@ -6,7 +6,11 @@ router.get('/', async (req, res) => {
   try {
     const { query } = require('../db');
     const { rows } = await query(
-      'SELECT * FROM schedules WHERE user_id = $1 ORDER BY created_at ASC',
+      `SELECT sch.*, COALESCE(sub.timezone, sch.timezone, 'UTC') AS effective_timezone
+       FROM schedules sch
+       LEFT JOIN subjects sub ON sub.id = sch.subject_id
+       WHERE sch.user_id = $1
+       ORDER BY sch.created_at ASC`,
       [req.user.id]
     );
     const activeJobs = scheduler.getActiveJobs();
@@ -14,7 +18,7 @@ router.get('/', async (req, res) => {
       id:       s.id,
       label:    s.label,
       cron:     s.cron,
-      timezone: s.timezone || 'UTC',
+      timezone: s.effective_timezone,
       enabled:  s.enabled,
       subject:  s.subject_id || '',
       active:   s.enabled && !!activeJobs[s.id],
