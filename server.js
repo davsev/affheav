@@ -326,7 +326,14 @@ const PORT = process.env.PORT || 4562;
 app.listen(PORT, async () => {
   console.log(`\n🎯 Affiliate Heaven running at http://localhost:${PORT}\n`);
   if (process.env.DATABASE_URL) {
-    await migrate().catch(err => console.error('[db] Migration failed:', err.message));
+    await migrate().catch(err => console.error('[db] Migration failed:', err.stack || err.message));
+    // Belt-and-suspenders: ensure the subjects.timezone column exists even if the
+    // main migration was interrupted before reaching that step on a previous deploy.
+    try {
+      await dbQuery(`ALTER TABLE subjects ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) NOT NULL DEFAULT 'Asia/Jerusalem'`);
+    } catch (err) {
+      console.warn('[db] Could not ensure subjects.timezone column:', err.message);
+    }
   } else {
     console.warn('[db] DATABASE_URL not set — skipping DB migration');
   }

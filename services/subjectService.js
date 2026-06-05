@@ -135,8 +135,8 @@ async function updateSubject(id, userId, fields) {
         'UPDATE subjects SET timezone = $1 WHERE id = $2 AND user_id = $3',
         [fields.timezone, id, userId]
       );
-    } catch (_) {
-      // subjects.timezone column not yet migrated — skip silently
+    } catch (err) {
+      console.warn('[subjects] timezone save failed:', err.message);
     }
   }
 
