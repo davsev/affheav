@@ -130,15 +130,21 @@ async function startAll() {
 }
 
 async function runJob(s) {
-  log(`Firing job: "${s.label}" (${s.cron})`);
+  // Use a scoped logger so entries carry userId/subjectId and appear in the SSE panel
+  const scope = { userId: s.user_id, subjectId: s.subject_id || null };
+  const jobLog = (msg, level = 'info') => {
+    if (_log) _log(`[scheduler] ${msg}`, level, scope);
+    else console.log(`[scheduler] [${level}] ${msg}`);
+  };
+  jobLog(`Firing job: "${s.label}" (${s.cron})`);
   if (_runWorkflow) {
     try {
       await _runWorkflow({ userId: s.user_id, subject: s.subject_id || undefined });
     } catch (err) {
-      log(`Workflow error in job "${s.label}": ${err.message}`, 'error');
+      jobLog(`Workflow error in job "${s.label}": ${err.message}`, 'error');
     }
   } else {
-    log('No workflow runner registered — job skipped', 'warn');
+    jobLog('No workflow runner registered — job skipped', 'warn');
   }
 }
 
