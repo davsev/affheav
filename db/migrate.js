@@ -135,6 +135,13 @@ async function migrate() {
     )
   `);
   await query(`ALTER TABLE schedules ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) NOT NULL DEFAULT 'UTC'`);
+  // One-time fix: schedules created before timezone support was added (2026-05-27) had their
+  // timezone column back-filled as 'UTC' by the migration, but they were always intended to run
+  // in Asia/Jerusalem (the previously hardcoded timezone). Restore the original intent.
+  await query(`
+    UPDATE schedules SET timezone = 'Asia/Jerusalem'
+    WHERE timezone = 'UTC' AND created_at < '2026-05-27T00:00:00Z'
+  `);
 
   // ── Settings (per-user key-value) ─────────────────────────────────────────
   await query(`
@@ -183,6 +190,11 @@ async function migrate() {
   await query(`CREATE INDEX IF NOT EXISTS bcast_subject_id ON broadcast_messages(subject_id)`);
   await query(`ALTER TABLE broadcast_messages ADD COLUMN IF NOT EXISTS send_facebook BOOLEAN NOT NULL DEFAULT true`);
   await query(`ALTER TABLE broadcast_messages ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) NOT NULL DEFAULT 'UTC'`);
+  // Same one-time fix for broadcasts created before timezone support.
+  await query(`
+    UPDATE broadcast_messages SET timezone = 'Asia/Jerusalem'
+    WHERE timezone = 'UTC' AND created_at < '2026-05-27T00:00:00Z'
+  `);
 
   // ── Commission Snapshots (AliExpress affiliate orders) ───────────────────────
   await query(`
