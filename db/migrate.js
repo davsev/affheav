@@ -81,6 +81,7 @@ async function migrate() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS wa_groups_subject_id ON whatsapp_groups(subject_id)`);
   await query(`ALTER TABLE subjects ADD COLUMN IF NOT EXISTS aliexpress_tracking_id TEXT`);
+  await query(`ALTER TABLE subjects ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) NOT NULL DEFAULT 'Asia/Jerusalem'`);
 
   // ── Products ──────────────────────────────────────────────────────────────
   await query(`

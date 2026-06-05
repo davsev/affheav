@@ -2,6 +2,7 @@ import { api, escHtml, fmtDate }  from './utils.js';
 import { init as initScheduleModal, resetCronBuilder } from './schedule-modal.js';
 import { initBroadcastModal } from './broadcast-modal.js';
 import { t, initLang, setLang, getLang, applyTranslations } from './i18n/index.js';
+import { populateTimezoneSelect } from './timezones.js';
 
 // ── Sidebar mobile toggle ─────────────────────────────────────────────────────
 function toggleSidebar() {
@@ -751,6 +752,16 @@ function renderActiveNicheCard() {
                   </div>
                 </div>
               </details>
+
+              <!-- Schedule Timezone -->
+              <div style="margin-top:24px;padding:16px;background:var(--surface-low);border-radius:1rem;border:1px solid var(--outline-var);">
+                <div class="niche-field-label" style="margin-bottom:10px;">
+                  <span class="material-symbols-outlined">schedule</span>
+                  אזור זמן לתזמונים
+                </div>
+                <select class="form-input" id="niche-timezone-${s.id}" style="max-width:280px;"></select>
+                <div class="form-hint" style="margin-top:6px;">השעה בטפסי התזמונים תתפרש לפי אזור זמן זה</div>
+              </div>
             </div>
           </div>
 
@@ -770,6 +781,8 @@ function renderActiveNicheCard() {
   // Load WA groups for this niche after rendering
   loadAndRenderWaGroups(s.id);
   loadWaServiceGroupsIntoSelect(`niche-wa-group-${s.id}`, null, null, s.waGroup || '');
+  const tzSel = document.getElementById(`niche-timezone-${s.id}`);
+  if (tzSel) populateTimezoneSelect(tzSel, s.timezone || 'Asia/Jerusalem');
   attachNicheAutoSave(s.id);
 }
 
@@ -938,6 +951,7 @@ window.saveNiche = async (id) => {
         instagramAccountId:      document.getElementById(`niche-ig-account-${id}`)?.value.trim() || '',
         aliexpressTrackingId:    document.getElementById(`niche-ali-tracking-${id}`)?.value.trim() || '',
         waGroup:                 document.getElementById(`niche-wa-group-${id}`)?.value || '',
+        timezone:                document.getElementById(`niche-timezone-${id}`)?.value || 'Asia/Jerusalem',
       },
     });
     if (result) { result.style.color = '#16a34a'; result.textContent = t('savedOk'); }
@@ -1658,7 +1672,7 @@ async function loadSchedules() {
         </div>
         <div class="schedule-actions">
           <button class="btn btn-sm" style="background:rgba(22,163,74,0.12);color:#16a34a;border:1px solid rgba(22,163,74,0.2);font-size:13px;padding:4px 10px;" onclick="fireScheduleNow('${s.id}')" title="הרץ עכשיו">▶</button>
-          <button class="btn btn-sm" style="background:rgba(112,42,225,0.08);color:var(--primary);border:1px solid rgba(112,42,225,0.2);padding:4px 8px;" onclick="openEditSchedule('${s.id}', ${JSON.stringify(s.label)}, ${JSON.stringify(s.cron)}, ${JSON.stringify(s.timezone || 'UTC')})" title="ערוך">
+          <button class="btn btn-sm" style="background:rgba(112,42,225,0.08);color:var(--primary);border:1px solid rgba(112,42,225,0.2);padding:4px 8px;" onclick="openEditSchedule('${s.id}', ${JSON.stringify(s.label)}, ${JSON.stringify(s.cron)})" title="ערוך">
             <span class="material-symbols-outlined" style="font-size:15px;line-height:1;">edit</span>
           </button>
           <label class="toggle" title="${s.enabled ? t('enabledLabel') : t('disabledLabel')}">
@@ -1725,10 +1739,9 @@ document.getElementById('btn-add-schedule').addEventListener('click', async () =
   const label    = document.getElementById('sched-label').value.trim();
   const cron     = document.getElementById('sched-cron').value.trim();
   const subject  = document.getElementById('sched-subject').value;
-  const timezone = document.getElementById('sched-timezone')?.value || 'UTC';
   if (!label || !cron) return alert(t('scheduleRequired'));
   try {
-    await api('/api/schedules', { method: 'POST', body: { label, cron, subject, timezone } });
+    await api('/api/schedules', { method: 'POST', body: { label, cron, subject } });
     document.getElementById('sched-label').value = '';
     document.getElementById('sched-subject').value = '';
     resetCronBuilder();

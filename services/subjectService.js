@@ -23,6 +23,7 @@ function _row(r) {
     instagramEnabled:      r.instagram_enabled,
     aliexpressTrackingId:  r.aliexpress_tracking_id || '',
     waProvider:            r.wa_provider || 'macrodroid',
+    timezone:              r.timezone || 'Asia/Jerusalem',
     createdAt:             r.created_at,
     updatedAt:             r.updated_at,
   };
@@ -100,6 +101,7 @@ async function updateSubject(id, userId, fields) {
     aliexpressTrackingId:   'aliexpress_tracking_id',
     waGroup:                'wa_group',
     waProvider:             'wa_provider',
+    timezone:               'timezone',
   };
 
   const updates = [];
