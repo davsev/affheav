@@ -1914,6 +1914,52 @@ document.getElementById('btn-scrape').addEventListener('click', async (btn) => {
 });
 
 // ── Add Product ───────────────────────────────────────────────────────────────
+
+// Show "Fetch Details" button whenever the link field contains an AliExpress URL
+document.getElementById('new-link').addEventListener('input', () => {
+  const val = document.getElementById('new-link').value.trim();
+  const isAli = val.includes('aliexpress.com') || val.includes('s.click.aliexpress');
+  document.getElementById('btn-fetch-product-data').style.display = isAli ? '' : 'none';
+  if (!isAli) document.getElementById('fetch-product-preview').style.display = 'none';
+});
+
+document.getElementById('btn-fetch-product-data').addEventListener('click', async () => {
+  const url     = document.getElementById('new-link').value.trim();
+  const subject = document.getElementById('new-subject').value;
+  const btn     = document.getElementById('btn-fetch-product-data');
+  const result  = document.getElementById('add-product-result');
+  const preview = document.getElementById('fetch-product-preview');
+
+  btn.disabled   = true;
+  btn.innerHTML  = '<span class="material-symbols-outlined" style="font-size:15px;animation:spin 1s linear infinite;">progress_activity</span>שולף...';
+  result.textContent = '';
+  preview.style.display = 'none';
+
+  try {
+    const data = await api('/api/aliexpress/fetch-by-url', {
+      method: 'POST',
+      body: { url, subjectId: subject || undefined },
+    });
+
+    if (data.data?.title) document.getElementById('new-text').value  = data.data.title;
+    if (data.data?.image) document.getElementById('new-image').value = data.data.image;
+
+    document.getElementById('fetch-preview-img').src        = data.data?.image || '';
+    document.getElementById('fetch-preview-title').textContent = data.data?.title || '(ללא שם)';
+    document.getElementById('fetch-preview-price').textContent =
+      data.data?.sale_price ? `₪${data.data.sale_price}` : '';
+    preview.style.display = '';
+
+    result.textContent = '';
+  } catch (err) {
+    result.textContent = '✗ שגיאה בשליפת פרטים: ' + err.message;
+    result.style.color = '#dc2626';
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">auto_fix_high</span>שלוף פרטים';
+  }
+});
+
 document.getElementById('btn-add-product').addEventListener('click', async () => {
   const Text     = document.getElementById('new-text').value.trim();
   const Link     = document.getElementById('new-link').value.trim();
@@ -1931,6 +1977,8 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
     result.textContent = t('productAddedOk');
     result.style.color = '#16a34a';
     ['new-text','new-link','new-image'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('fetch-product-preview').style.display = 'none';
+    document.getElementById('btn-fetch-product-data').style.display = 'none';
   } catch (err) {
     result.textContent = '✗ ' + t('errGeneral') + err.message;
     result.style.color = '#dc2626';

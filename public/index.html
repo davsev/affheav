@@ -561,12 +561,30 @@
         <div class="card-title">פרטי המוצר</div>
         <div class="form-grid">
           <div class="form-group form-full">
-            <label class="form-label">שם מוצר *</label>
-            <input class="form-input" id="new-text" placeholder="Fishing Rod Ultralight 2.7m" />
+            <label class="form-label">קישור מוצר AliExpress *</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input class="form-input" id="new-link" placeholder="https://s.click.aliexpress.com/... או https://www.aliexpress.com/item/..." dir="ltr" style="flex:1;" />
+              <button class="btn btn-ghost btn-sm" id="btn-fetch-product-data" style="white-space:nowrap;display:none;flex-shrink:0;">
+                <span class="material-symbols-outlined" style="font-size:15px;">auto_fix_high</span>שלוף פרטים
+              </button>
+            </div>
+          </div>
+          <!-- Product preview — shown after a successful fetch -->
+          <div id="fetch-product-preview" class="form-full" style="display:none;grid-column:1/-1;background:var(--surface-1);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px;">
+            <div style="display:flex;gap:14px;align-items:flex-start;">
+              <img id="fetch-preview-img" src="" alt="" style="width:80px;height:80px;object-fit:cover;border-radius:8px;flex-shrink:0;background:rgba(255,255,255,0.05);" />
+              <div style="flex:1;min-width:0;">
+                <div id="fetch-preview-title" style="font-size:13px;font-weight:600;color:var(--on-surface);margin-bottom:6px;word-break:break-word;"></div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+                  <span id="fetch-preview-price" style="font-size:13px;color:#16a34a;font-weight:700;"></span>
+                  <span style="font-size:11px;background:rgba(112,42,225,0.12);color:var(--primary);padding:2px 8px;border-radius:20px;font-weight:600;">✓ נשלף מ-AliExpress</span>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="form-group form-full">
-            <label class="form-label">קישור שותף *</label>
-            <input class="form-input" id="new-link" placeholder="https://s.click.aliexpress.com/..." dir="ltr" />
+            <label class="form-label">שם מוצר *</label>
+            <input class="form-input" id="new-text" placeholder="Fishing Rod Ultralight 2.7m" />
           </div>
           <div class="form-group form-full">
             <label class="form-label">קישור תמונה</label>

@@ -237,4 +237,43 @@ async function syncProducts(productIds, userId) {
   return result;
 }
 
-module.exports = { syncProduct, syncProducts, resolveUrl };
+// Fetch product data by URL without saving to DB — used for link-import preview.
+async function fetchProductDataByUrl(url, trackingId = DEFAULT_TRACKING_ID) {
+  const { finalUrl, status } = await resolveUrl(url);
+  if (status === 404) return { not_found: true };
+
+  const productId = extractProductId(finalUrl) || extractProductId(url);
+  let data = null;
+
+  if (productId) {
+    try { data = await fetchViaApi(productId, trackingId); } catch { /* fall through */ }
+  }
+
+  if (!data) {
+    try {
+      data = await fetchViaScraper(finalUrl);
+    } catch (err) {
+      if (err.code === 'NOT_FOUND') return { not_found: true };
+      throw err;
+    }
+  } else if (!data.title || !data.video_url) {
+    try {
+      const scraped = await fetchViaScraper(finalUrl);
+      if (!data.title     && scraped?.title)     data.title     = scraped.title;
+      if (!data.video_url && scraped?.video_url) data.video_url = scraped.video_url;
+    } catch { /* non-fatal */ }
+  }
+
+  if (productId && data && !data.title && !data.image) {
+    try {
+      const direct = await fetchViaScraper(`https://www.aliexpress.com/item/${productId}.html`);
+      if (direct?.title)     data.title     = direct.title;
+      if (direct?.image)     data.image     = direct.image;
+      if (direct?.video_url) data.video_url = direct.video_url;
+    } catch { /* ignore */ }
+  }
+
+  return data ? { data } : { data: null };
+}
+
+module.exports = { syncProduct, syncProducts, resolveUrl, fetchProductDataByUrl };

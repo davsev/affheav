@@ -5,7 +5,7 @@ const workflow = require('../services/workflow');
 const { query } = require('../db');
 const { signAndCall } = require('../services/aliexpressApi');
 const { passesFilters } = require('../services/aliexpressFilters');
-const { syncProduct, syncProducts, resolveUrl } = require('../services/aliexpressSync');
+const { syncProduct, syncProducts, resolveUrl, fetchProductDataByUrl } = require('../services/aliexpressSync');
 
 const DEFAULT_TRACKING_ID = process.env.ALIEXPRESS_TRACKING_ID || 'TechSalebuy';
 
@@ -170,6 +170,36 @@ router.post('/sync/:id', async (req, res) => {
     res.json({ success: true, not_found: false, data: result.data });
   } catch (err) {
     workflow.log(`✗ Sync failed for ${req.params.id}: ${err.message}`, 'error');
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/aliexpress/fetch-by-url — fetch product metadata by URL without saving
+// Body: { url, subjectId? }
+router.post('/fetch-by-url', async (req, res) => {
+  const { url, subjectId } = req.body;
+  if (!url) return res.status(400).json({ success: false, error: 'url is required' });
+
+  try {
+    let trackingId = DEFAULT_TRACKING_ID;
+    if (subjectId) {
+      const { rows } = await query(
+        'SELECT aliexpress_tracking_id FROM subjects WHERE id = $1 AND user_id = $2 LIMIT 1',
+        [subjectId, req.user.id]
+      );
+      if (rows[0]?.aliexpress_tracking_id) trackingId = rows[0].aliexpress_tracking_id;
+    }
+
+    workflow.log(`Fetching AliExpress product data for: ${url.slice(0, 80)}`);
+    const result = await fetchProductDataByUrl(url, trackingId);
+
+    if (result.not_found) return res.json({ success: false, error: 'Product not found (404)' });
+    if (!result.data)     return res.json({ success: false, error: 'Could not fetch product data' });
+
+    workflow.log(`✓ Fetched: ${result.data.title?.slice(0, 60) || '(no title)'}`);
+    res.json({ success: true, data: result.data });
+  } catch (err) {
+    workflow.log(`✗ fetch-by-url error: ${err.message}`, 'error');
     res.status(500).json({ success: false, error: err.message });
   }
 });
