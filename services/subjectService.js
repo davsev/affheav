@@ -101,7 +101,6 @@ async function updateSubject(id, userId, fields) {
     aliexpressTrackingId:   'aliexpress_tracking_id',
     waGroup:                'wa_group',
     waProvider:             'wa_provider',
-    timezone:               'timezone',
   };
 
   const updates = [];
@@ -118,18 +117,30 @@ async function updateSubject(id, userId, fields) {
       values.push(fields[jsKey]);
     }
   }
-  if (updates.length === 0) return getSubjectById(id, userId);
 
-  updates.push(`updated_at = NOW()`);
-  values.push(id, userId);
+  if (updates.length > 0) {
+    updates.push(`updated_at = NOW()`);
+    values.push(id, userId);
+    await query(
+      `UPDATE subjects SET ${updates.join(', ')}
+       WHERE id = $${i} AND user_id = $${i + 1}`,
+      values
+    );
+  }
 
-  const { rows } = await query(
-    `UPDATE subjects SET ${updates.join(', ')}
-     WHERE id = $${i} AND user_id = $${i + 1}
-     RETURNING *`,
-    values
-  );
-  return _row(rows[0]);
+  // Handle timezone separately — column may not exist yet if migration is pending
+  if (fields.timezone !== undefined) {
+    try {
+      await query(
+        'UPDATE subjects SET timezone = $1 WHERE id = $2 AND user_id = $3',
+        [fields.timezone, id, userId]
+      );
+    } catch (_) {
+      // subjects.timezone column not yet migrated — skip silently
+    }
+  }
+
+  return getSubjectById(id, userId);
 }
 
 async function deleteSubject(id, userId) {
