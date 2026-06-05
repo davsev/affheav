@@ -6,19 +6,28 @@ router.get('/', async (req, res) => {
   try {
     const { query } = require('../db');
     const { rows } = await query(
-      `SELECT sch.*, COALESCE(sub.timezone, sch.timezone, 'UTC') AS effective_timezone
-       FROM schedules sch
-       LEFT JOIN subjects sub ON sub.id = sch.subject_id
-       WHERE sch.user_id = $1
-       ORDER BY sch.created_at ASC`,
+      'SELECT * FROM schedules WHERE user_id = $1 ORDER BY created_at ASC',
       [req.user.id]
     );
+
+    // Build subject-timezone map (subjects.timezone may not exist on older deploys)
+    const subjectTz = {};
+    try {
+      const { rows: subs } = await query(
+        'SELECT id, timezone FROM subjects WHERE user_id = $1',
+        [req.user.id]
+      );
+      subs.forEach(s => { subjectTz[s.id] = s.timezone; });
+    } catch (_) {
+      // subjects.timezone column not yet migrated — fall through
+    }
+
     const activeJobs = scheduler.getActiveJobs();
     const schedules = rows.map(s => ({
       id:       s.id,
       label:    s.label,
       cron:     s.cron,
-      timezone: s.effective_timezone,
+      timezone: (s.subject_id && subjectTz[s.subject_id]) || s.timezone || 'UTC',
       enabled:  s.enabled,
       subject:  s.subject_id || '',
       active:   s.enabled && !!activeJobs[s.id],

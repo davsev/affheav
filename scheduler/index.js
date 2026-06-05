@@ -92,16 +92,20 @@ async function runBroadcastJob(b) {
 async function startAll() {
   let schedules = [];
   try {
-    const { rows } = await query(`
-      SELECT sch.*, sub.timezone AS subject_timezone
-      FROM schedules sch
-      LEFT JOIN subjects sub ON sub.id = sch.subject_id
-      WHERE sch.enabled = true
-    `);
+    const { rows } = await query('SELECT * FROM schedules WHERE enabled = true');
     schedules = rows;
   } catch (err) {
     console.warn('[scheduler] Could not load from DB:', err.message);
     return 0;
+  }
+
+  // Build subject-timezone lookup map (subjects.timezone may not exist on older deploys)
+  const subjectTz = {};
+  try {
+    const { rows } = await query('SELECT id, timezone FROM subjects');
+    rows.forEach(r => { subjectTz[r.id] = r.timezone; });
+  } catch (_) {
+    // column doesn't exist yet — fall through to per-schedule timezone
   }
 
   stopAll();
@@ -111,7 +115,7 @@ async function startAll() {
       console.warn(`[scheduler] Invalid cron: "${s.cron}" (id: ${s.id})`);
       continue;
     }
-    const tz = s.subject_timezone || s.timezone || 'UTC';
+    const tz = (s.subject_id && subjectTz[s.subject_id]) || s.timezone || 'UTC';
     activeJobs[s.id] = cron.schedule(s.cron, () => runJob(s), { timezone: tz });
     log(`Registered: "${s.label}" → ${s.cron} (${tz})`);
   }
