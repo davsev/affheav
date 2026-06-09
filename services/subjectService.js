@@ -22,6 +22,7 @@ function _row(r) {
     fbEnabled:           r.fb_enabled,
     instagramEnabled:      r.instagram_enabled,
     aliexpressTrackingId:  r.aliexpress_tracking_id || '',
+    amazonTag:             r.amazon_tag || '',
     waProvider:            r.wa_provider || 'macrodroid',
     timezone:              r.timezone || 'Asia/Jerusalem',
     createdAt:             r.created_at,
@@ -99,6 +100,7 @@ async function updateSubject(id, userId, fields) {
     fbEnabled:              'fb_enabled',
     instagramEnabled:       'instagram_enabled',
     aliexpressTrackingId:   'aliexpress_tracking_id',
+    amazonTag:              'amazon_tag',
     waGroup:                'wa_group',
     waProvider:             'wa_provider',
   };

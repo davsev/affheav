@@ -218,6 +218,12 @@ async function migrate() {
   await query(`CREATE INDEX IF NOT EXISTS commission_snapshots_subject ON commission_snapshots(subject_id)`);
   await query(`CREATE INDEX IF NOT EXISTS commission_snapshots_user    ON commission_snapshots(user_id)`);
 
+  // ── Affiliate provider tag on products ───────────────────────────────────
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS affiliate_provider VARCHAR(50) NOT NULL DEFAULT 'aliexpress'`);
+
+  // ── Amazon associate tag per niche ────────────────────────────────────────
+  await query(`ALTER TABLE subjects ADD COLUMN IF NOT EXISTS amazon_tag TEXT`);
+
   // ── Post IDs on products (for Meta Insights) ─────────────────────────────
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS fb_post_id  TEXT`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS ig_media_id TEXT`);

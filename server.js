@@ -309,6 +309,7 @@ app.use('/api/scrape',    isAuthenticated, require('./routes/scrape'));
 app.use('/api/facebook',      isAuthenticated, require('./routes/facebook'));
 app.use('/api/prompt',        isAuthenticated, require('./routes/prompt'));
 app.use('/api/aliexpress',        isAuthenticated, require('./routes/aliexpress-api'));
+app.use('/api/affiliates',        isAuthenticated, require('./routes/affiliates'));
 app.use('/api/discover',          isAuthenticated, require('./routes/discover'));
 app.use('/api/users',             isAuthenticated, require('./routes/users'));
 app.use('/api/broadcasts',        isAuthenticated, require('./routes/broadcasts'));

@@ -753,6 +753,27 @@ function renderActiveNicheCard() {
                 </div>
               </details>
 
+              <!-- Amazon accordion -->
+              <details class="niche-cred-section">
+                <summary class="niche-cred-summary">
+                  <span class="material-symbols-outlined" style="color:#ff9900;">store</span>
+                  <span>Amazon</span>
+                  ${s.amazonTag
+                    ? `<span class="cred-badge cred-set">${t('credSet')}</span>`
+                    : `<span class="cred-badge" style="background:var(--surface-container);color:var(--on-surface-var);">Optional</span>`}
+                  <span class="material-symbols-outlined niche-cred-chevron">expand_more</span>
+                </summary>
+                <div class="niche-cred-body">
+                  <div class="form-group">
+                    <label class="form-label">Associate Tag</label>
+                    <input class="form-input" type="text" id="niche-amazon-tag-${s.id}"
+                           value="${escHtml(s.amazonTag || '')}"
+                           placeholder="yourstore-20" dir="ltr" style="font-size:13px;" />
+                    <div class="form-hint">Your Amazon Associates tag (e.g. yourstore-20). Added automatically to Amazon product links.</div>
+                  </div>
+                </div>
+              </details>
+
               <!-- Schedule Timezone -->
               <div style="margin-top:24px;padding:16px;background:var(--surface-low);border-radius:1rem;border:1px solid var(--outline-var);">
                 <div class="niche-field-label" style="margin-bottom:10px;">
@@ -950,6 +971,7 @@ window.saveNiche = async (id) => {
         facebookAppSecret:   document.getElementById(`niche-fb-app-secret-${id}`)?.value.trim() || '',
         instagramAccountId:      document.getElementById(`niche-ig-account-${id}`)?.value.trim() || '',
         aliexpressTrackingId:    document.getElementById(`niche-ali-tracking-${id}`)?.value.trim() || '',
+        amazonTag:               document.getElementById(`niche-amazon-tag-${id}`)?.value.trim() || '',
         waGroup:                 document.getElementById(`niche-wa-group-${id}`)?.value || '',
         timezone:                document.getElementById(`niche-timezone-${id}`)?.value || 'Asia/Jerusalem',
       },
@@ -1152,6 +1174,15 @@ function renderProducts(products) {
         const clicksHtml = p.clicks != null
           ? `<span class="product-card-clicks">👁 ${p.clicks} ${t('clicksLabel')}</span>`
           : '';
+        const providerBadgeHtml = (() => {
+          const prov = p.affiliate_provider;
+          if (!prov || prov === 'aliexpress') return '';
+          const labels = { amazon: 'Amazon', manual: '' };
+          const colors = { amazon: '#ff9900', manual: '#6b7280' };
+          const lbl = labels[prov] || prov;
+          if (!lbl) return '';
+          return `<span style="font-size:10px;font-weight:600;color:${colors[prov] || '#6b7280'};background:rgba(255,255,255,0.06);padding:1px 6px;border-radius:10px;">${escHtml(lbl)}</span>`;
+        })();
         const sentBadge = p.sent
           ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>`
           : `<span class="badge badge-unsent">${t('pendingBadge')}</span>`;
@@ -1175,6 +1206,7 @@ function renderProducts(products) {
               ${sentBadge}
               ${sendCountBadge}
               ${clicksHtml}
+              ${providerBadgeHtml}
             </div>
           </div>
           <div class="product-card-footer">
@@ -1915,12 +1947,24 @@ document.getElementById('btn-scrape').addEventListener('click', async (btn) => {
 
 // ── Add Product ───────────────────────────────────────────────────────────────
 
-// Show "Fetch Details" button whenever the link field contains an AliExpress URL
+let _addProductProvider = 'manual';
+
+function _detectProviderLabel(url) {
+  if (!url) return null;
+  if (/aliexpress\.com|s\.click\.aliexpress/i.test(url)) return { id: 'aliexpress', label: 'AliExpress' };
+  if (/amazon\.(com|co\.uk|de|fr|it|es|co\.jp|com\.au|in|ca|com\.br|com\.mx)(\/|$)/i.test(url)) return { id: 'amazon', label: 'Amazon' };
+  return { id: 'manual', label: 'Manual / Other' };
+}
+
+const _providerColors = { aliexpress: '#e4572e', amazon: '#ff9900', manual: '#6b7280' };
+
+// Show "Fetch Details" button for any non-empty URL
 document.getElementById('new-link').addEventListener('input', () => {
   const val = document.getElementById('new-link').value.trim();
-  const isAli = val.includes('aliexpress.com') || val.includes('s.click.aliexpress');
-  document.getElementById('btn-fetch-product-data').style.display = isAli ? '' : 'none';
-  if (!isAli) document.getElementById('fetch-product-preview').style.display = 'none';
+  const detected = val.length > 5 ? _detectProviderLabel(val) : null;
+  _addProductProvider = detected?.id || 'manual';
+  document.getElementById('btn-fetch-product-data').style.display = detected ? '' : 'none';
+  if (!detected) document.getElementById('fetch-product-preview').style.display = 'none';
 });
 
 document.getElementById('btn-fetch-product-data').addEventListener('click', async () => {
@@ -1930,26 +1974,38 @@ document.getElementById('btn-fetch-product-data').addEventListener('click', asyn
   const result  = document.getElementById('add-product-result');
   const preview = document.getElementById('fetch-product-preview');
 
+  const provider = _detectProviderLabel(url) || { id: 'manual', label: 'Manual / Other' };
+  _addProductProvider = provider.id;
+
   btn.disabled   = true;
   btn.innerHTML  = '<span class="material-symbols-outlined" style="font-size:15px;animation:spin 1s linear infinite;">progress_activity</span>שולף...';
   result.textContent = '';
   preview.style.display = 'none';
 
   try {
-    const data = await api('/api/aliexpress/fetch-by-url', {
+    const data = await api(`/api/affiliates/${provider.id}/fetch-by-url`, {
       method: 'POST',
       body: { url, subjectId: subject || undefined },
     });
 
+    const fetchedUrl = data.data?.affiliate_url || url;
     if (data.data?.title) document.getElementById('new-text').value  = data.data.title;
     if (data.data?.image) document.getElementById('new-image').value = data.data.image;
+    if (fetchedUrl !== url) document.getElementById('new-link').value = fetchedUrl;
 
-    document.getElementById('fetch-preview-img').src        = data.data?.image || '';
+    document.getElementById('fetch-preview-img').src           = data.data?.image || '';
     document.getElementById('fetch-preview-title').textContent = data.data?.title || '(ללא שם)';
     document.getElementById('fetch-preview-price').textContent =
       data.data?.sale_price ? `₪${data.data.sale_price}` : '';
-    preview.style.display = '';
 
+    const providerBadgeEl = document.getElementById('fetch-preview-provider');
+    if (providerBadgeEl) {
+      providerBadgeEl.textContent = provider.label;
+      providerBadgeEl.style.color = _providerColors[provider.id] || '#6b7280';
+      providerBadgeEl.style.display = '';
+    }
+
+    preview.style.display = '';
     result.textContent = '';
   } catch (err) {
     result.textContent = '✗ שגיאה בשליפת פרטים: ' + err.message;
@@ -1973,7 +2029,7 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
   if (!Text || !Link) { result.textContent = t('productRequired'); result.style.color='#d97706'; return; }
 
   try {
-    await api('/api/products', { method: 'POST', body: { Link, image, Text, subject, whatsappGroupId } });
+    await api('/api/products', { method: 'POST', body: { Link, image, Text, subject, whatsappGroupId, affiliateProvider: _addProductProvider || 'manual' } });
     result.textContent = t('productAddedOk');
     result.style.color = '#16a34a';
     ['new-text','new-link','new-image'].forEach(id => document.getElementById(id).value = '');

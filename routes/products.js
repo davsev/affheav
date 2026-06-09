@@ -26,8 +26,9 @@ function rowToProduct(r, idx) {
     send_count:      r.send_count     || 0,
     sale_price:      r.sale_price     != null ? parseFloat(r.sale_price) : null,
     commission_rate: r.commission_rate != null ? parseFloat(r.commission_rate) : null,
-    video_url:       r.video_url      || '',
-    use_video:       r.use_video      || false,
+    video_url:         r.video_url         || '',
+    use_video:         r.use_video         || false,
+    affiliate_provider: r.affiliate_provider || 'aliexpress',
   };
 }
 
@@ -61,7 +62,7 @@ router.get('/', async (req, res) => {
 
 // POST /api/products — add new product
 router.post('/', async (req, res) => {
-  const { Link, image, Text, subject, whatsappGroupId } = req.body;
+  const { Link, image, Text, subject, whatsappGroupId, affiliateProvider } = req.body;
   if (!Link || !Text) return res.status(400).json({ success: false, error: 'Link and Text are required' });
   try {
     // Resolve wa_group and join_link from whatsapp_group FK if provided
@@ -81,10 +82,10 @@ router.post('/', async (req, res) => {
     );
     const { rows } = await query(
       `INSERT INTO products
-         (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, whatsapp_group_id, sort_order)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, whatsapp_group_id, sort_order, affiliate_provider)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING *`,
-      [req.user.id, subject || null, Link, shortLink, image || '', Text, join_link, wa_group, resolvedGroupId, maxRow[0].next_order]
+      [req.user.id, subject || null, Link, shortLink, image || '', Text, join_link, wa_group, resolvedGroupId, maxRow[0].next_order, affiliateProvider || 'manual']
     );
     res.json({ success: true, product: rowToProduct(rows[0], 0) });
   } catch (err) {
