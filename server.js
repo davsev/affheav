@@ -336,6 +336,29 @@ app.listen(PORT, async () => {
     } catch (err) {
       console.warn('[db] Could not ensure subjects.timezone column:', err.message);
     }
+
+    // Belt-and-suspenders: ensure affiliate_sources table and related columns exist.
+    try {
+      await dbQuery(`
+        CREATE TABLE IF NOT EXISTS affiliate_sources (
+          id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          name           VARCHAR(255) NOT NULL,
+          domain         VARCHAR(255),
+          link_template  TEXT,
+          affiliate_code TEXT,
+          description    TEXT,
+          created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      await dbQuery(`CREATE INDEX IF NOT EXISTS affiliate_sources_user ON affiliate_sources(user_id)`);
+      await dbQuery(`ALTER TABLE products ADD COLUMN IF NOT EXISTS affiliate_provider VARCHAR(50) NOT NULL DEFAULT 'aliexpress'`);
+      await dbQuery(`ALTER TABLE products ADD COLUMN IF NOT EXISTS affiliate_source_id UUID REFERENCES affiliate_sources(id) ON DELETE SET NULL`);
+      await dbQuery(`ALTER TABLE subjects ADD COLUMN IF NOT EXISTS amazon_tag TEXT`);
+    } catch (err) {
+      console.warn('[db] affiliate_sources safety guard:', err.message);
+    }
   } else {
     console.warn('[db] DATABASE_URL not set — skipping DB migration');
   }
