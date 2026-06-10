@@ -359,6 +359,14 @@ app.listen(PORT, async () => {
     } catch (err) {
       console.warn('[db] affiliate_sources safety guard:', err.message);
     }
+
+    // Belt-and-suspenders: ensure video columns exist on products.
+    try {
+      await dbQuery(`ALTER TABLE products ADD COLUMN IF NOT EXISTS video_url TEXT`);
+      await dbQuery(`ALTER TABLE products ADD COLUMN IF NOT EXISTS use_video BOOLEAN NOT NULL DEFAULT false`);
+    } catch (err) {
+      console.warn('[db] video columns safety guard:', err.message);
+    }
   } else {
     console.warn('[db] DATABASE_URL not set — skipping DB migration');
   }
