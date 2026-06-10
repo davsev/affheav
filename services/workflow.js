@@ -42,54 +42,62 @@ async function getUserSetting(userId, key) {
 }
 
 // Get next unsent product for a user from Postgres
+function _productRow(r) {
+  return {
+    id:                   r.id,
+    long_url:             r.long_url    || '',
+    Link:                 r.short_link  || '',
+    image:                r.image       || '',
+    Text:                 r.text        || '',
+    join_link:            r.join_link   || '',
+    wa_group:             r.wa_group    || '',
+    sent:                 r.sent_at     ? new Date(r.sent_at).toISOString() : '',
+    subject:              r.subject_id  || '',
+    skip_ai:              r.skip_ai     || false,
+    video_url:            r.video_url   || '',
+    use_video:            r.use_video   || false,
+    affiliate_source_name: r.affiliate_source_name || null,
+    affiliate_source_description: r.affiliate_source_description || null,
+  };
+}
+
 async function getNextUnsent({ userId, subject } = {}) {
   let rows;
+  const join = `LEFT JOIN affiliate_sources afs ON afs.id = p.affiliate_source_id`;
+  const cols = `p.*, afs.name AS affiliate_source_name, afs.description AS affiliate_source_description`;
   if (subject) {
     ({ rows } = await query(
-      `SELECT * FROM products
-       WHERE user_id = $1 AND subject_id = $2
-         AND sent_at IS NULL AND short_link IS NOT NULL AND short_link != ''
-       ORDER BY sort_order ASC NULLS LAST, created_at ASC LIMIT 1`,
+      `SELECT ${cols} FROM products p ${join}
+       WHERE p.user_id = $1 AND p.subject_id = $2
+         AND p.sent_at IS NULL AND p.short_link IS NOT NULL AND p.short_link != ''
+       ORDER BY p.sort_order ASC NULLS LAST, p.created_at ASC LIMIT 1`,
       [userId, subject]
     ));
   } else {
     ({ rows } = await query(
-      `SELECT * FROM products
-       WHERE user_id = $1
-         AND sent_at IS NULL AND short_link IS NOT NULL AND short_link != ''
-       ORDER BY sort_order ASC NULLS LAST, created_at ASC LIMIT 1`,
+      `SELECT ${cols} FROM products p ${join}
+       WHERE p.user_id = $1
+         AND p.sent_at IS NULL AND p.short_link IS NOT NULL AND p.short_link != ''
+       ORDER BY p.sort_order ASC NULLS LAST, p.created_at ASC LIMIT 1`,
       [userId]
     ));
   }
-  if (!rows[0]) return null;
-  const r = rows[0];
-  return {
-    id:        r.id,
-    long_url:  r.long_url    || '',
-    Link:      r.short_link  || '',
-    image:     r.image       || '',
-    Text:      r.text        || '',
-    join_link: r.join_link   || '',
-    wa_group:  r.wa_group    || '',
-    sent:      r.sent_at     ? new Date(r.sent_at).toISOString() : '',
-    subject:   r.subject_id  || '',
-    skip_ai:   r.skip_ai     || false,
-    video_url: r.video_url   || '',
-    use_video: r.use_video   || false,
-  };
+  return rows[0] ? _productRow(rows[0]) : null;
 }
 
 // Find oldest-sent product that is still live (not 404) — used as fallback when queue is empty
 async function getFallbackProduct({ userId, subject } = {}) {
   const args = [userId];
-  const subjectClause = subject ? `AND subject_id = $${args.push(subject)}` : '';
+  const subjectClause = subject ? `AND p.subject_id = $${args.push(subject)}` : '';
   const { rows } = await query(
-    `SELECT * FROM products
-     WHERE user_id = $1 ${subjectClause}
-       AND sent_at IS NOT NULL
-       AND short_link IS NOT NULL AND short_link != ''
-       AND long_url   IS NOT NULL AND long_url   != ''
-     ORDER BY sent_at ASC
+    `SELECT p.*, afs.name AS affiliate_source_name, afs.description AS affiliate_source_description
+     FROM products p
+     LEFT JOIN affiliate_sources afs ON afs.id = p.affiliate_source_id
+     WHERE p.user_id = $1 ${subjectClause}
+       AND p.sent_at IS NOT NULL
+       AND p.short_link IS NOT NULL AND p.short_link != ''
+       AND p.long_url   IS NOT NULL AND p.long_url   != ''
+     ORDER BY p.sent_at ASC
      LIMIT 20`,
     args
   );
@@ -101,20 +109,7 @@ async function getFallbackProduct({ userId, subject } = {}) {
       continue;
     }
     log(`Recycling product sent on ${new Date(r.sent_at).toLocaleDateString('he-IL')}: "${(r.text || '').slice(0, 50)}"`);
-    return {
-      id:        r.id,
-      long_url:  r.long_url    || '',
-      Link:      r.short_link  || '',
-      image:     r.image       || '',
-      Text:      r.text        || '',
-      join_link: r.join_link   || '',
-      wa_group:  r.wa_group    || '',
-      sent:      new Date(r.sent_at).toISOString(),
-      subject:   r.subject_id  || '',
-      skip_ai:   r.skip_ai     || false,
-      video_url: r.video_url   || '',
-      use_video: r.use_video   || false,
-    };
+    return { ...r, ..._productRow(r), sent: new Date(r.sent_at).toISOString() };
   }
   return null;
 }
@@ -220,10 +215,12 @@ async function run(overrideProduct = null, { platforms = ['whatsapp', 'facebook'
     }
     log('Generating Hebrew marketing message via OpenAI...');
     message = await openai.generateMessage({
-      Text: product.Text,
-      Link: product.Link,
-      join_link: product.join_link,
+      Text:           product.Text,
+      Link:           product.Link,
+      join_link:      product.join_link,
       promptOverride: subjectConfig?.prompt || null,
+      sourceName:     product.affiliate_source_name        || null,
+      sourceDescription: product.affiliate_source_description || null,
     });
     log(`Message generated (${message.length} chars)`);
     // Save generated message back to DB so resends don't regenerate

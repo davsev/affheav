@@ -28,7 +28,9 @@ function rowToProduct(r, idx) {
     commission_rate: r.commission_rate != null ? parseFloat(r.commission_rate) : null,
     video_url:         r.video_url         || '',
     use_video:         r.use_video         || false,
-    affiliate_provider: r.affiliate_provider || 'aliexpress',
+    affiliate_provider:   r.affiliate_provider   || 'aliexpress',
+    affiliate_source_id:  r.affiliate_source_id  || null,
+    affiliate_source_name: r.affiliate_source_name || null,
   };
 }
 
@@ -36,21 +38,23 @@ function rowToProduct(r, idx) {
 router.get('/', async (req, res) => {
   try {
     const { subject } = req.query;
+    const srcJoin = `LEFT JOIN affiliate_sources afs ON afs.id = p.affiliate_source_id`;
+    const srcCols = `p.*, afs.name AS affiliate_source_name`;
     let rows;
     if (subject) {
       ({ rows } = await query(
-        `SELECT * FROM products
-         WHERE user_id = $1 AND subject_id = $2
-           AND short_link IS NOT NULL AND short_link != ''
-         ORDER BY sort_order ASC NULLS LAST, created_at ASC`,
+        `SELECT ${srcCols} FROM products p ${srcJoin}
+         WHERE p.user_id = $1 AND p.subject_id = $2
+           AND p.short_link IS NOT NULL AND p.short_link != ''
+         ORDER BY p.sort_order ASC NULLS LAST, p.created_at ASC`,
         [req.user.id, subject]
       ));
     } else {
       ({ rows } = await query(
-        `SELECT * FROM products
-         WHERE user_id = $1
-           AND short_link IS NOT NULL AND short_link != ''
-         ORDER BY sort_order ASC NULLS LAST, created_at ASC`,
+        `SELECT ${srcCols} FROM products p ${srcJoin}
+         WHERE p.user_id = $1
+           AND p.short_link IS NOT NULL AND p.short_link != ''
+         ORDER BY p.sort_order ASC NULLS LAST, p.created_at ASC`,
         [req.user.id]
       ));
     }

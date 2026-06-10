@@ -224,6 +224,24 @@ async function migrate() {
   // ── Amazon associate tag per niche ────────────────────────────────────────
   await query(`ALTER TABLE subjects ADD COLUMN IF NOT EXISTS amazon_tag TEXT`);
 
+  // ── Custom affiliate sources ──────────────────────────────────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS affiliate_sources (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name           VARCHAR(255) NOT NULL,
+      domain         VARCHAR(255),
+      link_template  TEXT,
+      affiliate_code TEXT,
+      description    TEXT,
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS affiliate_sources_user ON affiliate_sources(user_id)`);
+  // FK from products to affiliate_sources
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS affiliate_source_id UUID REFERENCES affiliate_sources(id) ON DELETE SET NULL`);
+
   // ── Post IDs on products (for Meta Insights) ─────────────────────────────
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS fb_post_id  TEXT`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS ig_media_id TEXT`);
