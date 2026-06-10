@@ -26,8 +26,11 @@ function rowToProduct(r, idx) {
     send_count:      r.send_count     || 0,
     sale_price:      r.sale_price     != null ? parseFloat(r.sale_price) : null,
     commission_rate: r.commission_rate != null ? parseFloat(r.commission_rate) : null,
-    video_url:       r.video_url      || '',
-    use_video:       r.use_video      || false,
+    video_url:         r.video_url         || '',
+    use_video:         r.use_video         || false,
+    affiliate_provider:   r.affiliate_provider   || 'aliexpress',
+    affiliate_source_id:  r.affiliate_source_id  || null,
+    affiliate_source_name: r.affiliate_source_name || null,
   };
 }
 
@@ -35,21 +38,23 @@ function rowToProduct(r, idx) {
 router.get('/', async (req, res) => {
   try {
     const { subject } = req.query;
+    const srcJoin = `LEFT JOIN affiliate_sources afs ON afs.id = p.affiliate_source_id`;
+    const srcCols = `p.*, afs.name AS affiliate_source_name`;
     let rows;
     if (subject) {
       ({ rows } = await query(
-        `SELECT * FROM products
-         WHERE user_id = $1 AND subject_id = $2
-           AND short_link IS NOT NULL AND short_link != ''
-         ORDER BY sort_order ASC NULLS LAST, created_at ASC`,
+        `SELECT ${srcCols} FROM products p ${srcJoin}
+         WHERE p.user_id = $1 AND p.subject_id = $2
+           AND p.short_link IS NOT NULL AND p.short_link != ''
+         ORDER BY p.sort_order ASC NULLS LAST, p.created_at ASC`,
         [req.user.id, subject]
       ));
     } else {
       ({ rows } = await query(
-        `SELECT * FROM products
-         WHERE user_id = $1
-           AND short_link IS NOT NULL AND short_link != ''
-         ORDER BY sort_order ASC NULLS LAST, created_at ASC`,
+        `SELECT ${srcCols} FROM products p ${srcJoin}
+         WHERE p.user_id = $1
+           AND p.short_link IS NOT NULL AND p.short_link != ''
+         ORDER BY p.sort_order ASC NULLS LAST, p.created_at ASC`,
         [req.user.id]
       ));
     }
@@ -61,7 +66,7 @@ router.get('/', async (req, res) => {
 
 // POST /api/products — add new product
 router.post('/', async (req, res) => {
-  const { Link, image, Text, subject, whatsappGroupId } = req.body;
+  const { Link, image, Text, subject, whatsappGroupId, affiliateProvider } = req.body;
   if (!Link || !Text) return res.status(400).json({ success: false, error: 'Link and Text are required' });
   try {
     // Resolve wa_group and join_link from whatsapp_group FK if provided
@@ -81,10 +86,10 @@ router.post('/', async (req, res) => {
     );
     const { rows } = await query(
       `INSERT INTO products
-         (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, whatsapp_group_id, sort_order)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, whatsapp_group_id, sort_order, affiliate_provider)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING *`,
-      [req.user.id, subject || null, Link, shortLink, image || '', Text, join_link, wa_group, resolvedGroupId, maxRow[0].next_order]
+      [req.user.id, subject || null, Link, shortLink, image || '', Text, join_link, wa_group, resolvedGroupId, maxRow[0].next_order, affiliateProvider || 'manual']
     );
     res.json({ success: true, product: rowToProduct(rows[0], 0) });
   } catch (err) {

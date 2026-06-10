@@ -561,13 +561,19 @@
         <div class="card-title">פרטי המוצר</div>
         <div class="form-grid">
           <div class="form-group form-full">
-            <label class="form-label">קישור מוצר AliExpress *</label>
+            <label class="form-label">קישור מוצר *</label>
             <div style="display:flex;gap:8px;align-items:center;">
-              <input class="form-input" id="new-link" placeholder="https://s.click.aliexpress.com/... או https://www.aliexpress.com/item/..." dir="ltr" style="flex:1;" />
+              <input class="form-input" id="new-link" placeholder="הדבק URL של מוצר מכל חנות שותף..." dir="ltr" style="flex:1;" />
               <button class="btn btn-ghost btn-sm" id="btn-fetch-product-data" style="white-space:nowrap;display:none;flex-shrink:0;">
                 <span class="material-symbols-outlined" style="font-size:15px;">auto_fix_high</span>שלוף פרטים
               </button>
             </div>
+          </div>
+          <div class="form-group" id="new-source-group" style="display:none;">
+            <label class="form-label">מקור אפיליאציה</label>
+            <select class="form-input" id="new-source-select" style="font-size:13px;">
+              <option value="">ללא / ידני</option>
+            </select>
           </div>
           <!-- Product preview — shown after a successful fetch -->
           <div id="fetch-product-preview" class="form-full" style="display:none;grid-column:1/-1;background:var(--surface-1);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px;">
@@ -577,7 +583,7 @@
                 <div id="fetch-preview-title" style="font-size:13px;font-weight:600;color:var(--on-surface);margin-bottom:6px;word-break:break-word;"></div>
                 <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
                   <span id="fetch-preview-price" style="font-size:13px;color:#16a34a;font-weight:700;"></span>
-                  <span style="font-size:11px;background:rgba(112,42,225,0.12);color:var(--primary);padding:2px 8px;border-radius:20px;font-weight:600;">✓ נשלף מ-AliExpress</span>
+                  <span id="fetch-preview-provider" style="font-size:11px;font-weight:600;display:none;"></span>
                 </div>
               </div>
             </div>
@@ -1001,6 +1007,58 @@
 
     <!-- ── Settings ──────────────────────────────────────────────── -->
     <div class="tab-panel" id="tab-settings">
+
+      <!-- ── Section: Affiliate Sources ────────────────────────────── -->
+      <section style="margin-bottom:32px;" id="affiliate-sources-section">
+        <div style="margin-bottom:20px;">
+          <div class="page-eyebrow">הגדרות</div>
+          <h1 class="page-title" style="margin-bottom:4px;">מקורות אפיליאציה</h1>
+          <p style="color:var(--on-surface-var);font-size:13px;margin:0;">הגדר חנויות שותף מותאמות אישית — הוסף קוד, תבנית קישור, ותיאור לבינה המלאכותית.</p>
+        </div>
+        <div id="affiliate-sources-list" style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;"></div>
+        <button class="btn btn-ghost" style="gap:8px;" onclick="showAddAffiliateSourceForm()">
+          <span class="material-symbols-outlined" style="font-size:18px;">add_circle</span>הוסף מקור חדש
+        </button>
+        <!-- Add/Edit form (hidden by default) -->
+        <div id="affiliate-source-form-wrap" style="display:none;margin-top:16px;background:var(--surface-low);border:1px solid var(--outline-var);border-radius:16px;padding:20px 24px;">
+          <div style="font-weight:700;font-size:14px;margin-bottom:16px;" id="affiliate-source-form-title">מקור חדש</div>
+          <input type="hidden" id="aff-src-editing-id" value="" />
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="form-group">
+              <label class="form-label">שם המקור *</label>
+              <input class="form-input" id="aff-src-name" placeholder="AquaristikShop" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">דומיין (לזיהוי אוטומטי)</label>
+              <input class="form-input" id="aff-src-domain" placeholder="aquaristikshop.com" dir="ltr" />
+              <div class="form-hint">כאשר תדביק URL מהדומיין הזה, המקור יזוהה אוטומטית</div>
+            </div>
+            <div class="form-group form-full">
+              <label class="form-label">קוד אפיליאציה</label>
+              <input class="form-input" id="aff-src-code" placeholder="mycode123" dir="ltr" />
+            </div>
+            <div class="form-group form-full">
+              <label class="form-label">תבנית קישור</label>
+              <input class="form-input" id="aff-src-template" placeholder="{url}?ref={code}" dir="ltr" />
+              <div class="form-hint">
+                השתמש ב-<code>{url}</code> לכתובת המוצר ו-<code>{code}</code> לקוד.
+                לדוגמה: <code>{url}?ref={code}</code> · <code>https://tracker.com/click?u={url_enc}&id={code}</code>
+              </div>
+            </div>
+            <div class="form-group form-full">
+              <label class="form-label">תיאור לבינה המלאכותית</label>
+              <input class="form-input" id="aff-src-description"
+                     placeholder='AquaristikShop — חנות אקווריסטיקה מובילה בגרמניה, מכירת דגים, צמחים וציוד' />
+              <div class="form-hint">AI ישתמש בתיאור זה כהקשר בעת יצירת הודעות — למשל לציין את שם החנות. גם <code>{{affiliateSource}}</code> זמין בתבניות.</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:16px;align-items:center;">
+            <button class="btn btn-primary" onclick="saveAffiliateSource()">שמור</button>
+            <button class="btn btn-ghost" onclick="cancelAffiliateSourceForm()">ביטול</button>
+            <span id="aff-src-result" style="font-size:13px;"></span>
+          </div>
+        </div>
+      </section>
 
       <!-- ── Section: General ───────────────────────────────────────── -->
       <section style="margin-bottom:32px;">

@@ -16,7 +16,7 @@ function getDayContext() {
   return 'regular';
 }
 
-async function generateMessage({ Text, Link, join_link, promptOverride } = {}) {
+async function generateMessage({ Text, Link, join_link, promptOverride, sourceName, sourceDescription } = {}) {
   const dayContext = getDayContext();
 
   let dayInstruction = '';
@@ -27,13 +27,28 @@ async function generateMessage({ Text, Link, join_link, promptOverride } = {}) {
   }
 
   const promptStore = require('./promptStore');
-  // Use niche-specific prompt if provided and non-empty, otherwise fall back to global prompt
   const basePrompt = (promptOverride && promptOverride.trim()) ? promptOverride : promptStore.get();
-  const prompt = basePrompt
-    .replace('{{Text}}', Text)
-    .replace('{{Link}}', Link)
-    .replace('{{join_link}}', join_link)
-    .replace('{{dayInstruction}}', dayInstruction);
+
+  // Build the affiliate source label for {{affiliateSource}}
+  const affiliateSourceLabel = sourceName
+    ? (sourceDescription ? `${sourceName} (${sourceDescription})` : sourceName)
+    : '';
+
+  let prompt = basePrompt
+    .replace(/\{\{Text\}\}/g,             Text)
+    .replace(/\{\{Link\}\}/g,             Link)
+    .replace(/\{\{join_link\}\}/g,        join_link)
+    .replace(/\{\{dayInstruction\}\}/g,   dayInstruction)
+    .replace(/\{\{affiliateSource\}\}/g,  affiliateSourceLabel);
+
+  // If prompt doesn't reference {{affiliateSource}} but a source is set,
+  // append source context automatically so the AI can mention the store.
+  if (sourceName && !basePrompt.includes('{{affiliateSource}}')) {
+    const ctx = sourceDescription
+      ? `\n\nהמוצר הוא מ-${sourceName} (${sourceDescription}). אם רלוונטי, ניתן לציין את שם החנות בהודעה.`
+      : `\n\nהמוצר הוא מ-${sourceName}. אם רלוונטי, ניתן לציין את שם החנות בהודעה.`;
+    prompt += ctx;
+  }
 
   const response = await client.chat.completions.create({
     model: process.env.OPENAI_MODEL || 'gpt-4.1-mini',

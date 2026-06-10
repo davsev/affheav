@@ -753,6 +753,27 @@ function renderActiveNicheCard() {
                 </div>
               </details>
 
+              <!-- Amazon accordion -->
+              <details class="niche-cred-section">
+                <summary class="niche-cred-summary">
+                  <span class="material-symbols-outlined" style="color:#ff9900;">store</span>
+                  <span>Amazon</span>
+                  ${s.amazonTag
+                    ? `<span class="cred-badge cred-set">${t('credSet')}</span>`
+                    : `<span class="cred-badge" style="background:var(--surface-container);color:var(--on-surface-var);">Optional</span>`}
+                  <span class="material-symbols-outlined niche-cred-chevron">expand_more</span>
+                </summary>
+                <div class="niche-cred-body">
+                  <div class="form-group">
+                    <label class="form-label">Associate Tag</label>
+                    <input class="form-input" type="text" id="niche-amazon-tag-${s.id}"
+                           value="${escHtml(s.amazonTag || '')}"
+                           placeholder="yourstore-20" dir="ltr" style="font-size:13px;" />
+                    <div class="form-hint">Your Amazon Associates tag (e.g. yourstore-20). Added automatically to Amazon product links.</div>
+                  </div>
+                </div>
+              </details>
+
               <!-- Schedule Timezone -->
               <div style="margin-top:24px;padding:16px;background:var(--surface-low);border-radius:1rem;border:1px solid var(--outline-var);">
                 <div class="niche-field-label" style="margin-bottom:10px;">
@@ -950,6 +971,7 @@ window.saveNiche = async (id) => {
         facebookAppSecret:   document.getElementById(`niche-fb-app-secret-${id}`)?.value.trim() || '',
         instagramAccountId:      document.getElementById(`niche-ig-account-${id}`)?.value.trim() || '',
         aliexpressTrackingId:    document.getElementById(`niche-ali-tracking-${id}`)?.value.trim() || '',
+        amazonTag:               document.getElementById(`niche-amazon-tag-${id}`)?.value.trim() || '',
         waGroup:                 document.getElementById(`niche-wa-group-${id}`)?.value || '',
         timezone:                document.getElementById(`niche-timezone-${id}`)?.value || 'Asia/Jerusalem',
       },
@@ -1152,6 +1174,19 @@ function renderProducts(products) {
         const clicksHtml = p.clicks != null
           ? `<span class="product-card-clicks">👁 ${p.clicks} ${t('clicksLabel')}</span>`
           : '';
+        const providerBadgeHtml = (() => {
+          // Custom source takes priority
+          if (p.affiliate_source_name) {
+            return `<span style="font-size:10px;font-weight:600;color:#a78bfa;background:rgba(167,139,250,0.1);padding:1px 6px;border-radius:10px;">${escHtml(p.affiliate_source_name)}</span>`;
+          }
+          const prov = p.affiliate_provider;
+          if (!prov || prov === 'aliexpress') return '';
+          const labels = { amazon: 'Amazon', manual: '' };
+          const colors = { amazon: '#ff9900', manual: '#6b7280' };
+          const lbl = labels[prov] || prov;
+          if (!lbl) return '';
+          return `<span style="font-size:10px;font-weight:600;color:${colors[prov] || '#6b7280'};background:rgba(255,255,255,0.06);padding:1px 6px;border-radius:10px;">${escHtml(lbl)}</span>`;
+        })();
         const sentBadge = p.sent
           ? `<span class="badge badge-sent">${fmtDate(p.sent)}</span>`
           : `<span class="badge badge-unsent">${t('pendingBadge')}</span>`;
@@ -1175,6 +1210,7 @@ function renderProducts(products) {
               ${sentBadge}
               ${sendCountBadge}
               ${clicksHtml}
+              ${providerBadgeHtml}
             </div>
           </div>
           <div class="product-card-footer">
@@ -1915,12 +1951,55 @@ document.getElementById('btn-scrape').addEventListener('click', async (btn) => {
 
 // ── Add Product ───────────────────────────────────────────────────────────────
 
-// Show "Fetch Details" button whenever the link field contains an AliExpress URL
-document.getElementById('new-link').addEventListener('input', () => {
+let _addProductProvider = 'manual';
+
+function _detectProviderLabel(url) {
+  if (!url) return null;
+  if (/aliexpress\.com|s\.click\.aliexpress/i.test(url)) return { id: 'aliexpress', label: 'AliExpress' };
+  if (/amazon\.(com|co\.uk|de|fr|it|es|co\.jp|com\.au|in|ca|com\.br|com\.mx)(\/|$)/i.test(url)) return { id: 'amazon', label: 'Amazon' };
+  return { id: 'manual', label: 'Manual / Other' };
+}
+
+const _providerColors = { aliexpress: '#e4572e', amazon: '#ff9900', manual: '#6b7280' };
+
+// Show "Fetch Details" button for any non-empty URL; auto-detect source
+let _addProductSourceId = ''; // custom affiliate_source_id if selected
+
+document.getElementById('new-link').addEventListener('input', async () => {
   const val = document.getElementById('new-link').value.trim();
-  const isAli = val.includes('aliexpress.com') || val.includes('s.click.aliexpress');
-  document.getElementById('btn-fetch-product-data').style.display = isAli ? '' : 'none';
-  if (!isAli) document.getElementById('fetch-product-preview').style.display = 'none';
+  if (val.length < 6) {
+    document.getElementById('btn-fetch-product-data').style.display = 'none';
+    document.getElementById('fetch-product-preview').style.display = 'none';
+    document.getElementById('new-source-group').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('btn-fetch-product-data').style.display = '';
+
+  // Populate source selector (in case it wasn't loaded yet)
+  if (_affiliateSources.length) populateSourceSelect();
+
+  // Auto-detect custom source by domain
+  const detected = _detectProviderLabel(val);
+  _addProductProvider = detected.id;
+  _addProductSourceId = '';
+
+  try {
+    const res = await api(`/api/affiliate-sources/detect?url=${encodeURIComponent(val)}`);
+    if (res.source) {
+      _addProductProvider = 'custom';
+      _addProductSourceId = res.source.id;
+      const sel = document.getElementById('new-source-select');
+      if (sel) sel.value = res.source.id;
+    } else {
+      // built-in provider — clear custom source select
+      const sel = document.getElementById('new-source-select');
+      if (sel) sel.value = '';
+    }
+  } catch { /* ignore */ }
+
+  const sourceGroup = document.getElementById('new-source-group');
+  if (sourceGroup) sourceGroup.style.display = _affiliateSources.length ? '' : 'none';
 });
 
 document.getElementById('btn-fetch-product-data').addEventListener('click', async () => {
@@ -1930,26 +2009,52 @@ document.getElementById('btn-fetch-product-data').addEventListener('click', asyn
   const result  = document.getElementById('add-product-result');
   const preview = document.getElementById('fetch-product-preview');
 
+  // Resolve provider/source: custom source takes priority over built-in
+  const selectedSourceId = document.getElementById('new-source-select')?.value || '';
+  let   providerId, providerLabel;
+  if (selectedSourceId) {
+    const src = _affiliateSources.find(s => s.id === selectedSourceId);
+    providerId    = selectedSourceId;
+    providerLabel = src?.name || 'Custom';
+    _addProductProvider = 'custom';
+    _addProductSourceId = selectedSourceId;
+  } else {
+    const p   = _detectProviderLabel(url) || { id: 'manual', label: 'Manual / Other' };
+    providerId    = p.id;
+    providerLabel = p.label;
+    _addProductProvider = p.id;
+    _addProductSourceId = '';
+  }
+
   btn.disabled   = true;
   btn.innerHTML  = '<span class="material-symbols-outlined" style="font-size:15px;animation:spin 1s linear infinite;">progress_activity</span>שולף...';
   result.textContent = '';
   preview.style.display = 'none';
 
   try {
-    const data = await api('/api/aliexpress/fetch-by-url', {
+    const data = await api(`/api/affiliates/${providerId}/fetch-by-url`, {
       method: 'POST',
       body: { url, subjectId: subject || undefined },
     });
 
+    const fetchedUrl = data.data?.affiliate_url || url;
     if (data.data?.title) document.getElementById('new-text').value  = data.data.title;
     if (data.data?.image) document.getElementById('new-image').value = data.data.image;
+    if (fetchedUrl !== url) document.getElementById('new-link').value = fetchedUrl;
 
-    document.getElementById('fetch-preview-img').src        = data.data?.image || '';
+    document.getElementById('fetch-preview-img').src           = data.data?.image || '';
     document.getElementById('fetch-preview-title').textContent = data.data?.title || '(ללא שם)';
     document.getElementById('fetch-preview-price').textContent =
       data.data?.sale_price ? `₪${data.data.sale_price}` : '';
-    preview.style.display = '';
 
+    const providerBadgeEl = document.getElementById('fetch-preview-provider');
+    if (providerBadgeEl) {
+      providerBadgeEl.textContent = providerLabel;
+      providerBadgeEl.style.color = _providerColors[_addProductProvider] || '#a78bfa';
+      providerBadgeEl.style.display = '';
+    }
+
+    preview.style.display = '';
     result.textContent = '';
   } catch (err) {
     result.textContent = '✗ שגיאה בשליפת פרטים: ' + err.message;
@@ -1972,8 +2077,30 @@ document.getElementById('btn-add-product').addEventListener('click', async () =>
 
   if (!Text || !Link) { result.textContent = t('productRequired'); result.style.color='#d97706'; return; }
 
+  // If a custom affiliate source is selected, use the affiliates endpoint
+  const selSourceId = document.getElementById('new-source-select')?.value || _addProductSourceId || '';
+  if (selSourceId) {
+    try {
+      await api(`/api/affiliates/${selSourceId}/add`, {
+        method: 'POST',
+        body: { url: Link, title: Text, image, subject, whatsappGroupId },
+      });
+      result.textContent = t('productAddedOk');
+      result.style.color = '#16a34a';
+      ['new-text','new-link','new-image'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('fetch-product-preview').style.display = 'none';
+      document.getElementById('btn-fetch-product-data').style.display = 'none';
+      document.getElementById('new-source-group').style.display = 'none';
+      _addProductSourceId = '';
+    } catch (err) {
+      result.textContent = '✗ ' + t('errGeneral') + err.message;
+      result.style.color = '#dc2626';
+    }
+    return;
+  }
+
   try {
-    await api('/api/products', { method: 'POST', body: { Link, image, Text, subject, whatsappGroupId } });
+    await api('/api/products', { method: 'POST', body: { Link, image, Text, subject, whatsappGroupId, affiliateProvider: _addProductProvider || 'manual' } });
     result.textContent = t('productAddedOk');
     result.style.color = '#16a34a';
     ['new-text','new-link','new-image'].forEach(id => document.getElementById(id).value = '');
@@ -2076,8 +2203,137 @@ document.getElementById('btn-check-token')?.addEventListener('click', loadTokenI
 // Load subjects when settings tab is opened
 document.querySelector('[data-tab="settings"]').addEventListener('click', () => {
   loadSubjects();
+  loadAffiliateSources();
   loadWWebjsStatus();
 });
+
+// Load affiliate sources when add-product tab opens (for source selector)
+document.querySelector('[data-tab="add-product"]')?.addEventListener('click', () => {
+  loadAffiliateSources();
+});
+
+// ── Affiliate Sources ─────────────────────────────────────────────────────────
+
+let _affiliateSources = [];
+
+async function loadAffiliateSources() {
+  try {
+    const data = await api('/api/affiliate-sources');
+    _affiliateSources = data.sources || [];
+    renderAffiliateSourcesList();
+    populateSourceSelect();
+  } catch { /* ignore */ }
+}
+
+function renderAffiliateSourcesList() {
+  const container = document.getElementById('affiliate-sources-list');
+  if (!container) return;
+  if (!_affiliateSources.length) {
+    container.innerHTML = `<div style="font-size:13px;color:var(--on-surface-var);padding:12px 0;">אין מקורות. הוסף את מקור האפיליאציה הראשון שלך.</div>`;
+    return;
+  }
+  container.innerHTML = _affiliateSources.map(s => `
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--surface-container);border-radius:12px;border:1px solid var(--outline-var);">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:14px;">${escHtml(s.name)}</div>
+        ${s.domain ? `<div style="font-size:12px;color:var(--on-surface-var);direction:ltr;">${escHtml(s.domain)}</div>` : ''}
+        ${s.linkTemplate ? `<div style="font-size:11px;color:var(--on-surface-var);direction:ltr;margin-top:2px;opacity:0.7;">${escHtml(s.linkTemplate)}</div>` : ''}
+        ${s.description ? `<div style="font-size:12px;color:var(--on-surface-var);margin-top:4px;font-style:italic;">${escHtml(s.description)}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <button class="btn btn-ghost btn-sm" onclick="editAffiliateSource('${s.id}')">✏ ערוך</button>
+        <button class="btn btn-ghost btn-sm" style="color:#f87171;" onclick="deleteAffiliateSource('${s.id}')">🗑</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function populateSourceSelect() {
+  const sel = document.getElementById('new-source-select');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">ללא / ידני</option>';
+  _affiliateSources.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value       = s.id;
+    opt.textContent = s.name;
+    sel.appendChild(opt);
+  });
+  if (current) sel.value = current;
+}
+
+window.showAddAffiliateSourceForm = () => {
+  document.getElementById('aff-src-editing-id').value = '';
+  document.getElementById('aff-src-form-title') && (document.getElementById('affiliate-source-form-title').textContent = 'מקור חדש');
+  ['aff-src-name','aff-src-domain','aff-src-code','aff-src-template','aff-src-description'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('affiliate-source-form-wrap').style.display = '';
+  document.getElementById('aff-src-name')?.focus();
+};
+
+window.editAffiliateSource = (id) => {
+  const s = _affiliateSources.find(x => x.id === id);
+  if (!s) return;
+  document.getElementById('aff-src-editing-id').value = id;
+  document.getElementById('affiliate-source-form-title').textContent = `ערוך: ${s.name}`;
+  document.getElementById('aff-src-name').value        = s.name        || '';
+  document.getElementById('aff-src-domain').value      = s.domain      || '';
+  document.getElementById('aff-src-code').value        = s.affiliateCode || '';
+  document.getElementById('aff-src-template').value    = s.linkTemplate || '';
+  document.getElementById('aff-src-description').value = s.description  || '';
+  document.getElementById('affiliate-source-form-wrap').style.display = '';
+  document.getElementById('aff-src-name')?.focus();
+};
+
+window.cancelAffiliateSourceForm = () => {
+  document.getElementById('affiliate-source-form-wrap').style.display = 'none';
+  document.getElementById('aff-src-result').textContent = '';
+};
+
+window.saveAffiliateSource = async () => {
+  const editingId   = document.getElementById('aff-src-editing-id').value;
+  const name        = document.getElementById('aff-src-name').value.trim();
+  const resultEl    = document.getElementById('aff-src-result');
+  if (!name) { resultEl.textContent = 'שם חובה'; resultEl.style.color = '#f87171'; return; }
+
+  const body = {
+    name,
+    domain:        document.getElementById('aff-src-domain').value.trim(),
+    affiliateCode: document.getElementById('aff-src-code').value.trim(),
+    linkTemplate:  document.getElementById('aff-src-template').value.trim(),
+    description:   document.getElementById('aff-src-description').value.trim(),
+  };
+
+  try {
+    if (editingId) {
+      await api(`/api/affiliate-sources/${editingId}`, { method: 'PUT', body });
+    } else {
+      await api('/api/affiliate-sources', { method: 'POST', body });
+    }
+    resultEl.textContent = '✓ נשמר';
+    resultEl.style.color = '#16a34a';
+    await loadAffiliateSources();
+    setTimeout(() => {
+      document.getElementById('affiliate-source-form-wrap').style.display = 'none';
+      resultEl.textContent = '';
+    }, 800);
+  } catch (err) {
+    resultEl.textContent = '✗ ' + err.message;
+    resultEl.style.color = '#f87171';
+  }
+};
+
+window.deleteAffiliateSource = async (id) => {
+  if (!confirm('מחוק מקור זה?')) return;
+  try {
+    await api(`/api/affiliate-sources/${id}`, { method: 'DELETE' });
+    await loadAffiliateSources();
+  } catch (err) {
+    alert('שגיאה: ' + err.message);
+  }
+};
 
 // ── WhatsApp Web JS panel ──────────────────────────────────────────────────────
 async function loadWWebjsStatus() {
