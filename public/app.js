@@ -2264,13 +2264,98 @@ function populateSourceSelect() {
 
 window.showAddAffiliateSourceForm = () => {
   document.getElementById('aff-src-editing-id').value = '';
-  document.getElementById('aff-src-form-title') && (document.getElementById('affiliate-source-form-title').textContent = 'מקור חדש');
-  ['aff-src-name','aff-src-domain','aff-src-code','aff-src-template','aff-src-description'].forEach(id => {
+  document.getElementById('affiliate-source-form-title').textContent = 'מקור חדש';
+  ['aff-src-name','aff-src-domain','aff-src-code','aff-src-template','aff-src-description','aff-src-example'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  const detectResult = document.getElementById('aff-src-detect-result');
+  if (detectResult) { detectResult.style.display = 'none'; detectResult.textContent = ''; }
+  document.getElementById('aff-src-preview-group').style.display = 'none';
   document.getElementById('affiliate-source-form-wrap').style.display = '';
   document.getElementById('aff-src-name')?.focus();
+};
+
+// Known affiliate query param names (heuristic)
+const AFFILIATE_PARAMS = ['aff', 'ref', 'affiliate', 'partner', 'tag', 'aid', 'pid', 'cid', 'a', 'affid', 'affcode', 'refid', 'code', 'source'];
+
+window.detectFromExample = () => {
+  const example = document.getElementById('aff-src-example').value.trim();
+  const resultEl = document.getElementById('aff-src-detect-result');
+  if (!example) return;
+
+  try {
+    const parsed = new URL(example);
+    const domain  = parsed.hostname.replace(/^www\./, '');
+
+    // Find affiliate param: first check known names, then any param with a non-empty value
+    let affParam = null, affCode = null;
+    for (const name of AFFILIATE_PARAMS) {
+      const val = parsed.searchParams.get(name);
+      if (val) { affParam = name; affCode = val; break; }
+    }
+    // Fallback: first query param
+    if (!affParam) {
+      for (const [k, v] of parsed.searchParams) {
+        if (v) { affParam = k; affCode = v; break; }
+      }
+    }
+
+    // Build the product URL (remove affiliate param) and template
+    let template = '';
+    let productUrl = example;
+    if (affParam) {
+      const clean = new URL(example);
+      clean.searchParams.delete(affParam);
+      productUrl = clean.toString().replace(/[?&]$/, '');
+      // Does it need & instead of ? (already has other params)?
+      const sep = clean.searchParams.size > 0 ? '&' : '?';
+      template = `{url}${sep}${affParam}={code}`;
+    }
+
+    // Fill fields
+    if (domain)    document.getElementById('aff-src-domain').value   = domain;
+    if (affCode)   document.getElementById('aff-src-code').value     = affCode;
+    if (template)  document.getElementById('aff-src-template').value = template;
+
+    // Show result message
+    if (affParam) {
+      resultEl.innerHTML = `✓ זוהה: פרמטר <code>${affParam}</code>, קוד <code>${affCode}</code>, דומיין <code>${domain}</code>`;
+      resultEl.style.color = '#16a34a';
+    } else {
+      resultEl.textContent = 'לא זוהה פרמטר אפיליאציה — מלא את השדות ידנית';
+      resultEl.style.color = '#f59e0b';
+    }
+    resultEl.style.display = '';
+
+    // Store sample product URL for preview
+    window._affSrcSampleUrl = productUrl;
+    updateAffiliatePreview();
+  } catch {
+    document.getElementById('aff-src-detect-result').textContent = 'URL לא תקין';
+    document.getElementById('aff-src-detect-result').style.color = '#f87171';
+    document.getElementById('aff-src-detect-result').style.display = '';
+  }
+};
+
+window.updateAffiliatePreview = () => {
+  const template = document.getElementById('aff-src-template').value.trim();
+  const code     = document.getElementById('aff-src-code').value.trim();
+  const domain   = document.getElementById('aff-src-domain').value.trim();
+  const group    = document.getElementById('aff-src-preview-group');
+  const preview  = document.getElementById('aff-src-preview');
+  if (!template || !code) { if (group) group.style.display = 'none'; return; }
+
+  const sampleUrl = window._affSrcSampleUrl
+    || (domain ? `https://${domain}/example-product` : 'https://example.com/product');
+
+  const built = template
+    .replace(/\{url_enc\}/g, encodeURIComponent(sampleUrl))
+    .replace(/\{url\}/g,     sampleUrl)
+    .replace(/\{code\}/g,    code);
+
+  preview.textContent = built;
+  if (group) group.style.display = '';
 };
 
 window.editAffiliateSource = (id) => {
@@ -2278,12 +2363,17 @@ window.editAffiliateSource = (id) => {
   if (!s) return;
   document.getElementById('aff-src-editing-id').value = id;
   document.getElementById('affiliate-source-form-title').textContent = `ערוך: ${s.name}`;
-  document.getElementById('aff-src-name').value        = s.name        || '';
-  document.getElementById('aff-src-domain').value      = s.domain      || '';
+  document.getElementById('aff-src-name').value        = s.name          || '';
+  document.getElementById('aff-src-domain').value      = s.domain        || '';
   document.getElementById('aff-src-code').value        = s.affiliateCode || '';
-  document.getElementById('aff-src-template').value    = s.linkTemplate || '';
-  document.getElementById('aff-src-description').value = s.description  || '';
+  document.getElementById('aff-src-template').value    = s.linkTemplate  || '';
+  document.getElementById('aff-src-description').value = s.description   || '';
+  document.getElementById('aff-src-example').value     = '';
+  const detectResult = document.getElementById('aff-src-detect-result');
+  if (detectResult) { detectResult.style.display = 'none'; detectResult.textContent = ''; }
+  window._affSrcSampleUrl = s.domain ? `https://${s.domain}/example-product` : '';
   document.getElementById('affiliate-source-form-wrap').style.display = '';
+  updateAffiliatePreview();
   document.getElementById('aff-src-name')?.focus();
 };
 
