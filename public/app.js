@@ -1962,8 +1962,7 @@ function _detectProviderLabel(url) {
 
 const _providerColors = { aliexpress: '#e4572e', amazon: '#ff9900', manual: '#6b7280' };
 
-// Show "Fetch Details" button for any non-empty URL; auto-detect source
-let _addProductSourceId = ''; // custom affiliate_source_id if selected
+let _addProductSourceId = '';
 
 document.getElementById('new-link').addEventListener('input', async () => {
   const val = document.getElementById('new-link').value.trim();
@@ -1976,10 +1975,8 @@ document.getElementById('new-link').addEventListener('input', async () => {
 
   document.getElementById('btn-fetch-product-data').style.display = '';
 
-  // Populate source selector (in case it wasn't loaded yet)
   if (_affiliateSources.length) populateSourceSelect();
 
-  // Auto-detect custom source by domain
   const detected = _detectProviderLabel(val);
   _addProductProvider = detected.id;
   _addProductSourceId = '';
@@ -1992,7 +1989,6 @@ document.getElementById('new-link').addEventListener('input', async () => {
       const sel = document.getElementById('new-source-select');
       if (sel) sel.value = res.source.id;
     } else {
-      // built-in provider — clear custom source select
       const sel = document.getElementById('new-source-select');
       if (sel) sel.value = '';
     }
@@ -2002,12 +1998,13 @@ document.getElementById('new-link').addEventListener('input', async () => {
   if (sourceGroup) sourceGroup.style.display = _affiliateSources.length ? '' : 'none';
 });
 
-document.getElementById('btn-fetch-product-data').addEventListener('click', async () => {
-  const url     = document.getElementById('new-link').value.trim();
-  const subject = document.getElementById('new-subject').value;
-  const btn     = document.getElementById('btn-fetch-product-data');
-  const result  = document.getElementById('add-product-result');
-  const preview = document.getElementById('fetch-product-preview');
+async function doFetchAliProduct() {
+  const url       = document.getElementById('new-link').value.trim();
+  const subject   = document.getElementById('new-subject').value;
+  const result    = document.getElementById('add-product-result');
+  const preview   = document.getElementById('fetch-product-preview');
+  const linkInput = document.getElementById('new-link');
+  const btn       = document.getElementById('btn-fetch-product-data');
 
   // Resolve provider/source: custom source takes priority over built-in
   const selectedSourceId = document.getElementById('new-source-select')?.value || '';
@@ -2026,9 +2023,10 @@ document.getElementById('btn-fetch-product-data').addEventListener('click', asyn
     _addProductSourceId = '';
   }
 
-  btn.disabled   = true;
-  btn.innerHTML  = '<span class="material-symbols-outlined" style="font-size:15px;animation:spin 1s linear infinite;">progress_activity</span>שולף...';
-  result.textContent = '';
+  linkInput.style.opacity = '0.5';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;animation:spin 1s linear infinite;">progress_activity</span>שולף...'; }
+  result.textContent = 'שולף פרטי מוצר...';
+  result.style.color = 'var(--on-surface-var)';
   preview.style.display = 'none';
 
   try {
@@ -2060,10 +2058,17 @@ document.getElementById('btn-fetch-product-data').addEventListener('click', asyn
     result.textContent = '✗ שגיאה בשליפת פרטים: ' + err.message;
     result.style.color = '#dc2626';
   } finally {
-    btn.disabled  = false;
-    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">auto_fix_high</span>שלוף פרטים';
+    linkInput.style.opacity = '';
+    if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">refresh</span>נסה שוב'; }
   }
+}
+
+// Auto-fetch on paste
+document.getElementById('new-link').addEventListener('paste', () => {
+  setTimeout(doFetchAliProduct, 50);
 });
+
+document.getElementById('btn-fetch-product-data').addEventListener('click', doFetchAliProduct);
 
 document.getElementById('btn-add-product').addEventListener('click', async () => {
   const Text     = document.getElementById('new-text').value.trim();
