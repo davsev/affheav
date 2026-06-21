@@ -72,13 +72,15 @@ async function fetchViaScraper(url) {
   let res;
   try {
     res = await axios.get(url, {
+      maxRedirects:   20,
       timeout:        15000,
       headers:        SCRAPE_HEADERS,
       validateStatus: () => true,
     });
   } catch (err) {
     if (err.response?.status === 404) throw notFound();
-    throw err;
+    // Redirect loops, network errors etc — return null so callers can fall through
+    return null;
   }
 
   if (res.status === 404) throw notFound();
@@ -165,7 +167,7 @@ async function syncProduct(dbProductId, userId) {
       data = await fetchViaScraper(finalUrl);
     } catch (err) {
       if (err.code === 'NOT_FOUND') return { not_found: true };
-      throw err;
+      // Any other error (redirect loops, bot blocks) — fall through to Playwright
     }
   } else if (!data.title || !data.video_url) {
     // API succeeded but is missing title and/or video_url — fill in from scraper

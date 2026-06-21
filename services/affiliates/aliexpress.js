@@ -32,7 +32,12 @@ module.exports = {
   },
 
   async fetchByUrl(url, { trackingId = DEFAULT_TRACKING_ID } = {}) {
-    const result = await fetchProductDataByUrl(url, trackingId);
+    let result;
+    try {
+      result = await fetchProductDataByUrl(url, trackingId);
+    } catch {
+      result = { data: null };
+    }
 
     // If API + axios scraper both failed to return title/image, fall back to Playwright
     if (!result.not_found && !result.data?.title && !result.data?.image) {
