@@ -1974,28 +1974,30 @@ document.getElementById('new-link').addEventListener('input', async () => {
   }
 
   document.getElementById('btn-fetch-product-data').style.display = '';
+  document.getElementById('new-source-group').style.display = '';
 
-  if (_affiliateSources.length) populateSourceSelect();
+  populateSourceSelect();
 
   const detected = _detectProviderLabel(val);
-  _addProductProvider = detected.id;
+  _addProductProvider = detected?.id || 'manual';
   _addProductSourceId = '';
+
+  // Auto-select detected built-in provider in the dropdown
+  const sel = document.getElementById('new-source-select');
 
   try {
     const res = await api(`/api/affiliate-sources/detect?url=${encodeURIComponent(val)}`);
     if (res.source) {
       _addProductProvider = 'custom';
       _addProductSourceId = res.source.id;
-      const sel = document.getElementById('new-source-select');
       if (sel) sel.value = res.source.id;
     } else {
-      const sel = document.getElementById('new-source-select');
-      if (sel) sel.value = '';
+      if (sel && detected?.id && detected.id !== 'manual') sel.value = detected.id;
+      else if (sel && !sel.value) sel.value = '';
     }
-  } catch { /* ignore */ }
-
-  const sourceGroup = document.getElementById('new-source-group');
-  if (sourceGroup) sourceGroup.style.display = _affiliateSources.length ? '' : 'none';
+  } catch {
+    if (sel && detected?.id && detected.id !== 'manual') sel.value = detected.id;
+  }
 });
 
 async function doFetchAliProduct() {
@@ -2006,17 +2008,24 @@ async function doFetchAliProduct() {
   const linkInput = document.getElementById('new-link');
   const btn       = document.getElementById('btn-fetch-product-data');
 
-  // Resolve provider/source: custom source takes priority over built-in
+  // Resolve provider/source.
+  // Built-in providers have short string IDs ('aliexpress','amazon','manual').
+  // Custom sources have UUID IDs.
+  const BUILT_IN_IDS = { aliexpress: 'AliExpress', amazon: 'Amazon', manual: 'Manual' };
   const selectedSourceId = document.getElementById('new-source-select')?.value || '';
   let   providerId, providerLabel;
-  if (selectedSourceId) {
+  if (selectedSourceId && !BUILT_IN_IDS[selectedSourceId]) {
+    // UUID = custom affiliate source
     const src = _affiliateSources.find(s => s.id === selectedSourceId);
     providerId    = selectedSourceId;
     providerLabel = src?.name || 'Custom';
     _addProductProvider = 'custom';
     _addProductSourceId = selectedSourceId;
   } else {
-    const p   = _detectProviderLabel(url) || { id: 'manual', label: 'Manual / Other' };
+    // Built-in provider (selected explicitly or auto-detected from URL)
+    const p = (selectedSourceId && BUILT_IN_IDS[selectedSourceId])
+      ? { id: selectedSourceId, label: BUILT_IN_IDS[selectedSourceId] }
+      : (_detectProviderLabel(url) || { id: 'manual', label: 'Manual / Other' });
     providerId    = p.id;
     providerLabel = p.label;
     _addProductProvider = p.id;
@@ -2257,7 +2266,11 @@ function populateSourceSelect() {
   const sel = document.getElementById('new-source-select');
   if (!sel) return;
   const current = sel.value;
-  sel.innerHTML = '<option value="">ללא / ידני</option>';
+  sel.innerHTML = `
+    <option value="">ידני</option>
+    <option value="aliexpress">🛒 AliExpress</option>
+    <option value="amazon">📦 Amazon</option>
+  `;
   _affiliateSources.forEach(s => {
     const opt = document.createElement('option');
     opt.value       = s.id;
