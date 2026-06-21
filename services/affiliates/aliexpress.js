@@ -32,7 +32,27 @@ module.exports = {
   },
 
   async fetchByUrl(url, { trackingId = DEFAULT_TRACKING_ID } = {}) {
-    return fetchProductDataByUrl(url, trackingId);
+    const result = await fetchProductDataByUrl(url, trackingId);
+
+    // If API + axios scraper both failed to return title/image, fall back to Playwright
+    if (!result.not_found && !result.data?.title && !result.data?.image) {
+      try {
+        const { scrapeProduct } = require('../../scrapers/aliexpress');
+        const scraped = await scrapeProduct(url);
+        if (scraped.text || scraped.image) {
+          return {
+            data: {
+              title:      scraped.text  || null,
+              image:      scraped.image || null,
+              sale_price: null,
+              video_url:  null,
+            },
+          };
+        }
+      } catch { /* Playwright not available or scrape failed — return original result */ }
+    }
+
+    return result;
   },
 
   getDefaultCommission() { return 0.08; },
