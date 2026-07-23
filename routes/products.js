@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query } = require('../db');
 const { shortenUrl, getAllClickStats } = require('../services/spooMe');
-const { runAutoProductAgent } = require('../services/autoProductAgent');
+const { runAutoProductAgent, DEFAULT_KEYWORD_PROMPT } = require('../services/autoProductAgent');
 
 const log = (...a) => console.log('[products]', ...a);
 
@@ -93,6 +93,46 @@ router.post('/run-auto-agent', async (req, res) => {
   try {
     const result = await runAutoProductAgent(req.user.id);
     res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/products/auto-agent-settings — enabled state + AI decision-making settings
+router.get('/auto-agent-settings', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT key, value FROM settings WHERE user_id = $1
+       AND key IN ('auto_agent_enabled', 'auto_agent_ai_enabled', 'auto_agent_ai_prompt')`,
+      [req.user.id]
+    );
+    const map = Object.fromEntries(rows.map(r => [r.key, r.value]));
+    res.json({
+      success:       true,
+      // Both default ON (opt-out) — absence of the setting means enabled
+      enabled:       map.auto_agent_enabled !== 'false',
+      aiEnabled:     map.auto_agent_ai_enabled === 'true',
+      aiPrompt:      map.auto_agent_ai_prompt || '',
+      defaultPrompt: DEFAULT_KEYWORD_PROMPT,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PATCH /api/products/auto-agent-settings
+router.patch('/auto-agent-settings', async (req, res) => {
+  const { enabled, aiEnabled, aiPrompt } = req.body || {};
+  try {
+    const upsert = (key, value) => query(
+      `INSERT INTO settings (user_id, key, value, updated_at) VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (user_id, key) DO UPDATE SET value = $3, updated_at = NOW()`,
+      [req.user.id, key, value]
+    );
+    if (enabled   !== undefined) await upsert('auto_agent_enabled', enabled ? 'true' : 'false');
+    if (aiEnabled !== undefined) await upsert('auto_agent_ai_enabled', aiEnabled ? 'true' : 'false');
+    if (aiPrompt  !== undefined) await upsert('auto_agent_ai_prompt', aiPrompt);
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
