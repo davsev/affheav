@@ -1703,6 +1703,24 @@ document.getElementById('btn-delete-all-404').addEventListener('click', async fu
   }
 });
 
+// ── Run auto-agent now (manual trigger, same logic as the daily cron) ──────────
+document.getElementById('btn-run-auto-agent').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="animation:spin 1s linear infinite;font-size:17px;">sync</span>';
+  try {
+    const result = await api('/api/products/run-auto-agent', { method: 'POST' });
+    btn.innerHTML = `<span style="font-size:11px;font-weight:700;">+${result.totalAdded ?? 0}</span>`;
+    if (result.totalAdded > 0) await loadProducts();
+    else await loadDrafts();
+  } catch (err) {
+    alert(t('errGeneral') + err.message);
+    btn.innerHTML = '<span class="material-symbols-outlined">smart_toy</span>';
+  } finally {
+    setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">smart_toy</span>'; }, 4000);
+  }
+});
+
 document.getElementById('btn-sync-aliexpress-bulk').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   const ids = [...document.querySelectorAll('.product-chk:checked')].map(el => el.dataset.id);

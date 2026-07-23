@@ -87,15 +87,11 @@ async function getTopSellersBySubject(userId) {
 // best sellers, searches AliExpress for similar products, and inserts drafts directly
 // into the products table (status='draft') for manual approval. Never touches the
 // live catalog on its own.
+//
+// The auto_agent_enabled setting only gates the *scheduled* daily run (checked by the
+// caller in scheduler/index.js) — it does not gate this function itself, so a manual
+// "run now" trigger always works even when the user has paused automatic runs.
 async function runAutoProductAgent(userId) {
-  const { rows: settingRows } = await query(
-    `SELECT value FROM settings WHERE user_id = $1 AND key = 'auto_agent_enabled'`,
-    [userId]
-  );
-  if (settingRows[0]?.value === 'false') {
-    return { skipped: true, reason: 'disabled', totalAdded: 0, subjects: {} };
-  }
-
   const subjectMap = await getTopSellersBySubject(userId);
 
   // Dedup against every product this user has ever had, in any status —

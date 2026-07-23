@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query } = require('../db');
 const { shortenUrl, getAllClickStats } = require('../services/spooMe');
+const { runAutoProductAgent } = require('../services/autoProductAgent');
 
 const log = (...a) => console.log('[products]', ...a);
 
@@ -80,6 +81,18 @@ router.get('/', async (req, res) => {
       ));
     }
     res.json({ success: true, products: rows.map(rowToProduct) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/products/run-auto-agent — trigger the autonomous product agent immediately
+// (same logic the daily cron runs). Always runs regardless of the auto_agent_enabled
+// toggle — that setting only pauses the *scheduled* run, not a manual click.
+router.post('/run-auto-agent', async (req, res) => {
+  try {
+    const result = await runAutoProductAgent(req.user.id);
+    res.json({ success: true, ...result });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
