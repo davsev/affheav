@@ -167,12 +167,19 @@ async function runAutoProductAgentForAllUsers() {
   let userIds = [];
   try {
     const { rows } = await query(`
-      SELECT DISTINCT user_id FROM subjects
-      WHERE aliexpress_tracking_id IS NOT NULL AND aliexpress_tracking_id != ''
+      SELECT DISTINCT s.user_id
+      FROM subjects s
+      WHERE s.aliexpress_tracking_id IS NOT NULL AND s.aliexpress_tracking_id != ''
+        AND NOT EXISTS (
+          SELECT 1 FROM settings st
+          WHERE st.user_id = s.user_id
+            AND st.key = 'auto_agent_enabled'
+            AND st.value = 'false'
+        )
     `);
     userIds = rows.map(r => r.user_id);
   } catch (err) {
-    log(`Auto product agent: could not load users: ${err.message}`, 'error');
+    log(`Auto product agent: could not load eligible users: ${err.message}`, 'error');
     return;
   }
 
@@ -183,7 +190,6 @@ async function runAutoProductAgentForAllUsers() {
     };
     try {
       const result = await runAutoProductAgent(userId);
-      if (result.skipped) { jobLog(`Auto product agent: skipped (${result.reason})`); continue; }
       jobLog(`Auto product agent: ${result.totalAdded} new draft(s) added across ${Object.keys(result.subjects).length} channel(s)`);
     } catch (err) {
       jobLog(`Auto product agent failed: ${err.message}`, 'error');

@@ -128,9 +128,8 @@ async function loadUserSettings() {
     const { settings } = await api('/api/settings');
     const chk = document.getElementById('chk-recycle-products');
     if (chk) chk.checked = settings.recycle_products === 'true';
-    // Auto product agent defaults ON — absence of the setting means enabled
-    setAutoAgentToggleState(settings.auto_agent_enabled !== 'false');
   } catch { /* non-critical */ }
+  loadAutoAgentSettings();
 }
 
 document.getElementById('chk-recycle-products').addEventListener('change', async function () {
@@ -1396,24 +1395,107 @@ window.rejectDraft = async (btn) => {
   }
 };
 
+// ─── AUTO-AGENT SETTINGS (enabled toggle + AI decision-making) ─────────────
+
+async function loadAutoAgentSettings() {
+  try {
+    const s = await api('/api/products/auto-agent-settings');
+    renderAutoAgentSettings(s);
+  } catch (_) { /* non-critical */ }
+}
+
+function renderAutoAgentSettings({ enabled, aiEnabled, aiPrompt, defaultPrompt }) {
+  const container = document.getElementById('auto-agent-settings');
+  if (!container) return;
+
+  const toggleRow = (id, label, on, handler) => `
+    <span style="font-weight:600;font-size:14px;">${label}</span>
+    <label style="margin-right:auto;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+      <span style="color:var(--on-surface-var);">${on ? t('enabledLabel') : t('disabledLabel')}</span>
+      <div class="ai-toggle${on ? ' on' : ''}" id="${id}" onclick="${handler}(this)"
+           style="width:40px;height:22px;border-radius:11px;background:${on ? 'var(--primary)' : 'var(--surface-3, #444)'};
+                  position:relative;cursor:pointer;transition:background 0.2s;flex-shrink:0;">
+        <div style="position:absolute;top:3px;left:${on ? '20px' : '3px'};width:16px;height:16px;
+                    border-radius:50%;background:#fff;transition:left 0.2s;"></div>
+      </div>
+    </label>
+  `;
+
+  container.innerHTML = `
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+        <span class="material-symbols-outlined" style="font-size:18px;color:var(--primary);">smart_toy</span>
+        ${toggleRow('autoagent-toggle-btn', t('draftsAutoAgentLabel'), enabled, 'toggleAutoAgent')}
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:${aiEnabled ? '14px' : '0'};">
+        <span class="material-symbols-outlined" style="font-size:18px;color:var(--primary);">auto_awesome</span>
+        ${toggleRow('autoagent-ai-toggle-btn', t('autoAgentAiLabel'), aiEnabled, 'toggleAutoAgentAI')}
+      </div>
+      ${aiEnabled ? `
+      <div>
+        <div style="font-size:11px;color:var(--on-surface-var);margin-bottom:8px;">${t('autoAgentAiDesc')}</div>
+        <label style="font-size:12px;color:var(--on-surface-var);display:block;margin-bottom:6px;">
+          ${t('discoverAiPromptLabel')}
+        </label>
+        <textarea id="autoagent-ai-prompt" rows="6"
+          style="width:100%;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--border);
+                 border-radius:6px;color:var(--on-surface);font-size:12px;font-family:monospace;
+                 padding:10px;resize:vertical;line-height:1.5;"
+          placeholder="${escHtml(defaultPrompt)}"
+        >${escHtml(aiPrompt)}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="btn btn-primary btn-sm" onclick="saveAutoAgentAIPrompt()" style="font-size:12px;">
+            ${t('discoverSavePrompt')}
+          </button>
+          <button class="btn btn-sm" onclick="resetAutoAgentAIPrompt()" style="font-size:12px;background:var(--surface-2);color:var(--on-surface-var);">
+            ${t('discoverResetPrompt')}
+          </button>
+        </div>
+      </div>` : ''}
+    </div>
+  `;
+}
+
 window.toggleAutoAgent = async (toggleEl) => {
   const isOn = toggleEl.classList.contains('on');
   try {
-    await api('/api/settings', { method: 'PATCH', body: { key: 'auto_agent_enabled', value: String(!isOn) } });
-    setAutoAgentToggleState(!isOn);
+    await api('/api/products/auto-agent-settings', { method: 'PATCH', body: { enabled: !isOn } });
+    await loadAutoAgentSettings();
   } catch (err) {
     alert(t('errSaveSetting') + err.message);
   }
 };
 
-function setAutoAgentToggleState(enabled) {
-  const toggle = document.getElementById('autoagent-toggle-btn');
-  if (!toggle) return;
-  toggle.classList.toggle('on', enabled);
-  toggle.style.background = enabled ? 'var(--primary)' : 'var(--surface-3, #444)';
-  const dot = toggle.firstElementChild;
-  if (dot) dot.style.left = enabled ? '18px' : '2px';
-}
+window.toggleAutoAgentAI = async (toggleEl) => {
+  const isOn = toggleEl.classList.contains('on');
+  try {
+    await api('/api/products/auto-agent-settings', { method: 'PATCH', body: { aiEnabled: !isOn } });
+    await loadAutoAgentSettings();
+  } catch (err) {
+    alert(t('errSaveSetting') + err.message);
+  }
+};
+
+window.saveAutoAgentAIPrompt = async () => {
+  const el = document.getElementById('autoagent-ai-prompt');
+  if (!el) return;
+  try {
+    await api('/api/products/auto-agent-settings', { method: 'PATCH', body: { aiPrompt: el.value } });
+    el.style.border = '1px solid #22c55e';
+    setTimeout(() => { if (el) el.style.border = '1px solid var(--border)'; }, 1500);
+  } catch (err) {
+    alert(t('errSaveSetting') + err.message);
+  }
+};
+
+window.resetAutoAgentAIPrompt = async () => {
+  try {
+    await api('/api/products/auto-agent-settings', { method: 'PATCH', body: { aiPrompt: '' } });
+    await loadAutoAgentSettings();
+  } catch (err) {
+    alert(t('errSaveSetting') + err.message);
+  }
+};
 
 window.toggleUseVideo = async (id, newValue, el) => {
   try {
@@ -1700,6 +1782,24 @@ document.getElementById('btn-delete-all-404').addEventListener('click', async fu
   } finally {
     this.disabled = false;
     this.textContent = t('deleteAll404');
+  }
+});
+
+// ── Run auto-agent now (manual trigger, same logic as the daily cron) ──────────
+document.getElementById('btn-run-auto-agent').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-symbols-outlined" style="animation:spin 1s linear infinite;font-size:17px;">sync</span>';
+  try {
+    const result = await api('/api/products/run-auto-agent', { method: 'POST' });
+    btn.innerHTML = `<span style="font-size:11px;font-weight:700;">+${result.totalAdded ?? 0}</span>`;
+    if (result.totalAdded > 0) await loadProducts();
+    else await loadDrafts();
+  } catch (err) {
+    alert(t('errGeneral') + err.message);
+    btn.innerHTML = '<span class="material-symbols-outlined">smart_toy</span>';
+  } finally {
+    setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">smart_toy</span>'; }, 4000);
   }
 });
 
