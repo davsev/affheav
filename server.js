@@ -375,5 +375,7 @@ app.listen(PORT, async () => {
   const count = await scheduler.startAll();
   console.log(`📅 ${count} schedule(s) loaded`);
   const bcount = await scheduler.startBroadcasts();
-  console.log(`📡 ${bcount} broadcast(s) loaded\n`);
+  console.log(`📡 ${bcount} broadcast(s) loaded`);
+  const discoveryScheduled = await scheduler.startDiscoveryAgent();
+  console.log(`🔎 Discovery agent ${discoveryScheduled ? 'scheduled (daily)' : 'not scheduled'}\n`);
 });

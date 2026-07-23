@@ -5289,10 +5289,11 @@ async function renderDiscoverTab() {
   const status = document.getElementById('discover-status');
   if (!grid) return;
 
-  // Load AI settings and render the settings panel
+  // Load AI + automation settings and render the settings panel
   try {
     const s = await api('/api/discover/settings');
     renderDiscoverSettings(s);
+    renderDiscoverAutoRunSettings(s);
   } catch (_) {}
 
   grid.innerHTML = `<div style="color:var(--on-surface-var);font-size:13px;">${t('discoverLoading')}</div>`;
@@ -5307,6 +5308,42 @@ async function renderDiscoverTab() {
     if (status) status.textContent = `${suggestions.length} ${t('discoverPending')}`;
   } catch (err) {
     grid.innerHTML = `<div style="color:#ef4444;font-size:13px;">${t('errGeneral')}${escHtml(err.message)}</div>`;
+  }
+}
+
+function renderDiscoverAutoRunSettings({ autoRunEnabled }) {
+  const container = document.getElementById('discover-autorun-settings');
+  if (!container) return;
+  container.innerHTML = `
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span class="material-symbols-outlined" style="font-size:18px;color:var(--primary);">schedule</span>
+        <div>
+          <div style="font-weight:600;font-size:14px;">${t('discoverAutoRunLabel')}</div>
+          <div style="font-size:12px;color:var(--on-surface-var);margin-top:2px;">${t('discoverAutoRunDesc')}</div>
+        </div>
+        <label style="margin-right:auto;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;flex-shrink:0;">
+          <span style="color:var(--on-surface-var);">${autoRunEnabled ? t('enabledLabel') : t('disabledLabel')}</span>
+          <div class="ai-toggle${autoRunEnabled ? ' on' : ''}" id="autorun-toggle-btn" onclick="toggleDiscoverAutoRun(this)"
+               style="width:40px;height:22px;border-radius:11px;background:${autoRunEnabled ? 'var(--primary)' : 'var(--surface-3, #444)'};
+                      position:relative;cursor:pointer;transition:background 0.2s;flex-shrink:0;">
+            <div style="position:absolute;top:3px;left:${autoRunEnabled ? '20px' : '3px'};width:16px;height:16px;
+                        border-radius:50%;background:#fff;transition:left 0.2s;"></div>
+          </div>
+        </label>
+      </div>
+    </div>
+  `;
+}
+
+async function toggleDiscoverAutoRun(toggleEl) {
+  const isOn = toggleEl.classList.contains('on');
+  try {
+    await api('/api/discover/settings', { method: 'PATCH', body: { autoRunEnabled: !isOn } });
+    const s = await api('/api/discover/settings');
+    renderDiscoverAutoRunSettings(s);
+  } catch (err) {
+    alert(t('errGeneral') + err.message);
   }
 }
 

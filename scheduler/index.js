@@ -1,10 +1,15 @@
 const cron = require('node-cron');
 const { query } = require('../db');
+const { runDiscovery } = require('../services/discoveryAgent');
 
 let activeJobs = {}; // id → cron.ScheduledTask
 let activeBroadcastJobs = {}; // broadcastId → cron.ScheduledTask
+let discoveryJob = null;
 let _runWorkflow = null;
 let _log = null; // injected from server.js so scheduler events appear in the UI log stream
+
+// Daily by default — override with DISCOVERY_CRON (5-field cron, evaluated in UTC)
+const DISCOVERY_CRON = process.env.DISCOVERY_CRON || '0 6 * * *';
 
 function setWorkflowRunner(fn) { _runWorkflow = fn; }
 function setLogger(fn) { _log = fn; }
@@ -86,6 +91,55 @@ async function runBroadcastJob(b) {
     await broadcastDelivery.send(fresh, fresh.user_id);
   } catch (err) {
     log(`Broadcast "${fresh.label}" error: ${err.message}`, 'error');
+  }
+}
+
+// Runs the AI product-discovery agent once daily for every user who has at least
+// one subject with an AliExpress tracking_id (channel) configured and hasn't opted
+// out via the discovery_auto_run_enabled setting. Only fills the review queue
+// (product_suggestions) — nothing is added to a user's live product list automatically.
+async function startDiscoveryAgent() {
+  if (discoveryJob) { discoveryJob.stop(); discoveryJob = null; }
+  if (!cron.validate(DISCOVERY_CRON)) {
+    log(`Invalid DISCOVERY_CRON: "${DISCOVERY_CRON}" — discovery agent not scheduled`, 'warn');
+    return false;
+  }
+  discoveryJob = cron.schedule(DISCOVERY_CRON, runDiscoveryForAllUsers, { timezone: 'UTC' });
+  log(`🔎 Discovery agent scheduled: ${DISCOVERY_CRON} (UTC)`);
+  return true;
+}
+
+async function runDiscoveryForAllUsers() {
+  let userIds = [];
+  try {
+    const { rows } = await query(`
+      SELECT DISTINCT s.user_id
+      FROM subjects s
+      WHERE s.aliexpress_tracking_id IS NOT NULL AND s.aliexpress_tracking_id != ''
+        AND NOT EXISTS (
+          SELECT 1 FROM settings st
+          WHERE st.user_id = s.user_id
+            AND st.key = 'discovery_auto_run_enabled'
+            AND st.value = 'false'
+        )
+    `);
+    userIds = rows.map(r => r.user_id);
+  } catch (err) {
+    log(`Discovery agent: could not load eligible users: ${err.message}`, 'error');
+    return;
+  }
+
+  for (const userId of userIds) {
+    const jobLog = (msg, level = 'info') => {
+      if (_log) _log(`[scheduler] ${msg}`, level, { userId });
+      else console.log(`[scheduler] [${level}] ${msg}`);
+    };
+    try {
+      const result = await runDiscovery(userId);
+      jobLog(`Discovery agent: ${result.newCount} new suggestion(s) from ${result.subjectsSearched} subject(s)${result.aiEnabled ? ' (AI)' : ''}`);
+    } catch (err) {
+      jobLog(`Discovery agent failed: ${err.message}`, 'error');
+    }
   }
 }
 
@@ -224,6 +278,7 @@ async function remove(id, userId) {
 module.exports = {
   startAll, stopAll, getActiveJobs,
   startBroadcasts, stopBroadcasts,
+  startDiscoveryAgent,
   add, update, remove,
   setWorkflowRunner, setLogger, fireNow,
 };

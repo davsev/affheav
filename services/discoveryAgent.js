@@ -10,7 +10,7 @@ const DEFAULT_AI_PROMPT =
 
 Niche: {{niche}}
 
-Top-selling products in this niche (sorted by clicks):
+Top-selling products in this niche (ranked by real AliExpress sales for this channel, falling back to link clicks when no sales data exists yet):
 {{products}}
 
 Generate 3 AliExpress search keywords to find similar or complementary products for this niche. Each keyword must be 2–5 English words — specific enough to return relevant products, broad enough to find variety.
@@ -45,7 +45,7 @@ async function generateKeywordsWithAI(niche, products, customPrompt) {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   const productList = products
-    .map((p, i) => `${i + 1}. ${p.title} (${p.clicks} clicks)`)
+    .map((p, i) => `${i + 1}. ${p.title} (${p.orderCount > 0 ? `${p.orderCount} sold` : `${p.clicks} clicks`})`)
     .join('\n');
 
   const basePrompt = (customPrompt && customPrompt.trim()) ? customPrompt : DEFAULT_AI_PROMPT;
@@ -77,21 +77,36 @@ async function runDiscovery(userId) {
   const aiEnabled = settingsMap.discovery_ai_enabled === 'true';
   const aiPrompt  = settingsMap.discovery_ai_prompt || '';
 
-  // 1. Fetch top-performing products per subject, ordered by clicks DESC
+  // 1. Fetch top-performing products per subject.
+  // "Most sold" is measured by real AliExpress orders/commission for that subject's
+  // channel (tracking_id) via order_items — website clicks are only a fallback signal
+  // for products that don't have confirmed order data yet.
   const { rows: topProducts } = await query(`
     SELECT
       p.subject_id,
-      s.name                   AS subject_name,
+      s.name                              AS subject_name,
       s.aliexpress_tracking_id,
       p.clicks,
-      p.title                  AS product_title
+      p.title                             AS product_title,
+      COALESCE(sales.order_count, 0)      AS order_count,
+      COALESCE(sales.total_commission, 0) AS total_commission
     FROM products p
     JOIN subjects s ON s.id = p.subject_id AND s.user_id = $1
+    LEFT JOIN LATERAL (
+      SELECT COUNT(DISTINCT oi.order_id) AS order_count,
+             SUM(oi.commission_usd)      AS total_commission
+      FROM order_items oi
+      WHERE oi.user_id = $1
+        AND oi.subject_id = p.subject_id
+        AND p.long_url IS NOT NULL
+        AND p.long_url LIKE '%' || oi.product_id || '%'
+    ) sales ON true
     WHERE p.user_id = $1
       AND p.title IS NOT NULL
       AND p.created_at > NOW() - INTERVAL '90 days'
       AND (
-        p.clicks > 3
+        COALESCE(sales.order_count, 0) > 0
+        OR p.clicks > 3
         OR EXISTS (
           SELECT 1 FROM commission_snapshots cs
           WHERE cs.user_id = $1
@@ -99,7 +114,7 @@ async function runDiscovery(userId) {
             AND p.long_url LIKE '%' || cs.aliexpress_product_id || '%'
         )
       )
-    ORDER BY p.clicks DESC
+    ORDER BY sales.order_count DESC NULLS LAST, sales.total_commission DESC NULLS LAST, p.clicks DESC
   `, [userId]);
 
   // 2. Group products by subject (skip Hebrew titles)
@@ -114,8 +129,10 @@ async function runDiscovery(userId) {
       });
     }
     subjectProductsMap.get(row.subject_id).products.push({
-      title:  row.product_title,
-      clicks: row.clicks,
+      title:      row.product_title,
+      clicks:     row.clicks,
+      orderCount: Number(row.order_count) || 0,
+      commission: Number(row.total_commission) || 0,
     });
   }
 

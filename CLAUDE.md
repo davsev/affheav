@@ -33,8 +33,17 @@ User/Cron → POST /api/send → workflow.js → googleSheets.js (fetch unsent p
 - **services/googleSheets.js** — Primary data store: products, schedules, settings, logs, subjects (niches)
 - **services/openai.js** — Generates Hebrew marketing messages; adds Shabbat/Motzei Shabbat greetings based on day/time in `Asia/Jerusalem`
 - **scheduler/index.js** — node-cron job manager; schedules loaded from Google Sheets on startup
-- **routes/** — One file per resource: products, send, schedules, subjects, facebook, prompt, scrape, aliexpress-api
+- **routes/** — One file per resource: products, send, schedules, subjects, facebook, prompt, scrape, aliexpress-api, discover, analytics
 - **public/app.js** — Vanilla JS frontend (1631 lines), Hebrew RTL dark-theme UI
+
+### AI Product Discovery (Discover tab)
+
+`services/discoveryAgent.js` learns each subject's (niche's) best-selling AliExpress products for that subject's affiliate channel (`aliexpress_tracking_id`) and searches for similar/complementary products to suggest.
+
+- **Ranking signal:** real AliExpress orders/commission from `order_items` (synced via `POST /api/analytics/sync-commissions`, matched to each subject's tracking ID) — falls back to website `products.clicks` for products without confirmed order data yet.
+- **Keyword generation:** title-extraction by default, or OpenAI-generated keywords when `discovery_ai_enabled` is on (per-user setting, custom prompt supported).
+- **Output:** results are inserted into `product_suggestions` (status `pending`) — never added to the live product list automatically. Reviewed via the Discover tab (`GET/PATCH /api/discover`), which calls `POST /api/aliexpress/add` on approval.
+- **Automation:** `scheduler.startDiscoveryAgent()` runs `runDiscovery(userId)` once daily (`DISCOVERY_CRON`, default `0 6 * * *` UTC) for every user with a subject tracking ID configured, unless they've opted out via the `discovery_auto_run_enabled` setting. Still review-first — the cron only populates the suggestion queue.
 
 ### Multi-Niche (Subjects)
 
