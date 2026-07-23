@@ -367,6 +367,18 @@ app.listen(PORT, async () => {
     } catch (err) {
       console.warn('[db] video columns safety guard:', err.message);
     }
+
+    // Belt-and-suspenders: ensure the draft/approval lifecycle columns exist on
+    // products (auto product agent) even if the main migration was interrupted
+    // before reaching that step on a previous deploy.
+    try {
+      await dbQuery(`ALTER TABLE products ADD COLUMN IF NOT EXISTS status   VARCHAR(20) NOT NULL DEFAULT 'active'`);
+      await dbQuery(`ALTER TABLE products ADD COLUMN IF NOT EXISTS added_by VARCHAR(20) NOT NULL DEFAULT 'manual'`);
+      await dbQuery(`CREATE INDEX IF NOT EXISTS products_status_idx ON products(user_id, status)`);
+      await dbQuery(`CREATE INDEX IF NOT EXISTS products_subject_added_by_idx ON products(subject_id, added_by, created_at)`);
+    } catch (err) {
+      console.warn('[db] products draft/approval columns safety guard:', err.message);
+    }
   } else {
     console.warn('[db] DATABASE_URL not set — skipping DB migration');
   }
