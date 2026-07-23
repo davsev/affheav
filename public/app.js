@@ -128,6 +128,8 @@ async function loadUserSettings() {
     const { settings } = await api('/api/settings');
     const chk = document.getElementById('chk-recycle-products');
     if (chk) chk.checked = settings.recycle_products === 'true';
+    // Auto product agent defaults ON — absence of the setting means enabled
+    setAutoAgentToggleState(settings.auto_agent_enabled !== 'false');
   } catch { /* non-critical */ }
 }
 
@@ -1277,6 +1279,7 @@ function initDragAndDrop(tbody) {
 async function loadProducts() {
   const tbody = document.getElementById('products-body');
   tbody.innerHTML = `<tr><td colspan="10" class="empty-state">${t('loading')}</td></tr>`;
+  loadDrafts(); // refresh the auto-agent drafts panel alongside the live product list
 
   try {
     const url = _currentSubject ? `/api/products?subject=${encodeURIComponent(_currentSubject)}` : '/api/products';
@@ -1289,6 +1292,127 @@ async function loadProducts() {
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="10" class="empty-state" style="color:#f87171;">${escHtml(err.message)}</td></tr>`;
   }
+}
+
+// ─── AUTO-AGENT DRAFTS (autonomous product acquisition) ────────────────────
+
+let _draftsListOpen = false;
+
+async function loadDrafts() {
+  const panel = document.getElementById('drafts-panel');
+  const countEl = document.getElementById('drafts-count');
+  if (!panel) return;
+  try {
+    const url = _currentSubject
+      ? `/api/products?status=draft&subject=${encodeURIComponent(_currentSubject)}`
+      : '/api/products?status=draft';
+    const { products } = await api(url);
+    if (!products || !products.length) {
+      panel.style.display = 'none';
+      return;
+    }
+    panel.style.display = '';
+    if (countEl) countEl.textContent = products.length;
+    if (_draftsListOpen) renderDraftsGrid(products);
+    else _lastDrafts = products;
+  } catch (_) {
+    panel.style.display = 'none';
+  }
+}
+
+let _lastDrafts = [];
+
+window.toggleDraftsList = () => {
+  _draftsListOpen = !_draftsListOpen;
+  const grid = document.getElementById('drafts-grid');
+  const btn = document.getElementById('btn-toggle-drafts-list');
+  if (grid) grid.style.display = _draftsListOpen ? 'grid' : 'none';
+  if (btn) btn.textContent = _draftsListOpen ? t('draftsHide') : t('draftsShow');
+  if (_draftsListOpen) renderDraftsGrid(_lastDrafts);
+};
+
+function renderDraftsGrid(products) {
+  _lastDrafts = products;
+  const grid = document.getElementById('drafts-grid');
+  if (!grid) return;
+  grid.innerHTML = products.map(renderDraftCard).join('');
+}
+
+function renderDraftCard(p) {
+  const price = p.sale_price ? `₪${parseFloat(p.sale_price).toFixed(2)}` : '';
+  const subject = p.subject_name ? `<span class="suggestion-subject-badge">${escHtml(p.subject_name)}</span>` : '';
+  const img = p.image
+    ? `<img src="${escHtml(p.image)}" alt="" style="width:100%;height:160px;object-fit:cover;border-radius:8px 8px 0 0;">`
+    : `<div style="width:100%;height:160px;background:var(--surface-2);border-radius:8px 8px 0 0;"></div>`;
+
+  return `
+    <div class="suggestion-card" data-id="${escHtml(String(p.id))}">
+      ${img}
+      <div style="padding:12px;">
+        ${subject}
+        <div class="suggestion-title" title="${escHtml(p.title)}">${escHtml(p.title)}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0;font-size:12px;color:var(--on-surface-var);">
+          ${price ? `<span>${price}</span>` : ''}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn btn-primary btn-sm" style="flex:1;font-size:12px;" onclick="approveDraft(this)">
+            ${t('draftsApprove')}
+          </button>
+          <button class="btn btn-sm" style="flex:1;font-size:12px;background:var(--surface-2);color:var(--on-surface-var);"
+            onclick="rejectDraft(this)">
+            ${t('draftsReject')}
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+window.approveDraft = async (btn) => {
+  const card = btn.closest('.suggestion-card');
+  const id = card.dataset.id;
+  btn.disabled = true;
+  try {
+    await api(`/api/products/${id}/approve`, { method: 'PATCH' });
+    card.style.opacity = '0';
+    setTimeout(() => { loadProducts(); }, 200);
+  } catch (err) {
+    alert(t('errGeneral') + err.message);
+    btn.disabled = false;
+  }
+};
+
+window.rejectDraft = async (btn) => {
+  const card = btn.closest('.suggestion-card');
+  const id = card.dataset.id;
+  btn.disabled = true;
+  try {
+    await api(`/api/products/${id}/reject`, { method: 'PATCH' });
+    card.style.opacity = '0';
+    setTimeout(() => { loadDrafts(); }, 200);
+  } catch (err) {
+    alert(t('errGeneral') + err.message);
+    btn.disabled = false;
+  }
+};
+
+window.toggleAutoAgent = async (toggleEl) => {
+  const isOn = toggleEl.classList.contains('on');
+  try {
+    await api('/api/settings', { method: 'PATCH', body: { key: 'auto_agent_enabled', value: String(!isOn) } });
+    setAutoAgentToggleState(!isOn);
+  } catch (err) {
+    alert(t('errSaveSetting') + err.message);
+  }
+};
+
+function setAutoAgentToggleState(enabled) {
+  const toggle = document.getElementById('autoagent-toggle-btn');
+  if (!toggle) return;
+  toggle.classList.toggle('on', enabled);
+  toggle.style.background = enabled ? 'var(--primary)' : 'var(--surface-3, #444)';
+  const dot = toggle.firstElementChild;
+  if (dot) dot.style.left = enabled ? '18px' : '2px';
 }
 
 window.toggleUseVideo = async (id, newValue, el) => {

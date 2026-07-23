@@ -1,15 +1,19 @@
 const cron = require('node-cron');
 const { query } = require('../db');
 const { runDiscovery } = require('../services/discoveryAgent');
+const { runAutoProductAgent } = require('../services/autoProductAgent');
 
 let activeJobs = {}; // id → cron.ScheduledTask
 let activeBroadcastJobs = {}; // broadcastId → cron.ScheduledTask
 let discoveryJob = null;
+let autoAgentJob = null;
 let _runWorkflow = null;
 let _log = null; // injected from server.js so scheduler events appear in the UI log stream
 
 // Daily by default — override with DISCOVERY_CRON (5-field cron, evaluated in UTC)
 const DISCOVERY_CRON = process.env.DISCOVERY_CRON || '0 6 * * *';
+// Staggered 1h after the discovery agent so the two don't hammer the AliExpress API together
+const AUTO_AGENT_CRON = process.env.AUTO_AGENT_CRON || '0 7 * * *';
 
 function setWorkflowRunner(fn) { _runWorkflow = fn; }
 function setLogger(fn) { _log = fn; }
@@ -139,6 +143,50 @@ async function runDiscoveryForAllUsers() {
       jobLog(`Discovery agent: ${result.newCount} new suggestion(s) from ${result.subjectsSearched} subject(s)${result.aiEnabled ? ' (AI)' : ''}`);
     } catch (err) {
       jobLog(`Discovery agent failed: ${err.message}`, 'error');
+    }
+  }
+}
+
+// Runs the autonomous product-acquisition agent once daily: learns each channel's
+// (subject's aliexpress_tracking_id) most clicked/sold products from persisted
+// order/click history, searches AliExpress for similar products, and inserts them
+// directly into the products table as drafts (status='draft') awaiting approval.
+// Independent of the Discover-tab suggestion queue — the two run side by side.
+async function startAutoProductAgent() {
+  if (autoAgentJob) { autoAgentJob.stop(); autoAgentJob = null; }
+  if (!cron.validate(AUTO_AGENT_CRON)) {
+    log(`Invalid AUTO_AGENT_CRON: "${AUTO_AGENT_CRON}" — auto product agent not scheduled`, 'warn');
+    return false;
+  }
+  autoAgentJob = cron.schedule(AUTO_AGENT_CRON, runAutoProductAgentForAllUsers, { timezone: 'UTC' });
+  log(`🤖 Auto product agent scheduled: ${AUTO_AGENT_CRON} (UTC)`);
+  return true;
+}
+
+async function runAutoProductAgentForAllUsers() {
+  let userIds = [];
+  try {
+    const { rows } = await query(`
+      SELECT DISTINCT user_id FROM subjects
+      WHERE aliexpress_tracking_id IS NOT NULL AND aliexpress_tracking_id != ''
+    `);
+    userIds = rows.map(r => r.user_id);
+  } catch (err) {
+    log(`Auto product agent: could not load users: ${err.message}`, 'error');
+    return;
+  }
+
+  for (const userId of userIds) {
+    const jobLog = (msg, level = 'info') => {
+      if (_log) _log(`[scheduler] ${msg}`, level, { userId });
+      else console.log(`[scheduler] [${level}] ${msg}`);
+    };
+    try {
+      const result = await runAutoProductAgent(userId);
+      if (result.skipped) { jobLog(`Auto product agent: skipped (${result.reason})`); continue; }
+      jobLog(`Auto product agent: ${result.totalAdded} new draft(s) added across ${Object.keys(result.subjects).length} channel(s)`);
+    } catch (err) {
+      jobLog(`Auto product agent failed: ${err.message}`, 'error');
     }
   }
 }
@@ -279,6 +327,7 @@ module.exports = {
   startAll, stopAll, getActiveJobs,
   startBroadcasts, stopBroadcasts,
   startDiscoveryAgent,
+  startAutoProductAgent,
   add, update, remove,
   setWorkflowRunner, setLogger, fireNow,
 };

@@ -389,6 +389,16 @@ async function migrate() {
     END $$
   `);
 
+  // ── Draft / approval lifecycle for autonomous product acquisition ────────
+  // status:   'active' (live, normal catalog) | 'draft' (awaiting approval) |
+  //           'rejected' (declined — kept, not deleted, so the auto-agent
+  //           remembers not to re-suggest it)
+  // added_by: 'manual' (user/UI-driven) | 'auto_agent' (the autonomous agent)
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS status   VARCHAR(20) NOT NULL DEFAULT 'active'`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS added_by VARCHAR(20) NOT NULL DEFAULT 'manual'`);
+  await query(`CREATE INDEX IF NOT EXISTS products_status_idx ON products(user_id, status)`);
+  await query(`CREATE INDEX IF NOT EXISTS products_subject_added_by_idx ON products(subject_id, added_by, created_at)`);
+
   console.log('✓ Database schema up to date');
 }
 

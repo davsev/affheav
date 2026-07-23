@@ -31,20 +31,41 @@ function rowToProduct(r, idx) {
     affiliate_provider:   r.affiliate_provider   || 'aliexpress',
     affiliate_source_id:  r.affiliate_source_id  || null,
     affiliate_source_name: r.affiliate_source_name || null,
+    status:     r.status   || 'active',
+    added_by:   r.added_by || 'manual',
   };
 }
 
-// GET /api/products — list (optional ?subject=id filter)
+// GET /api/products — list (optional ?subject=id filter, optional ?status=draft
+// to list products the auto-agent added that are still awaiting approval)
 router.get('/', async (req, res) => {
   try {
-    const { subject } = req.query;
+    const { subject, status } = req.query;
     const srcJoin = `LEFT JOIN affiliate_sources afs ON afs.id = p.affiliate_source_id`;
     const srcCols = `p.*, afs.name AS affiliate_source_name`;
+
+    if (status === 'draft') {
+      const params = [req.user.id];
+      let subjectFilter = '';
+      if (subject) { params.push(subject); subjectFilter = 'AND p.subject_id = $2'; }
+      const { rows } = await query(
+        `SELECT ${srcCols}, s.name AS subject_name FROM products p ${srcJoin}
+         LEFT JOIN subjects s ON s.id = p.subject_id
+         WHERE p.user_id = $1 AND p.status = 'draft' ${subjectFilter}
+         ORDER BY p.created_at DESC`,
+        params
+      );
+      return res.json({
+        success:  true,
+        products: rows.map((r, i) => ({ ...rowToProduct(r, i), subject_name: r.subject_name || '' })),
+      });
+    }
+
     let rows;
     if (subject) {
       ({ rows } = await query(
         `SELECT ${srcCols} FROM products p ${srcJoin}
-         WHERE p.user_id = $1 AND p.subject_id = $2
+         WHERE p.user_id = $1 AND p.subject_id = $2 AND p.status = 'active'
            AND p.short_link IS NOT NULL AND p.short_link != ''
          ORDER BY p.sort_order ASC NULLS LAST, p.created_at ASC`,
         [req.user.id, subject]
@@ -52,13 +73,74 @@ router.get('/', async (req, res) => {
     } else {
       ({ rows } = await query(
         `SELECT ${srcCols} FROM products p ${srcJoin}
-         WHERE p.user_id = $1
+         WHERE p.user_id = $1 AND p.status = 'active'
            AND p.short_link IS NOT NULL AND p.short_link != ''
          ORDER BY p.sort_order ASC NULLS LAST, p.created_at ASC`,
         [req.user.id]
       ));
     }
     res.json({ success: true, products: rows.map(rowToProduct) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PATCH /api/products/:id/approve — approve a draft: resolve a WhatsApp group,
+// generate its short link (deferred until now so rejected drafts never waste
+// a spoo.me link), and flip it to 'active' so it enters the normal send rotation.
+// Body: { whatsappGroupId? } — falls back to the subject's first group if omitted.
+router.patch('/:id/approve', async (req, res) => {
+  const { whatsappGroupId } = req.body || {};
+  try {
+    const { rows: draftRows } = await query(
+      `SELECT * FROM products WHERE id = $1 AND user_id = $2 AND status = 'draft'`,
+      [req.params.id, req.user.id]
+    );
+    const draft = draftRows[0];
+    if (!draft) return res.status(404).json({ success: false, error: 'Draft not found' });
+
+    let wa_group = '', join_link = '', resolvedGroupId = whatsappGroupId || null;
+    if (whatsappGroupId) {
+      const { rows: grp } = await query(
+        'SELECT wa_group, join_link FROM whatsapp_groups WHERE id = $1 AND user_id = $2',
+        [whatsappGroupId, req.user.id]
+      );
+      if (grp[0]) { wa_group = grp[0].wa_group; join_link = grp[0].join_link || ''; }
+    } else if (draft.subject_id) {
+      const { rows: grp } = await query(
+        `SELECT id, wa_group, join_link FROM whatsapp_groups
+         WHERE subject_id = $1 AND user_id = $2 ORDER BY created_at ASC LIMIT 1`,
+        [draft.subject_id, req.user.id]
+      );
+      if (grp[0]) { resolvedGroupId = grp[0].id; wa_group = grp[0].wa_group; join_link = grp[0].join_link || ''; }
+    }
+
+    const shortLink = draft.short_link || await shortenUrl(draft.long_url);
+
+    const { rows: updated } = await query(
+      `UPDATE products SET
+         status = 'active', short_link = $1, wa_group = $2, join_link = $3,
+         whatsapp_group_id = $4, updated_at = NOW()
+       WHERE id = $5 AND user_id = $6
+       RETURNING *`,
+      [shortLink, wa_group, join_link, resolvedGroupId, req.params.id, req.user.id]
+    );
+    res.json({ success: true, product: rowToProduct(updated[0], 0) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PATCH /api/products/:id/reject — decline a draft. Kept (not deleted) with
+// status='rejected' so the auto-agent remembers not to re-suggest it.
+router.patch('/:id/reject', async (req, res) => {
+  try {
+    const { rowCount } = await query(
+      `UPDATE products SET status = 'rejected', updated_at = NOW() WHERE id = $1 AND user_id = $2 AND status = 'draft'`,
+      [req.params.id, req.user.id]
+    );
+    if (!rowCount) return res.status(404).json({ success: false, error: 'Draft not found' });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
