@@ -338,6 +338,26 @@
           </div>
         </div>
 
+        <!-- Auto-agent drafts panel -->
+        <div id="drafts-panel" style="display:none;margin-bottom:14px;">
+          <div class="sync-404-header">
+            <span>🤖 <span id="drafts-count"></span> <span data-i18n="draftsPendingLabel">מוצרים ממתינים לאישור (הוספו אוטומטית)</span></span>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--on-surface-var);">
+                <span data-i18n="draftsAutoAgentLabel">סוכן אוטומטי פעיל</span>
+                <div class="ai-toggle" id="autoagent-toggle-btn" onclick="toggleAutoAgent(this)"
+                     style="width:36px;height:20px;border-radius:10px;background:var(--surface-3, #444);
+                            position:relative;cursor:pointer;transition:background 0.2s;flex-shrink:0;">
+                  <div style="position:absolute;top:2px;left:2px;width:16px;height:16px;
+                              border-radius:50%;background:#fff;transition:left 0.2s;"></div>
+                </div>
+              </label>
+              <button class="btn btn-sm" id="btn-toggle-drafts-list" onclick="toggleDraftsList()" data-i18n="draftsShow">הצג</button>
+            </div>
+          </div>
+          <div id="drafts-grid" style="display:none;margin-top:12px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;"></div>
+        </div>
+
         <!-- Sync progress bar -->
         <div id="sync-progress-panel" style="display:none;margin-bottom:12px;">
           <div class="sync-progress-bar-wrap">
@@ -1326,6 +1346,7 @@
           רענן הצעות
         </button>
       </div>
+      <div id="discover-autorun-settings"></div>
       <div id="discover-ai-settings"></div>
       <div id="discover-status" style="font-size:13px;color:var(--on-surface-var);margin-bottom:12px;min-height:20px;"></div>
       <div id="discover-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;"></div>

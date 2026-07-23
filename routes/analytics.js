@@ -881,7 +881,7 @@ router.get('/insights', async (req, res) => {
                ELSE 0 END
            ), 0)                                              AS est_revenue_default
          FROM products p
-         WHERE p.user_id = $1
+         WHERE p.user_id = $1 AND p.status = 'active'
          GROUP BY p.subject_id
        )
        SELECT

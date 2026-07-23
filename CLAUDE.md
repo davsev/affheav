@@ -33,8 +33,27 @@ User/Cron → POST /api/send → workflow.js → googleSheets.js (fetch unsent p
 - **services/googleSheets.js** — Primary data store: products, schedules, settings, logs, subjects (niches)
 - **services/openai.js** — Generates Hebrew marketing messages; adds Shabbat/Motzei Shabbat greetings based on day/time in `Asia/Jerusalem`
 - **scheduler/index.js** — node-cron job manager; schedules loaded from Google Sheets on startup
-- **routes/** — One file per resource: products, send, schedules, subjects, facebook, prompt, scrape, aliexpress-api
+- **routes/** — One file per resource: products, send, schedules, subjects, facebook, prompt, scrape, aliexpress-api, discover, analytics
 - **public/app.js** — Vanilla JS frontend (1631 lines), Hebrew RTL dark-theme UI
+
+### AI Product Discovery (Discover tab)
+
+`services/discoveryAgent.js` learns each subject's (niche's) best-selling AliExpress products for that subject's affiliate channel (`aliexpress_tracking_id`) and searches for similar/complementary products to suggest.
+
+- **Ranking signal:** real AliExpress orders/commission from `order_items` (synced via `POST /api/analytics/sync-commissions`, matched to each subject's tracking ID) — falls back to website `products.clicks` for products without confirmed order data yet.
+- **Keyword generation:** title-extraction by default, or OpenAI-generated keywords when `discovery_ai_enabled` is on (per-user setting, custom prompt supported).
+- **Output:** results are inserted into `product_suggestions` (status `pending`) — never added to the live product list automatically. Reviewed via the Discover tab (`GET/PATCH /api/discover`), which calls `POST /api/aliexpress/add` on approval.
+- **Automation:** `scheduler.startDiscoveryAgent()` runs `runDiscovery(userId)` once daily (`DISCOVERY_CRON`, default `0 6 * * *` UTC) for every user with a subject tracking ID configured, unless they've opted out via the `discovery_auto_run_enabled` setting. Still review-first — the cron only populates the suggestion queue.
+
+### Autonomous Product Agent (drafts on the Products tab)
+
+`services/autoProductAgent.js` is a second, independent acquisition agent (runs alongside Discover, not merged with it) that writes candidates directly into the `products` table instead of a separate suggestions table.
+
+- **Memory:** `getTopSellersBySubject()` ranks each channel's (subject's `aliexpress_tracking_id`) best sellers primarily from `order_items` (grouped by `product_id`, independent of whether the source product row still exists), falling back to `products.clicks` for channels without order history yet.
+- **Lifecycle:** every `products` row has `status` (`active` | `draft` | `rejected`) and `added_by` (`manual` | `auto_agent`). The agent inserts new candidates as `status='draft'` — no `short_link`, so they're already invisible to the send pipeline, `GET /api/products`, and `routes/send.js` (all filtered to `status='active'`). `PATCH /api/products/:id/approve` resolves a WhatsApp group (explicit `whatsappGroupId` or the subject's first group), generates the `short_link` via spoo.me (deferred until approval so rejected drafts never waste one), and flips the row to `active`. `PATCH /api/products/:id/reject` sets `status='rejected'` — kept, not deleted, so the agent's dedup check remembers not to re-suggest it.
+- **Volume control:** capped at 5 new drafts per subject (channel) per day (`MAX_DRAFTS_PER_SUBJECT_PER_DAY`), across up to 10 subjects per run.
+- **Automation:** `scheduler.startAutoProductAgent()` runs `runAutoProductAgent(userId)` once daily (`AUTO_AGENT_CRON`, default `0 7 * * *` UTC, staggered an hour after the Discovery agent), unless disabled per-user via the `auto_agent_enabled` setting (Products tab toggle, defaults on).
+- **UI:** the Products tab shows a collapsible "pending approval" panel (`GET /api/products?status=draft`) with Approve/Reject actions per card.
 
 ### Multi-Niche (Subjects)
 

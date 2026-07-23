@@ -68,7 +68,7 @@ async function getNextUnsent({ userId, subject } = {}) {
   if (subject) {
     ({ rows } = await query(
       `SELECT ${cols} FROM products p ${join}
-       WHERE p.user_id = $1 AND p.subject_id = $2
+       WHERE p.user_id = $1 AND p.subject_id = $2 AND p.status = 'active'
          AND p.sent_at IS NULL AND p.short_link IS NOT NULL AND p.short_link != ''
        ORDER BY p.sort_order ASC NULLS LAST, p.created_at ASC LIMIT 1`,
       [userId, subject]
@@ -76,7 +76,7 @@ async function getNextUnsent({ userId, subject } = {}) {
   } else {
     ({ rows } = await query(
       `SELECT ${cols} FROM products p ${join}
-       WHERE p.user_id = $1
+       WHERE p.user_id = $1 AND p.status = 'active'
          AND p.sent_at IS NULL AND p.short_link IS NOT NULL AND p.short_link != ''
        ORDER BY p.sort_order ASC NULLS LAST, p.created_at ASC LIMIT 1`,
       [userId]
@@ -93,7 +93,7 @@ async function getFallbackProduct({ userId, subject } = {}) {
     `SELECT p.*, afs.name AS affiliate_source_name, afs.description AS affiliate_source_description
      FROM products p
      LEFT JOIN affiliate_sources afs ON afs.id = p.affiliate_source_id
-     WHERE p.user_id = $1 ${subjectClause}
+     WHERE p.user_id = $1 AND p.status = 'active' ${subjectClause}
        AND p.sent_at IS NOT NULL
        AND p.short_link IS NOT NULL AND p.short_link != ''
        AND p.long_url   IS NOT NULL AND p.long_url   != ''

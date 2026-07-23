@@ -25,28 +25,31 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/discover/settings — return AI experiment settings
+// GET /api/discover/settings — return AI + automation experiment settings
 router.get('/settings', async (req, res) => {
   try {
     const { rows } = await query(
-      `SELECT key, value FROM settings WHERE user_id = $1 AND key IN ('discovery_ai_enabled', 'discovery_ai_prompt')`,
+      `SELECT key, value FROM settings WHERE user_id = $1
+       AND key IN ('discovery_ai_enabled', 'discovery_ai_prompt', 'discovery_auto_run_enabled')`,
       [req.user.id]
     );
     const map = Object.fromEntries(rows.map(r => [r.key, r.value]));
     res.json({
-      success:       true,
-      aiEnabled:     map.discovery_ai_enabled === 'true',
-      aiPrompt:      map.discovery_ai_prompt || '',
-      defaultPrompt: DEFAULT_AI_PROMPT,
+      success:        true,
+      aiEnabled:      map.discovery_ai_enabled === 'true',
+      aiPrompt:       map.discovery_ai_prompt || '',
+      defaultPrompt:  DEFAULT_AI_PROMPT,
+      // Auto-run defaults ON (opt-out) — absence of the setting means enabled
+      autoRunEnabled: map.discovery_auto_run_enabled !== 'false',
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// PATCH /api/discover/settings — save AI experiment settings
+// PATCH /api/discover/settings — save AI + automation experiment settings
 router.patch('/settings', async (req, res) => {
-  const { aiEnabled, aiPrompt } = req.body || {};
+  const { aiEnabled, aiPrompt, autoRunEnabled } = req.body || {};
   try {
     if (aiEnabled !== undefined) {
       await query(
@@ -60,6 +63,13 @@ router.patch('/settings', async (req, res) => {
         `INSERT INTO settings (user_id, key, value, updated_at) VALUES ($1, 'discovery_ai_prompt', $2, NOW())
          ON CONFLICT (user_id, key) DO UPDATE SET value = $2, updated_at = NOW()`,
         [req.user.id, aiPrompt]
+      );
+    }
+    if (autoRunEnabled !== undefined) {
+      await query(
+        `INSERT INTO settings (user_id, key, value, updated_at) VALUES ($1, 'discovery_auto_run_enabled', $2, NOW())
+         ON CONFLICT (user_id, key) DO UPDATE SET value = $2, updated_at = NOW()`,
+        [req.user.id, autoRunEnabled ? 'true' : 'false']
       );
     }
     res.json({ success: true });
