@@ -1278,7 +1278,8 @@ function initDragAndDrop(tbody) {
 async function loadProducts() {
   const tbody = document.getElementById('products-body');
   tbody.innerHTML = `<tr><td colspan="10" class="empty-state">${t('loading')}</td></tr>`;
-  loadDrafts(); // refresh the auto-agent drafts panel alongside the live product list
+  loadDrafts();      // refresh the auto-agent drafts panel alongside the live product list
+  loadAutoAgentStats(); // refresh the auto-agent-vs-manual performance comparison
 
   try {
     const url = _currentSubject ? `/api/products?subject=${encodeURIComponent(_currentSubject)}` : '/api/products';
@@ -1344,6 +1345,13 @@ function renderDraftCard(p) {
     ? `<img src="${escHtml(p.image)}" alt="" style="width:100%;height:160px;object-fit:cover;border-radius:8px 8px 0 0;">`
     : `<div style="width:100%;height:160px;background:var(--surface-2);border-radius:8px 8px 0 0;"></div>`;
 
+  const reason = p.suggestion_reason
+    ? `<div style="display:flex;gap:6px;align-items:flex-start;margin:6px 0;font-size:11px;color:var(--on-surface-var);">
+        <span class="material-symbols-outlined" style="font-size:14px;flex-shrink:0;">lightbulb</span>
+        <span>${escHtml(p.suggestion_reason)}</span>
+      </div>`
+    : '';
+
   return `
     <div class="suggestion-card" data-id="${escHtml(String(p.id))}">
       ${img}
@@ -1353,6 +1361,7 @@ function renderDraftCard(p) {
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0;font-size:12px;color:var(--on-surface-var);">
           ${price ? `<span>${price}</span>` : ''}
         </div>
+        ${reason}
         <div style="display:flex;gap:8px;margin-top:10px;">
           <button class="btn btn-primary btn-sm" style="flex:1;font-size:12px;" onclick="approveDraft(this)">
             ${t('draftsApprove')}
@@ -1454,6 +1463,39 @@ function renderAutoAgentSettings({ enabled, aiEnabled, aiPrompt, defaultPrompt }
       </div>` : ''}
     </div>
   `;
+}
+
+async function loadAutoAgentStats() {
+  const container = document.getElementById('auto-agent-stats');
+  if (!container) return;
+  try {
+    const { stats } = await api('/api/products/auto-agent-stats');
+    const agentRow = stats.find(s => s.added_by === 'auto_agent');
+    if (!agentRow) { container.style.display = 'none'; return; }
+    const manualRow = stats.find(s => s.added_by === 'manual') || {
+      active_count: 0, avg_clicks: 0, total_orders: 0,
+    };
+
+    const row = (icon, label, s) => `
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--on-surface-var);padding:4px 0;">
+        <span class="material-symbols-outlined" style="font-size:15px;">${icon}</span>
+        <span style="font-weight:600;color:var(--on-surface);min-width:70px;">${label}</span>
+        <span>${s.active_count} ${t('autoAgentStatsActive')}</span>
+        ${s.draft_count !== undefined ? `<span>· ${s.draft_count} ${t('autoAgentStatsPending')}</span>` : ''}
+        ${s.rejected_count !== undefined ? `<span>· ${s.rejected_count} ${t('autoAgentStatsRejected')}</span>` : ''}
+        <span>· ${t('autoAgentStatsAvgClicks')} ${s.avg_clicks.toFixed(1)}</span>
+        <span>· ${s.total_orders} ${t('autoAgentStatsRealSales')}</span>
+      </div>
+    `;
+
+    container.style.display = '';
+    container.innerHTML = `
+      <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:12px 16px;">
+        ${row('smart_toy', t('draftsAutoAgentLabel'), agentRow)}
+        ${row('touch_app', t('autoAgentStatsManual'), manualRow)}
+      </div>
+    `;
+  } catch (_) { container.style.display = 'none'; }
 }
 
 window.toggleAutoAgent = async (toggleEl) => {

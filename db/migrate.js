@@ -399,6 +399,10 @@ async function migrate() {
   await query(`CREATE INDEX IF NOT EXISTS products_status_idx ON products(user_id, status)`);
   await query(`CREATE INDEX IF NOT EXISTS products_subject_added_by_idx ON products(subject_id, added_by, created_at)`);
 
+  // Why the auto-agent suggested this draft (best-seller lineage, or the AI's stated
+  // reason when AI decision-making is on) — shown on the draft card for context.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS suggestion_reason TEXT`);
+
   console.log('✓ Database schema up to date');
 }
 

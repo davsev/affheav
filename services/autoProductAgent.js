@@ -31,12 +31,16 @@ Niche: {{niche}}
 Current best sellers in this niche:
 {{bestSellers}}
 
+Products previously rejected for this niche — avoid suggesting similar ones again:
+{{rejected}}
+
 Candidate products found via AliExpress search:
 {{candidates}}
 
-Decide which candidates are a good fit to add to this channel's catalog: relevant to the niche, a genuine complement or variant of the best sellers, and not a near-duplicate of another candidate in this list. Reject anything off-topic, low-quality-looking, or redundant with another candidate.
+Decide which candidates are a good fit to add to this channel's catalog: relevant to the niche, a genuine complement or variant of the best sellers, not similar to anything previously rejected, and not a near-duplicate of another candidate in this list. Reject anything off-topic, low-quality-looking, or redundant.
 
-Reply with only a valid JSON array of the candidate numbers to keep (1-indexed). Example: [1,3,4]
+Reply with only a valid JSON array of objects for the candidates to keep, each with the candidate number (1-indexed) and a short (under 12 words) reason a shop owner would find useful. Example:
+[{"index":1,"reason":"Matching screen protector for your best-selling phone case"},{"index":3,"reason":"Popular color variant of your top seller"}]
 No explanation, no extra text — just the JSON array.`;
 
 // Extract a short category-level keyword from a full product title (first 5 words)
@@ -72,10 +76,12 @@ async function generateKeywordsWithAI(subjectName, products, customPrompt) {
   return keywords.filter(k => typeof k === 'string' && k.trim()).slice(0, 5);
 }
 
-// Judges a subject's numeric-filter-passing candidates against its niche + best sellers,
-// returning only the ones worth drafting. Falls back to keeping everything on any
-// failure (network error, bad JSON, etc) — AI filtering is an enhancement, not a gate.
-async function filterCandidatesWithAI(subjectName, bestSellers, candidates) {
+// Judges a subject's numeric-filter-passing candidates against its niche, best sellers,
+// and previously-rejected products, returning only the ones worth drafting — each
+// tagged with a short AI-written reason (used for the draft card's "why this?" line).
+// Falls back to keeping everything (untagged) on any failure (network error, bad JSON,
+// etc) — AI filtering is an enhancement, not a gate.
+async function filterCandidatesWithAI(subjectName, bestSellers, candidates, rejectedTitles) {
   if (!candidates.length) return candidates;
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -83,11 +89,15 @@ async function filterCandidatesWithAI(subjectName, bestSellers, candidates) {
   const bestSellerList = bestSellers.length
     ? bestSellers.map((p, i) => `${i + 1}. ${p.title}`).join('\n')
     : '(no sales data yet)';
+  const rejectedList = rejectedTitles.length
+    ? rejectedTitles.map((t, i) => `${i + 1}. ${t}`).join('\n')
+    : '(none yet)';
   const candidateList = candidates.map((c, i) => `${i + 1}. ${c.product_title}`).join('\n');
 
   const prompt = RELEVANCE_PROMPT
     .replace('{{niche}}', subjectName)
     .replace('{{bestSellers}}', bestSellerList)
+    .replace('{{rejected}}', rejectedList)
     .replace('{{candidates}}', candidateList);
 
   const response = await client.chat.completions.create({
@@ -96,9 +106,16 @@ async function filterCandidatesWithAI(subjectName, bestSellers, candidates) {
     temperature: 0.3,
   });
 
-  const indices = parseAiJsonArray(response.choices[0].message.content);
-  const keepSet = new Set(indices.map(n => Number(n)));
-  return candidates.filter((_, i) => keepSet.has(i + 1));
+  const decisions = parseAiJsonArray(response.choices[0].message.content);
+  const reasonByIndex = new Map(
+    decisions
+      .filter(d => d && typeof d.index !== 'undefined')
+      .map(d => [Number(d.index), typeof d.reason === 'string' ? d.reason.trim() : null])
+  );
+
+  return candidates
+    .map((c, i) => (reasonByIndex.has(i + 1) ? { ...c, aiReason: reasonByIndex.get(i + 1) || null } : null))
+    .filter(Boolean);
 }
 
 async function searchAliExpress(keywords, trackingId) {
@@ -220,16 +237,28 @@ async function runAutoProductAgent(userId) {
     let remaining = MAX_DRAFTS_PER_SUBJECT_PER_DAY - parseInt(countRows[0]?.n || 0, 10);
     if (remaining <= 0) { perSubject[subjectName] = 0; continue; }
 
+    // keyword -> best-seller title that produced it. Only meaningful for title-extraction
+    // keywords (each comes from one specific best seller); AI-generated keywords aren't
+    // tied to a single product, so this map stays empty in that case.
+    const keywordSource = new Map();
     let keywords;
     if (aiEnabled) {
       try {
         keywords = await generateKeywordsWithAI(subjectName, products, aiPrompt);
       } catch (err) {
         console.error(`[auto-agent] AI keyword generation failed for "${subjectName}", falling back to title extraction: ${err.message}`);
-        keywords = [...new Set(products.slice(0, 3).map(p => titleToKeyword(p.title)))];
+        keywords = [];
+        for (const p of products.slice(0, 3)) {
+          const kw = titleToKeyword(p.title);
+          if (!keywordSource.has(kw)) { keywords.push(kw); keywordSource.set(kw, p.title); }
+        }
       }
     } else {
-      keywords = [...new Set(products.slice(0, 3).map(p => titleToKeyword(p.title)))];
+      keywords = [];
+      for (const p of products.slice(0, 3)) {
+        const kw = titleToKeyword(p.title);
+        if (!keywordSource.has(kw)) { keywords.push(kw); keywordSource.set(kw, p.title); }
+      }
     }
 
     // Gather every numeric-filter-passing candidate across this subject's keywords first,
@@ -238,7 +267,12 @@ async function runAutoProductAgent(userId) {
     for (const keyword of keywords) {
       try {
         const results = await searchAliExpress(keyword, trackingId);
-        candidates.push(...results.filter(passesFilters).filter(p => !existingUrls.has(p.promotion_link)));
+        candidates.push(
+          ...results
+            .filter(passesFilters)
+            .filter(p => !existingUrls.has(p.promotion_link))
+            .map(p => ({ ...p, _sourceKeyword: keyword }))
+        );
       } catch (err) {
         console.error(`[auto-agent] search failed for "${keyword}": ${err.message}`);
       }
@@ -255,7 +289,13 @@ async function runAutoProductAgent(userId) {
 
     if (aiEnabled && candidates.length) {
       try {
-        candidates = await filterCandidatesWithAI(subjectName, products, candidates);
+        const { rows: rejectedRows } = await query(
+          `SELECT title FROM products
+           WHERE user_id = $1 AND subject_id = $2 AND status = 'rejected' AND title IS NOT NULL
+           ORDER BY updated_at DESC LIMIT 20`,
+          [userId, subjectId]
+        );
+        candidates = await filterCandidatesWithAI(subjectName, products, candidates, rejectedRows.map(r => r.title));
       } catch (err) {
         console.error(`[auto-agent] AI relevance filter failed for "${subjectName}", keeping all numeric-filtered candidates: ${err.message}`);
       }
@@ -268,18 +308,22 @@ async function runAutoProductAgent(userId) {
       const salePrice      = parseFloat(product.app_sale_price) || null;
       const commissionRate = salePrice ? 0.08 : null;
       const videoUrl       = product.product_video_url || null;
+      const bestSeller     = keywordSource.get(product._sourceKeyword);
+      const reason         = product.aiReason
+        || (bestSeller ? `Similar to your best seller "${bestSeller}"` : `Found via search: "${product._sourceKeyword}"`);
 
       await query(
         `INSERT INTO products
            (user_id, subject_id, long_url, image, text, title, sort_order,
-            sale_price, commission_rate, video_url, use_video, status, added_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'draft','auto_agent')`,
+            sale_price, commission_rate, video_url, use_video, status, added_by, suggestion_reason)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'draft','auto_agent',$12)`,
         [
           userId, subjectId, product.promotion_link,
           product.product_main_image_url || '',
           product.product_title, product.product_title,
           nextOrder++,
           salePrice, commissionRate, videoUrl, !!videoUrl,
+          reason,
         ]
       );
 
