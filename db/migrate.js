@@ -403,6 +403,13 @@ async function migrate() {
   // reason when AI decision-making is on) — shown on the draft card for context.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS suggestion_reason TEXT`);
 
+  // The stable AliExpress product ID (as opposed to long_url, which stores the
+  // affiliate promotion_link — regenerated per API call, so it differs between
+  // separate searches for the exact same product and is useless for dedup).
+  // Used by the auto-agent to recognize a product it's already suggested/drafted.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS aliexpress_product_id TEXT`);
+  await query(`CREATE INDEX IF NOT EXISTS products_aliexpress_product_id_idx ON products(user_id, aliexpress_product_id)`);
+
   console.log('✓ Database schema up to date');
 }
 

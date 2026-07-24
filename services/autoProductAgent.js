@@ -208,14 +208,21 @@ async function runAutoProductAgent(userId) {
 
   const subjectMap = await getTopSellersBySubject(userId);
 
-  // Dedup against every product this user has ever had, in any status —
-  // rejected drafts are kept (not deleted) specifically so they count here and
-  // the agent never re-suggests something already declined.
+  // Dedup against every product this user has ever had, in any status — rejected
+  // drafts are kept (not deleted) specifically so they count here and the agent
+  // never re-suggests something already declined. Keyed primarily by the stable
+  // AliExpress product_id, not long_url: long_url stores the affiliate
+  // promotion_link, which AliExpress regenerates on every API call — the same
+  // physical product gets a different link each time, so a URL-only dedup check
+  // silently fails and the same product keeps resurfacing as "new". long_url is
+  // kept as a secondary check for older rows inserted before this column existed.
   const { rows: existingRows } = await query(
-    `SELECT long_url FROM products WHERE user_id = $1 AND long_url IS NOT NULL`,
+    `SELECT long_url, aliexpress_product_id FROM products
+     WHERE user_id = $1 AND (long_url IS NOT NULL OR aliexpress_product_id IS NOT NULL)`,
     [userId]
   );
-  const existingUrls = new Set(existingRows.map(r => r.long_url));
+  const existingUrls       = new Set(existingRows.map(r => r.long_url).filter(Boolean));
+  const existingProductIds = new Set(existingRows.map(r => r.aliexpress_product_id).filter(Boolean));
 
   const { rows: maxRow } = await query(
     'SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM products WHERE user_id = $1',
@@ -270,7 +277,7 @@ async function runAutoProductAgent(userId) {
         candidates.push(
           ...results
             .filter(passesFilters)
-            .filter(p => !existingUrls.has(p.promotion_link))
+            .filter(p => !existingProductIds.has(String(p.product_id)) && !existingUrls.has(p.promotion_link))
             .map(p => ({ ...p, _sourceKeyword: keyword }))
         );
       } catch (err) {
@@ -279,11 +286,13 @@ async function runAutoProductAgent(userId) {
       await new Promise(r => setTimeout(r, 1000));
     }
 
-    // Dedup candidates against each other (the same product can surface for multiple keywords)
-    const seenLinks = new Set();
+    // Dedup candidates against each other (the same product can surface for multiple
+    // keywords, each time with a different promotion_link) — key by product_id, not link.
+    const seenIds = new Set();
     candidates = candidates.filter(c => {
-      if (seenLinks.has(c.promotion_link)) return false;
-      seenLinks.add(c.promotion_link);
+      const pid = String(c.product_id);
+      if (seenIds.has(pid)) return false;
+      seenIds.add(pid);
       return true;
     });
 
@@ -315,19 +324,21 @@ async function runAutoProductAgent(userId) {
       await query(
         `INSERT INTO products
            (user_id, subject_id, long_url, image, text, title, sort_order,
-            sale_price, commission_rate, video_url, use_video, status, added_by, suggestion_reason)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'draft','auto_agent',$12)`,
+            sale_price, commission_rate, video_url, use_video, status, added_by,
+            suggestion_reason, aliexpress_product_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'draft','auto_agent',$12,$13)`,
         [
           userId, subjectId, product.promotion_link,
           product.product_main_image_url || '',
           product.product_title, product.product_title,
           nextOrder++,
           salePrice, commissionRate, videoUrl, !!videoUrl,
-          reason,
+          reason, String(product.product_id),
         ]
       );
 
       existingUrls.add(product.promotion_link);
+      existingProductIds.add(String(product.product_id));
       remaining--;
       added++;
       totalAdded++;
