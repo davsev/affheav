@@ -34,6 +34,7 @@ function rowToProduct(r, idx) {
     affiliate_source_name: r.affiliate_source_name || null,
     status:     r.status   || 'active',
     added_by:   r.added_by || 'manual',
+    suggestion_reason: r.suggestion_reason || '',
   };
 }
 
@@ -133,6 +134,44 @@ router.patch('/auto-agent-settings', async (req, res) => {
     if (aiEnabled !== undefined) await upsert('auto_agent_ai_enabled', aiEnabled ? 'true' : 'false');
     if (aiPrompt  !== undefined) await upsert('auto_agent_ai_prompt', aiPrompt);
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/products/auto-agent-stats — compares auto_agent-added vs manually-added
+// products (lifecycle counts + performance) so it's visible whether the agent is
+// actually adding things worth keeping.
+router.get('/auto-agent-stats', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT
+         p.added_by,
+         COUNT(*) FILTER (WHERE p.status = 'active')   AS active_count,
+         COUNT(*) FILTER (WHERE p.status = 'draft')    AS draft_count,
+         COUNT(*) FILTER (WHERE p.status = 'rejected') AS rejected_count,
+         COALESCE(AVG(p.clicks) FILTER (WHERE p.status = 'active'), 0) AS avg_clicks,
+         COALESCE(SUM(sales.order_count), 0) AS total_orders
+       FROM products p
+       LEFT JOIN LATERAL (
+         SELECT COUNT(DISTINCT oi.order_id) AS order_count
+         FROM order_items oi
+         WHERE oi.user_id = p.user_id AND oi.subject_id = p.subject_id
+           AND p.long_url IS NOT NULL AND p.long_url LIKE '%' || oi.product_id || '%'
+       ) sales ON p.status = 'active'
+       WHERE p.user_id = $1
+       GROUP BY p.added_by`,
+      [req.user.id]
+    );
+    const stats = rows.map(r => ({
+      added_by:       r.added_by,
+      active_count:   parseInt(r.active_count, 10),
+      draft_count:    parseInt(r.draft_count, 10),
+      rejected_count: parseInt(r.rejected_count, 10),
+      avg_clicks:     parseFloat(r.avg_clicks),
+      total_orders:   parseInt(r.total_orders, 10),
+    }));
+    res.json({ success: true, stats });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

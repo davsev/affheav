@@ -379,6 +379,21 @@ app.listen(PORT, async () => {
     } catch (err) {
       console.warn('[db] products draft/approval columns safety guard:', err.message);
     }
+
+    // Belt-and-suspenders: ensure suggestion_reason exists on products.
+    try {
+      await dbQuery(`ALTER TABLE products ADD COLUMN IF NOT EXISTS suggestion_reason TEXT`);
+    } catch (err) {
+      console.warn('[db] suggestion_reason column safety guard:', err.message);
+    }
+
+    // Belt-and-suspenders: ensure aliexpress_product_id exists on products.
+    try {
+      await dbQuery(`ALTER TABLE products ADD COLUMN IF NOT EXISTS aliexpress_product_id TEXT`);
+      await dbQuery(`CREATE INDEX IF NOT EXISTS products_aliexpress_product_id_idx ON products(user_id, aliexpress_product_id)`);
+    } catch (err) {
+      console.warn('[db] aliexpress_product_id column safety guard:', err.message);
+    }
   } else {
     console.warn('[db] DATABASE_URL not set — skipping DB migration');
   }
