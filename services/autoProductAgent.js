@@ -43,6 +43,21 @@ Reply with only a valid JSON array of objects for the candidates to keep, each w
 [{"index":1,"reason":"Matching screen protector for your best-selling phone case"},{"index":3,"reason":"Popular color variant of your top seller"}]
 No explanation, no extra text — just the JSON array.`;
 
+// Not user-customizable (unlike the keyword prompt) — keeps the settings UI to one prompt.
+const COMPLEMENTARY_PROMPT =
+`You are an AliExpress affiliate cross-sell researcher.
+
+Niche: {{niche}}
+
+Top-selling products in this niche:
+{{products}}
+
+Generate 3 AliExpress search keywords for products that COMPLEMENT the ones above — accessories or add-ons a customer who already bought these would also want. Not more variants of the same product. For example, for a phone case: screen protector, wireless charger, phone stand. Each keyword must be 2–5 English words.
+
+Reply with only a valid JSON array of strings. Example:
+["tempered glass screen protector", "wireless phone charger", "phone stand desk"]
+No explanation, no extra text — just the JSON array.`;
+
 // Extract a short category-level keyword from a full product title (first 5 words)
 function titleToKeyword(title) {
   return title.split(/\s+/).slice(0, 5).join(' ');
@@ -74,6 +89,28 @@ async function generateKeywordsWithAI(subjectName, products, customPrompt) {
 
   const keywords = parseAiJsonArray(response.choices[0].message.content);
   return keywords.filter(k => typeof k === 'string' && k.trim()).slice(0, 5);
+}
+
+// Cross-sell keywords — accessories/add-ons for the best sellers, not more variants of
+// the same item. No non-AI equivalent: there's no reliable title-extraction heuristic
+// for "what goes with this," so this source is skipped entirely when AI is off.
+async function generateComplementaryKeywordsWithAI(subjectName, products) {
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  const productList = products
+    .map((p, i) => `${i + 1}. ${p.title} (${p.orderCount > 0 ? `${p.orderCount} sold` : `${p.clicks} clicks`})`)
+    .join('\n');
+
+  const prompt = COMPLEMENTARY_PROMPT.replace('{{niche}}', subjectName).replace('{{products}}', productList);
+
+  const response = await client.chat.completions.create({
+    model:       process.env.OPENAI_MODEL || 'gpt-4.1-mini',
+    messages:    [{ role: 'user', content: prompt }],
+    temperature: 0.7,
+  });
+
+  const keywords = parseAiJsonArray(response.choices[0].message.content);
+  return keywords.filter(k => typeof k === 'string' && k.trim()).slice(0, 3);
 }
 
 // Judges a subject's numeric-filter-passing candidates against its niche, best sellers,
@@ -135,6 +172,26 @@ async function searchAliExpress(keywords, trackingId) {
     ?.resp_result?.result?.products?.product || [];
 }
 
+// AliExpress's own hot/trending products for a keyword — independent of this channel's
+// own sales history, so it surfaces new-to-you products and works even for a subject
+// with zero orders or clicks yet.
+async function searchHotProducts(keywords, trackingId) {
+  const response = await signAndCall({
+    method:          'aliexpress.affiliate.hotproduct.query',
+    keywords,
+    target_currency: 'ILS',
+    target_language: 'HE',
+    tracking_id:     trackingId || DEFAULT_TRACKING_ID,
+    sort:            'LAST_VOLUME_DESC',
+    page_no:         '1',
+    page_size:       '30',
+    fields:          'product_id,product_title,product_main_image_url,product_video_url,promotion_link,app_sale_price,evaluate_rate,lastest_volume,available_stock',
+  });
+  return response.data
+    ?.aliexpress_affiliate_hotproduct_query_response
+    ?.resp_result?.result?.products?.product || [];
+}
+
 // "Memory" of each channel's (subject/tracking_id) best sellers. Primary signal is
 // order_items — real AliExpress orders, which persist independently of the live
 // products table (a product can be edited/removed and this history still holds).
@@ -190,9 +247,10 @@ async function getTopSellersBySubject(userId) {
 }
 
 // Runs the autonomous product-acquisition agent for one user: learns each channel's
-// best sellers, searches AliExpress for similar products, and inserts drafts directly
-// into the products table (status='draft') for manual approval. Never touches the
-// live catalog on its own.
+// best sellers, then searches AliExpress across three angles — similar variants,
+// complementary/cross-sell add-ons (AI only), and trending products for the niche as
+// a whole — and inserts drafts directly into the products table (status='draft') for
+// manual approval. Never touches the live catalog on its own.
 //
 // The auto_agent_enabled setting only gates the *scheduled* daily run (checked by the
 // caller in scheduler/index.js) — it does not gate this function itself, so a manual
@@ -245,43 +303,67 @@ async function runAutoProductAgent(userId) {
     if (remaining <= 0) { perSubject[subjectName] = 0; continue; }
 
     // keyword -> best-seller title that produced it. Only meaningful for title-extraction
-    // keywords (each comes from one specific best seller); AI-generated keywords aren't
-    // tied to a single product, so this map stays empty in that case.
+    // "similar" keywords (each comes from one specific best seller); AI-generated
+    // keywords (similar or complementary) aren't tied to a single product, so this map
+    // stays empty for those.
     const keywordSource = new Map();
-    let keywords;
+    let similarKeywords;
     if (aiEnabled) {
       try {
-        keywords = await generateKeywordsWithAI(subjectName, products, aiPrompt);
+        similarKeywords = await generateKeywordsWithAI(subjectName, products, aiPrompt);
       } catch (err) {
         console.error(`[auto-agent] AI keyword generation failed for "${subjectName}", falling back to title extraction: ${err.message}`);
-        keywords = [];
+        similarKeywords = [];
         for (const p of products.slice(0, 3)) {
           const kw = titleToKeyword(p.title);
-          if (!keywordSource.has(kw)) { keywords.push(kw); keywordSource.set(kw, p.title); }
+          if (!keywordSource.has(kw)) { similarKeywords.push(kw); keywordSource.set(kw, p.title); }
         }
       }
     } else {
-      keywords = [];
+      similarKeywords = [];
       for (const p of products.slice(0, 3)) {
         const kw = titleToKeyword(p.title);
-        if (!keywordSource.has(kw)) { keywords.push(kw); keywordSource.set(kw, p.title); }
+        if (!keywordSource.has(kw)) { similarKeywords.push(kw); keywordSource.set(kw, p.title); }
       }
     }
 
-    // Gather every numeric-filter-passing candidate across this subject's keywords first,
-    // so an AI relevance pass (if enabled) can judge the whole set in one call.
-    let candidates = [];
-    for (const keyword of keywords) {
+    // Three search sources feed the same candidate pool: variants of what already
+    // sells (similarKeywords, above), accessories/add-ons for those best sellers
+    // (complementary — AI only, no reliable non-AI heuristic for "what goes with
+    // this"), and AliExpress's own trending products for the niche as a whole
+    // (works even for a subject with zero sales history yet).
+    const searchTasks = similarKeywords.map(keyword => ({ keyword, hot: false }));
+
+    if (aiEnabled) {
       try {
-        const results = await searchAliExpress(keyword, trackingId);
+        const complementary = await generateComplementaryKeywordsWithAI(subjectName, products);
+        searchTasks.push(...complementary.map(keyword => ({ keyword, hot: false })));
+      } catch (err) {
+        console.error(`[auto-agent] AI complementary-keyword generation failed for "${subjectName}": ${err.message}`);
+      }
+    }
+
+    if (!HEBREW_RE.test(subjectName)) {
+      searchTasks.push({ keyword: subjectName, hot: true });
+    }
+
+    // Gather every numeric-filter-passing candidate across all of this subject's
+    // searches first, so an AI relevance pass (if enabled) can judge the whole set
+    // in one call.
+    let candidates = [];
+    for (const task of searchTasks) {
+      try {
+        const results = task.hot
+          ? await searchHotProducts(task.keyword, trackingId)
+          : await searchAliExpress(task.keyword, trackingId);
         candidates.push(
           ...results
             .filter(passesFilters)
             .filter(p => !existingProductIds.has(String(p.product_id)) && !existingUrls.has(p.promotion_link))
-            .map(p => ({ ...p, _sourceKeyword: keyword }))
+            .map(p => ({ ...p, _sourceKeyword: task.keyword, _isTrending: task.hot }))
         );
       } catch (err) {
-        console.error(`[auto-agent] search failed for "${keyword}": ${err.message}`);
+        console.error(`[auto-agent] search failed for "${task.keyword}"${task.hot ? ' (trending)' : ''}: ${err.message}`);
       }
       await new Promise(r => setTimeout(r, 1000));
     }
@@ -319,6 +401,7 @@ async function runAutoProductAgent(userId) {
       const videoUrl       = product.product_video_url || null;
       const bestSeller     = keywordSource.get(product._sourceKeyword);
       const reason         = product.aiReason
+        || (product._isTrending ? `Trending in "${subjectName}" on AliExpress` : null)
         || (bestSeller ? `Similar to your best seller "${bestSeller}"` : `Found via search: "${product._sourceKeyword}"`);
 
       await query(
