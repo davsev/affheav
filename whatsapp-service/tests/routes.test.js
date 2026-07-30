@@ -125,10 +125,27 @@ describe('POST /send — input guards', () => {
 
 describe('POST /send — group resolution', () => {
   it('returns 404 when group is not found', async () => {
-    const { app, setState } = makeApp({ getChatById: vi.fn().mockResolvedValue(null) }, { retryDelayMs: 0 });
+    const { app, setState } = makeApp({
+      getChatById: vi.fn().mockResolvedValue(null),
+      getChats: vi.fn().mockResolvedValue([]),
+    }, { retryDelayMs: 0 });
     setState({ state: 'CONNECTED' });
     const res = await request(app).post('/send').send({ groupId: '123@g.us', text: 'hi' });
     expect(res.status).toBe(404);
+  });
+
+  it('falls back to getChats() when getChatById misses a group the store has not cached yet', async () => {
+    const { app, setState } = makeApp({
+      getChatById: vi.fn().mockResolvedValue(null),
+      getChats: vi.fn().mockResolvedValue([
+        { isGroup: true, name: 'Late-synced Group', id: { _serialized: '123@g.us' } },
+      ]),
+      sendMessage: vi.fn().mockResolvedValue({ id: { _serialized: 'msg1' } }),
+    }, { retryDelayMs: 0 });
+    setState({ state: 'CONNECTED' });
+    const res = await request(app).post('/send').send({ groupId: '123@g.us', text: 'hi' });
+    expect(res.status).toBe(200);
+    expect(res.body.chatName).toBe('Late-synced Group');
   });
 
   it('returns 400 when chat exists but is not a group', async () => {

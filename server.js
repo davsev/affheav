@@ -394,6 +394,15 @@ app.listen(PORT, async () => {
     } catch (err) {
       console.warn('[db] aliexpress_product_id column safety guard:', err.message);
     }
+
+    // Belt-and-suspenders: ensure logs.subject_id exists even if the main migration
+    // was interrupted before reaching that step on a previous deploy.
+    try {
+      await dbQuery(`ALTER TABLE logs ADD COLUMN IF NOT EXISTS subject_id UUID REFERENCES subjects(id) ON DELETE SET NULL`);
+      await dbQuery(`CREATE INDEX IF NOT EXISTS logs_user_subject_ts ON logs(user_id, subject_id, ts DESC)`);
+    } catch (err) {
+      console.warn('[db] logs.subject_id column safety guard:', err.message);
+    }
   } else {
     console.warn('[db] DATABASE_URL not set — skipping DB migration');
   }
