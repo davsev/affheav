@@ -79,17 +79,30 @@ function createApp({
     const client = getClient();
 
     enqueue(async () => {
+      // getChatById reads from whatsapp-web.js's local chat store, which is rebuilt
+      // from scratch in memory on every process restart and can take a while to fully
+      // sync (worse for group-heavy accounts) — 'ready'/CONNECTED fires well before
+      // that sync finishes. getChats() forces a resync pass, and retrying a few times
+      // with a delay gives a chat that hasn't landed yet a chance to show up before we
+      // give up on it.
+      async function resolveChat() {
+        let found;
+        try { found = await client.getChatById(groupId); } catch (_) { found = null; }
+        if (!found) {
+          try {
+            const chats = await client.getChats();
+            found = chats.find(c => c.id?._serialized === groupId) || null;
+          } catch (_) { /* keep found = null */ }
+        }
+        if (!found) throw new Error('not found yet');
+        return found;
+      }
+
       let chat;
-      try { chat = await client.getChatById(groupId); } catch (_) { chat = null; }
-      if (!chat) {
-        // getChatById reads from whatsapp-web.js's local chat store, which can lag
-        // behind the phone's actual chat list (e.g. a group with no recent activity
-        // since the last sync). getChats() forces a full resync — retry once against
-        // that before concluding the group is genuinely inaccessible.
-        try {
-          const chats = await client.getChats();
-          chat = chats.find(c => c.id?._serialized === groupId) || null;
-        } catch (_) { /* keep chat = null */ }
+      try {
+        chat = await withRetry(resolveChat, { attempts: retryAttempts, delayMs: retryDelayMs });
+      } catch (_) {
+        chat = null;
       }
       if (!chat) {
         const err = new Error(`Group not found: ${groupId}`);

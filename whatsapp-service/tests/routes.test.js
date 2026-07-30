@@ -148,6 +148,27 @@ describe('POST /send — group resolution', () => {
     expect(res.body.chatName).toBe('Late-synced Group');
   });
 
+  it('retries until a group that syncs in on a later attempt is found', async () => {
+    const getChatById = vi.fn().mockResolvedValue(null);
+    let getChatsCalls = 0;
+    const getChats = vi.fn(() => {
+      getChatsCalls += 1;
+      // Store sync completes on the 3rd poll, not the 1st.
+      if (getChatsCalls < 3) return Promise.resolve([]);
+      return Promise.resolve([{ isGroup: true, name: 'Slow Group', id: { _serialized: '123@g.us' } }]);
+    });
+    const { app, setState } = makeApp({
+      getChatById,
+      getChats,
+      sendMessage: vi.fn().mockResolvedValue({ id: { _serialized: 'msg1' } }),
+    }, { retryDelayMs: 0, retryAttempts: 3 });
+    setState({ state: 'CONNECTED' });
+    const res = await request(app).post('/send').send({ groupId: '123@g.us', text: 'hi' });
+    expect(res.status).toBe(200);
+    expect(res.body.chatName).toBe('Slow Group');
+    expect(getChatsCalls).toBe(3);
+  });
+
   it('returns 400 when chat exists but is not a group', async () => {
     const { app, setState } = makeApp({ getChatById: vi.fn().mockResolvedValue({ isGroup: false }) }, { retryDelayMs: 0 });
     setState({ state: 'CONNECTED' });
