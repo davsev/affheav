@@ -10,6 +10,18 @@ const DATA_PATH = process.env.WHATSAPP_DATA_PATH || './wwebjs_auth';
 const MAX_RECONNECT_DELAY_MS = 60 * 1000;
 const INIT_TIMEOUT_MS = 120_000;
 
+// webVersionCache: { type: 'none' } always loads whatever WhatsApp Web build is live,
+// which as of 2026-07 includes a 2.3000.x alpha rollout that renamed an internal
+// minified property (_serialized -> $1), breaking whatsapp-web.js's Store bindings
+// for getChats()/getState() ("r: r" evaluate errors -- see wwebjs/whatsapp-web.js#201845,
+// #201852). Pin to a cached build via wa-version instead so we don't keep tracking
+// whatever WhatsApp is currently serving. Override with WA_VERSION_HTML_URL if this
+// particular build turns out to be broken too, or once an upstream fix ships and
+// tracking live again is safe.
+const DEFAULT_WA_VERSION_HTML_URL =
+  'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1040481160-alpha.html';
+const WA_VERSION_HTML_URL = process.env.WA_VERSION_HTML_URL || DEFAULT_WA_VERSION_HTML_URL;
+
 let reconnectDelay = 5000;
 let initTimeoutId = null;
 let currentClient = null;
@@ -22,7 +34,7 @@ function cleanupStaleLock() {
 function makeClient() {
   return new Client({
     authStrategy: new LocalAuth({ dataPath: DATA_PATH }),
-    webVersionCache: { type: 'none' },
+    webVersionCache: { type: 'remote', remotePath: WA_VERSION_HTML_URL },
     puppeteer: {
       headless: true,
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
