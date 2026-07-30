@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query } = require('../db');
 const { shortenUrl, getAllClickStats } = require('../services/spooMe');
-const { runAutoProductAgent, DEFAULT_KEYWORD_PROMPT } = require('../services/autoProductAgent');
+const { runAutoProductAgent, approveProduct, DEFAULT_KEYWORD_PROMPT } = require('../services/autoProductAgent');
 
 const log = (...a) => console.log('[products]', ...a);
 
@@ -104,16 +104,18 @@ router.get('/auto-agent-settings', async (req, res) => {
   try {
     const { rows } = await query(
       `SELECT key, value FROM settings WHERE user_id = $1
-       AND key IN ('auto_agent_enabled', 'auto_agent_ai_enabled', 'auto_agent_ai_prompt')`,
+       AND key IN ('auto_agent_enabled', 'auto_agent_ai_enabled', 'auto_agent_ai_prompt', 'auto_agent_auto_approve')`,
       [req.user.id]
     );
     const map = Object.fromEntries(rows.map(r => [r.key, r.value]));
     res.json({
       success:       true,
-      // Both default ON (opt-out) — absence of the setting means enabled
+      // enabled/aiEnabled default ON (opt-out) — absence means enabled. autoApprove
+      // is the opposite: it skips human review entirely, so it defaults OFF (opt-in).
       enabled:       map.auto_agent_enabled !== 'false',
       aiEnabled:     map.auto_agent_ai_enabled === 'true',
       aiPrompt:      map.auto_agent_ai_prompt || '',
+      autoApprove:   map.auto_agent_auto_approve === 'true',
       defaultPrompt: DEFAULT_KEYWORD_PROMPT,
     });
   } catch (err) {
@@ -123,16 +125,17 @@ router.get('/auto-agent-settings', async (req, res) => {
 
 // PATCH /api/products/auto-agent-settings
 router.patch('/auto-agent-settings', async (req, res) => {
-  const { enabled, aiEnabled, aiPrompt } = req.body || {};
+  const { enabled, aiEnabled, aiPrompt, autoApprove } = req.body || {};
   try {
     const upsert = (key, value) => query(
       `INSERT INTO settings (user_id, key, value, updated_at) VALUES ($1, $2, $3, NOW())
        ON CONFLICT (user_id, key) DO UPDATE SET value = $3, updated_at = NOW()`,
       [req.user.id, key, value]
     );
-    if (enabled   !== undefined) await upsert('auto_agent_enabled', enabled ? 'true' : 'false');
-    if (aiEnabled !== undefined) await upsert('auto_agent_ai_enabled', aiEnabled ? 'true' : 'false');
-    if (aiPrompt  !== undefined) await upsert('auto_agent_ai_prompt', aiPrompt);
+    if (enabled     !== undefined) await upsert('auto_agent_enabled', enabled ? 'true' : 'false');
+    if (aiEnabled   !== undefined) await upsert('auto_agent_ai_enabled', aiEnabled ? 'true' : 'false');
+    if (aiPrompt    !== undefined) await upsert('auto_agent_ai_prompt', aiPrompt);
+    if (autoApprove !== undefined) await upsert('auto_agent_auto_approve', autoApprove ? 'true' : 'false');
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -184,40 +187,9 @@ router.get('/auto-agent-stats', async (req, res) => {
 router.patch('/:id/approve', async (req, res) => {
   const { whatsappGroupId } = req.body || {};
   try {
-    const { rows: draftRows } = await query(
-      `SELECT * FROM products WHERE id = $1 AND user_id = $2 AND status = 'draft'`,
-      [req.params.id, req.user.id]
-    );
-    const draft = draftRows[0];
-    if (!draft) return res.status(404).json({ success: false, error: 'Draft not found' });
-
-    let wa_group = '', join_link = '', resolvedGroupId = whatsappGroupId || null;
-    if (whatsappGroupId) {
-      const { rows: grp } = await query(
-        'SELECT wa_group, join_link FROM whatsapp_groups WHERE id = $1 AND user_id = $2',
-        [whatsappGroupId, req.user.id]
-      );
-      if (grp[0]) { wa_group = grp[0].wa_group; join_link = grp[0].join_link || ''; }
-    } else if (draft.subject_id) {
-      const { rows: grp } = await query(
-        `SELECT id, wa_group, join_link FROM whatsapp_groups
-         WHERE subject_id = $1 AND user_id = $2 ORDER BY created_at ASC LIMIT 1`,
-        [draft.subject_id, req.user.id]
-      );
-      if (grp[0]) { resolvedGroupId = grp[0].id; wa_group = grp[0].wa_group; join_link = grp[0].join_link || ''; }
-    }
-
-    const shortLink = draft.short_link || await shortenUrl(draft.long_url);
-
-    const { rows: updated } = await query(
-      `UPDATE products SET
-         status = 'active', short_link = $1, wa_group = $2, join_link = $3,
-         whatsapp_group_id = $4, updated_at = NOW()
-       WHERE id = $5 AND user_id = $6
-       RETURNING *`,
-      [shortLink, wa_group, join_link, resolvedGroupId, req.params.id, req.user.id]
-    );
-    res.json({ success: true, product: rowToProduct(updated[0], 0) });
+    const updated = await approveProduct(req.user.id, req.params.id, whatsappGroupId);
+    if (!updated) return res.status(404).json({ success: false, error: 'Draft not found' });
+    res.json({ success: true, product: rowToProduct(updated, 0) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
