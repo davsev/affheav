@@ -1,6 +1,7 @@
 const { query } = require('../db');
 const { signAndCall } = require('./aliexpressApi');
 const { passesFilters } = require('./aliexpressFilters');
+const { shortenUrl } = require('./spooMe');
 const OpenAI = require('openai');
 
 const DEFAULT_TRACKING_ID = process.env.ALIEXPRESS_TRACKING_ID || 'TechSalebuy';
@@ -246,23 +247,72 @@ async function getTopSellersBySubject(userId) {
   return result;
 }
 
+// Approves a single draft: resolves a WhatsApp group (explicit choice, or the
+// subject's first group), generates the short_link via spoo.me (deferred until
+// approval so drafts that never get approved never waste one), and flips it to
+// 'active' so it enters the normal send rotation. Shared by the manual approve
+// route (routes/products.js) and runAutoProductAgent's optional auto-approve mode
+// below — returns null if the row isn't a pending draft (already handled/gone).
+async function approveProduct(userId, productId, whatsappGroupId) {
+  const { rows: draftRows } = await query(
+    `SELECT * FROM products WHERE id = $1 AND user_id = $2 AND status = 'draft'`,
+    [productId, userId]
+  );
+  const draft = draftRows[0];
+  if (!draft) return null;
+
+  let wa_group = '', join_link = '', resolvedGroupId = whatsappGroupId || null;
+  if (whatsappGroupId) {
+    const { rows: grp } = await query(
+      'SELECT wa_group, join_link FROM whatsapp_groups WHERE id = $1 AND user_id = $2',
+      [whatsappGroupId, userId]
+    );
+    if (grp[0]) { wa_group = grp[0].wa_group; join_link = grp[0].join_link || ''; }
+  } else if (draft.subject_id) {
+    const { rows: grp } = await query(
+      `SELECT id, wa_group, join_link FROM whatsapp_groups
+       WHERE subject_id = $1 AND user_id = $2 ORDER BY created_at ASC LIMIT 1`,
+      [draft.subject_id, userId]
+    );
+    if (grp[0]) { resolvedGroupId = grp[0].id; wa_group = grp[0].wa_group; join_link = grp[0].join_link || ''; }
+  }
+
+  const shortLink = draft.short_link || await shortenUrl(draft.long_url);
+
+  const { rows: updated } = await query(
+    `UPDATE products SET
+       status = 'active', short_link = $1, wa_group = $2, join_link = $3,
+       whatsapp_group_id = $4, updated_at = NOW()
+     WHERE id = $5 AND user_id = $6
+     RETURNING *`,
+    [shortLink, wa_group, join_link, resolvedGroupId, productId, userId]
+  );
+  return updated[0];
+}
+
 // Runs the autonomous product-acquisition agent for one user: learns each channel's
 // best sellers, then searches AliExpress across three angles — similar variants,
 // complementary/cross-sell add-ons (AI only), and trending products for the niche as
 // a whole — and inserts drafts directly into the products table (status='draft') for
-// manual approval. Never touches the live catalog on its own.
+// manual approval. Never touches the live catalog on its own, UNLESS the
+// auto_agent_auto_approve setting is on (off by default, opt-in), in which case every
+// inserted draft is immediately approved via approveProduct() — no human review step.
 //
 // The auto_agent_enabled setting only gates the *scheduled* daily run (checked by the
 // caller in scheduler/index.js) — it does not gate this function itself, so a manual
 // "run now" trigger always works even when the user has paused automatic runs.
 async function runAutoProductAgent(userId) {
   const { rows: settingRows } = await query(
-    `SELECT key, value FROM settings WHERE user_id = $1 AND key IN ('auto_agent_ai_enabled', 'auto_agent_ai_prompt')`,
+    `SELECT key, value FROM settings WHERE user_id = $1
+     AND key IN ('auto_agent_ai_enabled', 'auto_agent_ai_prompt', 'auto_agent_auto_approve')`,
     [userId]
   );
   const settingsMap = Object.fromEntries(settingRows.map(r => [r.key, r.value]));
-  const aiEnabled = settingsMap.auto_agent_ai_enabled === 'true';
-  const aiPrompt  = settingsMap.auto_agent_ai_prompt || '';
+  const aiEnabled    = settingsMap.auto_agent_ai_enabled === 'true';
+  const aiPrompt     = settingsMap.auto_agent_ai_prompt || '';
+  // Off by default (opt-in) — unlike the other two settings, this one skips human
+  // review entirely, so it doesn't get the same "absence means enabled" default.
+  const autoApprove  = settingsMap.auto_agent_auto_approve === 'true';
 
   const subjectMap = await getTopSellersBySubject(userId);
 
@@ -404,12 +454,13 @@ async function runAutoProductAgent(userId) {
         || (product._isTrending ? `Trending in "${subjectName}" on AliExpress` : null)
         || (bestSeller ? `Similar to your best seller "${bestSeller}"` : `Found via search: "${product._sourceKeyword}"`);
 
-      await query(
+      const { rows: insertedRows } = await query(
         `INSERT INTO products
            (user_id, subject_id, long_url, image, text, title, sort_order,
             sale_price, commission_rate, video_url, use_video, status, added_by,
             suggestion_reason, aliexpress_product_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'draft','auto_agent',$12,$13)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'draft','auto_agent',$12,$13)
+         RETURNING id`,
         [
           userId, subjectId, product.promotion_link,
           product.product_main_image_url || '',
@@ -419,6 +470,16 @@ async function runAutoProductAgent(userId) {
           reason, String(product.product_id),
         ]
       );
+
+      if (autoApprove) {
+        try {
+          await approveProduct(userId, insertedRows[0].id, null);
+        } catch (err) {
+          // Falls back to sitting as a normal draft for manual review — never
+          // blocks the run.
+          console.error(`[auto-agent] auto-approve failed for product ${insertedRows[0].id}: ${err.message}`);
+        }
+      }
 
       existingUrls.add(product.promotion_link);
       existingProductIds.add(String(product.product_id));
@@ -436,6 +497,7 @@ async function runAutoProductAgent(userId) {
 module.exports = {
   runAutoProductAgent,
   getTopSellersBySubject,
+  approveProduct,
   MAX_DRAFTS_PER_SUBJECT_PER_DAY,
   DEFAULT_KEYWORD_PROMPT,
 };

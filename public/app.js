@@ -1413,7 +1413,7 @@ async function loadAutoAgentSettings() {
   } catch (_) { /* non-critical */ }
 }
 
-function renderAutoAgentSettings({ enabled, aiEnabled, aiPrompt, defaultPrompt }) {
+function renderAutoAgentSettings({ enabled, aiEnabled, aiPrompt, autoApprove, defaultPrompt }) {
   const container = document.getElementById('auto-agent-settings');
   if (!container) return;
 
@@ -1461,6 +1461,15 @@ function renderAutoAgentSettings({ enabled, aiEnabled, aiPrompt, defaultPrompt }
           </button>
         </div>
       </div>` : ''}
+      <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span class="material-symbols-outlined" style="font-size:18px;color:${autoApprove ? '#ef4444' : 'var(--on-surface-var)'};">warning</span>
+          ${toggleRow('autoagent-autoapprove-toggle-btn', t('autoAgentAutoApproveLabel'), autoApprove, 'toggleAutoAgentAutoApprove')}
+        </div>
+        <div style="font-size:11px;color:${autoApprove ? '#ef4444' : 'var(--on-surface-var)'};margin-top:6px;">
+          ${t('autoAgentAutoApproveDesc')}
+        </div>
+      </div>
     </div>
   `;
 }
@@ -1512,6 +1521,18 @@ window.toggleAutoAgentAI = async (toggleEl) => {
   const isOn = toggleEl.classList.contains('on');
   try {
     await api('/api/products/auto-agent-settings', { method: 'PATCH', body: { aiEnabled: !isOn } });
+    await loadAutoAgentSettings();
+  } catch (err) {
+    alert(t('errSaveSetting') + err.message);
+  }
+};
+
+window.toggleAutoAgentAutoApprove = async (toggleEl) => {
+  const isOn = toggleEl.classList.contains('on');
+  // Only confirm on the way IN — turning it off is always the safe direction.
+  if (!isOn && !confirm(t('autoAgentAutoApproveConfirm'))) return;
+  try {
+    await api('/api/products/auto-agent-settings', { method: 'PATCH', body: { autoApprove: !isOn } });
     await loadAutoAgentSettings();
   } catch (err) {
     alert(t('errSaveSetting') + err.message);
