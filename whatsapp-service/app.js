@@ -82,6 +82,16 @@ function createApp({
       let chat;
       try { chat = await client.getChatById(groupId); } catch (_) { chat = null; }
       if (!chat) {
+        // getChatById reads from whatsapp-web.js's local chat store, which can lag
+        // behind the phone's actual chat list (e.g. a group with no recent activity
+        // since the last sync). getChats() forces a full resync — retry once against
+        // that before concluding the group is genuinely inaccessible.
+        try {
+          const chats = await client.getChats();
+          chat = chats.find(c => c.id?._serialized === groupId) || null;
+        } catch (_) { /* keep chat = null */ }
+      }
+      if (!chat) {
         const err = new Error(`Group not found: ${groupId}`);
         err.status = 404;
         throw err;
