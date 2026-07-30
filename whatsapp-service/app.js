@@ -176,7 +176,14 @@ function createApp({
       return { chatName: chat.name, messageId: message.id._serialized };
     })
       .then(result => res.json({ success: true, ...result }))
-      .catch(err => res.status(err.status || 500).json({ success: false, error: err.message }));
+      .catch(err => {
+        // Puppeteer/whatsapp-web.js internals can throw with a bare, unhelpful
+        // .message (sometimes a single minified token) when WhatsApp Web's own
+        // client-side code errors out from underneath us — log the full error
+        // here so Railway logs carry more than what we hand back to the caller.
+        console.error(`[whatsapp] /send failed for ${groupId}:`, err);
+        res.status(err.status || 500).json({ success: false, error: err.message });
+      });
   });
 
   app.get('/groups', requireApiKey, async (req, res) => {
@@ -191,6 +198,7 @@ function createApp({
         .map(c => ({ id: c.id._serialized, name: c.name, participants: c.participants?.length }));
       res.json(groups);
     } catch (err) {
+      console.error('[whatsapp] /groups failed:', err);
       res.status(500).json({ error: err.message });
     }
   });
