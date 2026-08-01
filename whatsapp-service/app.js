@@ -85,16 +85,29 @@ function createApp({
       // that sync finishes. getChats() forces a resync pass, and retrying a few times
       // with a delay gives a chat that hasn't landed yet a chance to show up before we
       // give up on it.
+      // Tracks the last real error (client/Puppeteer crash) seen while resolving,
+      // as opposed to a clean "not in the chat list" result — these need different
+      // messages: one means "wrong group ID", the other means "we couldn't check".
+      let lastClientErr = null;
+
       async function resolveChat() {
-        let found;
-        try { found = await client.getChatById(groupId); } catch (_) { found = null; }
+        let found = null;
+        try {
+          found = await client.getChatById(groupId);
+          lastClientErr = null;
+        } catch (err) {
+          lastClientErr = err;
+        }
         if (!found) {
           try {
             const chats = await client.getChats();
             found = chats.find(c => c.id?._serialized === groupId) || null;
-          } catch (_) { /* keep found = null */ }
+            lastClientErr = null; // getChats() itself succeeded — a clean "not in the list"
+          } catch (err) {
+            lastClientErr = err;
+          }
         }
-        if (!found) throw new Error('not found yet');
+        if (!found) throw new Error('not resolved yet');
         return found;
       }
 
@@ -105,8 +118,17 @@ function createApp({
         chat = null;
       }
       if (!chat) {
-        const err = new Error(`Group not found: ${groupId}`);
-        err.status = 404;
+        let err;
+        if (lastClientErr) {
+          // The WhatsApp client itself errored out (e.g. a Puppeteer/whatsapp-web.js
+          // crash) — we never actually got a clean answer, so don't claim the group
+          // is missing. Surface the real cause instead.
+          err = new Error(`WhatsApp client error while looking up group ${groupId}: ${lastClientErr.message}`);
+          err.status = 502;
+        } else {
+          err = new Error(`Group not found: ${groupId}`);
+          err.status = 404;
+        }
         throw err;
       }
       if (!chat.isGroup) {
@@ -199,7 +221,7 @@ function createApp({
       res.json(groups);
     } catch (err) {
       console.error('[whatsapp] /groups failed:', err);
-      res.status(500).json({ error: err.message });
+      res.status(502).json({ error: `WhatsApp client error while listing groups: ${err.message}` });
     }
   });
 

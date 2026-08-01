@@ -175,6 +175,17 @@ describe('POST /send — group resolution', () => {
     const res = await request(app).post('/send').send({ groupId: '123@g.us', text: 'hi' });
     expect(res.status).toBe(400);
   });
+
+  it('returns 502 with the real cause when the client errors instead of cleanly finding nothing', async () => {
+    const { app, setState } = makeApp({
+      getChatById: vi.fn().mockRejectedValue(new Error('r')),
+      getChats: vi.fn().mockRejectedValue(new Error('r')),
+    }, { retryDelayMs: 0 });
+    setState({ state: 'CONNECTED' });
+    const res = await request(app).post('/send').send({ groupId: '123@g.us', text: 'hi' });
+    expect(res.status).toBe(502);
+    expect(res.body.error).toMatch(/WhatsApp client error while looking up group 123@g\.us: r/);
+  });
 });
 
 describe('GET /groups', () => {
@@ -195,6 +206,14 @@ describe('GET /groups', () => {
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
     expect(res.body[0]).toMatchObject({ id: 'g1@g.us', name: 'Group A', participants: 2 });
+  });
+
+  it('returns 502 with a clear message when getChats() throws', async () => {
+    const { app, setState } = makeApp({ getChats: vi.fn().mockRejectedValue(new Error('r')) });
+    setState({ state: 'CONNECTED' });
+    const res = await request(app).get('/groups');
+    expect(res.status).toBe(502);
+    expect(res.body.error).toBe('WhatsApp client error while listing groups: r');
   });
 
   it('returns 401 when API key is wrong', async () => {

@@ -10,17 +10,21 @@ const DATA_PATH = process.env.WHATSAPP_DATA_PATH || './wwebjs_auth';
 const MAX_RECONNECT_DELAY_MS = 60 * 1000;
 const INIT_TIMEOUT_MS = 120_000;
 
-// webVersionCache: { type: 'none' } always loads whatever WhatsApp Web build is live,
-// which as of 2026-07 includes a 2.3000.x alpha rollout that renamed an internal
-// minified property (_serialized -> $1), breaking whatsapp-web.js's Store bindings
-// for getChats()/getState() ("r: r" evaluate errors -- see wwebjs/whatsapp-web.js#201845,
-// #201852). Pin to a cached build via wa-version instead so we don't keep tracking
-// whatever WhatsApp is currently serving. Override with WA_VERSION_HTML_URL if this
-// particular build turns out to be broken too, or once an upstream fix ships and
-// tracking live again is safe.
-const DEFAULT_WA_VERSION_HTML_URL =
-  'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1040481160-alpha.html';
-const WA_VERSION_HTML_URL = process.env.WA_VERSION_HTML_URL || DEFAULT_WA_VERSION_HTML_URL;
+// getChats()/getState() currently throw "r: r" (see wwebjs/whatsapp-web.js#201845,
+// #201852) because WhatsApp shipped a 2.3000.x build that renamed an internal
+// minified property (_serialized -> $1), breaking whatsapp-web.js's Store bindings.
+// We tried pinning webVersionCache to an older cached build via the community
+// wa-version project (github.com/wppconnect-team/wa-version) to dodge this, but
+// that project only ever mirrors a rolling window of recent builds *within the
+// same broken rollout* and prunes old ones within days -- there was never an
+// actual pre-bug build available there, and the one we pinned to was deleted
+// (404) days later. So there's no known-good version to pin to right now; we're
+// blocked on the upstream fix landing. Set WA_VERSION_HTML_URL (pointing at a
+// github.com/wppconnect-team/wa-version/tree/main/html build) if that changes.
+const WA_VERSION_HTML_URL = process.env.WA_VERSION_HTML_URL || null;
+const webVersionCache = WA_VERSION_HTML_URL
+  ? { type: 'remote', remotePath: WA_VERSION_HTML_URL }
+  : { type: 'none' };
 
 let reconnectDelay = 5000;
 let initTimeoutId = null;
@@ -34,7 +38,7 @@ function cleanupStaleLock() {
 function makeClient() {
   return new Client({
     authStrategy: new LocalAuth({ dataPath: DATA_PATH }),
-    webVersionCache: { type: 'remote', remotePath: WA_VERSION_HTML_URL },
+    webVersionCache,
     puppeteer: {
       headless: true,
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
