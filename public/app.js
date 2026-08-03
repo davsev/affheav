@@ -3651,10 +3651,48 @@ document.getElementById('btn-migrate-subjects')?.addEventListener('click', async
   if (endEl)   endEl.value   = now.toISOString().slice(0, 10);
 })();
 
+// Reads real synced commission data (from commission_snapshots) within the
+// active AliExpress campaign window and shows progress toward its incentive cap.
+async function loadCampaignProgress() {
+  const card = document.getElementById('campaign-progress-card');
+  if (!card) return;
+
+  try {
+    const data = await api('/api/analytics/campaign-progress');
+    if (!data.success) { card.style.display = 'none'; return; }
+
+    card.style.display = '';
+    const bar  = document.getElementById('campaign-progress-bar');
+    const text = document.getElementById('campaign-progress-text');
+    const days = document.getElementById('campaign-progress-days');
+    const warn = document.getElementById('campaign-progress-warning');
+
+    const pct = Math.min(100, data.pctUsed);
+    bar.style.width      = `${pct}%`;
+    bar.style.background = data.capReached ? '#ef4444' : pct > 80 ? '#f59e0b' : '#16a34a';
+
+    text.textContent = `$${data.totalCommission.toFixed(2)} מתוך $${data.cap} · ${data.orderCount} הזמנות בחלון הקמפיין (${data.startDate} — ${data.endDate})`;
+    days.textContent = data.daysRemaining > 0 ? `${data.daysRemaining} ימים נותרו` : 'הקמפיין הסתיים';
+
+    if (data.capReached) {
+      warn.style.display = '';
+      warn.textContent   = 'התקרה הכוללת ($100) הושגה — עמלות נוספות מעבר לתקרה לא ישולמו על ידי AliExpress.';
+    } else if (data.ordersOverCap > 0) {
+      warn.style.display = '';
+      warn.textContent   = `${data.ordersOverCap} הזמנות חרגו מתקרת $50 להזמנה — יעוגלו כלפי מטה על ידי AliExpress.`;
+    } else {
+      warn.style.display = 'none';
+    }
+  } catch (_) {
+    card.style.display = 'none';
+  }
+}
+
 async function renderAnalyticsSummary() {
   const grid = document.getElementById('analytics-niches-grid');
   if (!grid) return;
   grid.innerHTML = `<div style="padding:40px;text-align:center;color:var(--on-surface-var);">${t('anLoading')}</div>`;
+  loadCampaignProgress();
 
   try {
     const data   = await api('/api/analytics/summary');

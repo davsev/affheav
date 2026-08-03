@@ -337,6 +337,63 @@ router.get('/orders', async (req, res) => {
   }
 });
 
+// GET /api/analytics/campaign-progress?subjectId=&startDate=&endDate=&cap=&perOrderCap=
+// Tracks progress toward an AliExpress promo-campaign incentive cap, using
+// commission_snapshots already pulled in by /sync-commissions. Defaults match
+// the "IL Raising Commission Incentive - Summer Clearance" campaign
+// (2026-07-31 to 2026-08-16, $100 total cap, $50 per-order cap).
+router.get('/campaign-progress', async (req, res) => {
+  try {
+    const userId      = req.user.id;
+    const { subjectId } = req.query;
+    const startDate    = req.query.startDate   || '2026-07-31';
+    const endDate       = req.query.endDate     || '2026-08-16';
+    const cap           = req.query.cap         != null ? parseFloat(req.query.cap)         : 100;
+    const perOrderCap   = req.query.perOrderCap != null ? parseFloat(req.query.perOrderCap) : 50;
+
+    const params = [userId, startDate, endDate, perOrderCap];
+    let subjectFilter = '';
+    if (subjectId) {
+      params.push(subjectId);
+      subjectFilter = 'AND subject_id = $5';
+    }
+
+    const { rows } = await query(
+      `SELECT
+         COUNT(DISTINCT order_id)                     AS order_count,
+         COALESCE(SUM(commission_usd), 0)              AS total_commission,
+         COUNT(*) FILTER (WHERE commission_usd > $4)   AS orders_over_cap
+       FROM commission_snapshots
+       WHERE user_id = $1
+         AND order_time >= $2::date
+         AND order_time <  ($3::date + INTERVAL '1 day')
+         ${subjectFilter}`,
+      params
+    );
+
+    const totalCommission = parseFloat(rows[0]?.total_commission || 0);
+    const end             = new Date(`${endDate}T00:00:00Z`);
+    const daysRemaining    = Math.max(0, Math.ceil((end - Date.now()) / 86400000));
+
+    res.json({
+      success:        true,
+      startDate,
+      endDate,
+      cap,
+      perOrderCap,
+      totalCommission,
+      remaining:      Math.max(0, cap - totalCommission),
+      pctUsed:        cap > 0 ? Math.min(100, (totalCommission / cap) * 100) : 0,
+      orderCount:     parseInt(rows[0]?.order_count || 0, 10),
+      ordersOverCap:  parseInt(rows[0]?.orders_over_cap || 0, 10),
+      daysRemaining,
+      capReached:     totalCommission >= cap,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/analytics/daily-stats?subjectId=&days=30
 // Returns orders count and commission grouped by day
 router.get('/daily-stats', async (req, res) => {
