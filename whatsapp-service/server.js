@@ -10,25 +10,25 @@ const DATA_PATH = process.env.WHATSAPP_DATA_PATH || './wwebjs_auth';
 const MAX_RECONNECT_DELAY_MS = 60 * 1000;
 const INIT_TIMEOUT_MS = 120_000;
 
-// getChats()/getState() currently throw "r: r" (see wwebjs/whatsapp-web.js#201845,
-// #201852) because WhatsApp shipped a 2.3000.x build that renamed an internal
-// minified property (_serialized -> $1), breaking whatsapp-web.js's Store bindings.
-// We tried pinning webVersionCache to an older cached build via the community
-// wa-version project (github.com/wppconnect-team/wa-version) to dodge this, but
-// that project only ever mirrors a rolling window of recent builds *within the
-// same broken rollout* and prunes old ones within days -- there was never an
-// actual pre-bug build available there, and the one we pinned to was deleted
-// (404) days later. So there's no known-good version to pin to right now; we're
-// blocked on the upstream fix landing. Set WA_VERSION_HTML_URL (pointing at a
-// github.com/wppconnect-team/wa-version/tree/main/html build) if that changes.
+// getChats()/getState() used to throw "r: r" because WhatsApp renamed an internal
+// minified property that our WhatsApp automation dependency read by the old name,
+// breaking its Store bindings -- now fixed via a patch applied at install time
+// (see patches/). We also tried pinning webVersionCache to an older cached WhatsApp
+// Web build as a workaround, but the archive that came from only ever mirrors a
+// rolling window of recent builds *within the same broken rollout* and prunes old
+// ones within days -- there was never an actual pre-bug build available there. Left
+// unpinned (tracks live) now that the real fix is in place; WA_VERSION_HTML_URL
+// stays available as an override if a version-specific issue ever needs it again.
 const WA_VERSION_HTML_URL = process.env.WA_VERSION_HTML_URL || null;
 const webVersionCache = WA_VERSION_HTML_URL
   ? { type: 'remote', remotePath: WA_VERSION_HTML_URL }
   : { type: 'none' };
 
 let reconnectDelay = 5000;
+let reconnectScheduled = false;
 let initTimeoutId = null;
 let currentClient = null;
+let setState, getState;
 
 function cleanupStaleLock() {
   const lockFile = path.join(DATA_PATH, 'session', 'SingletonLock');
@@ -56,8 +56,21 @@ function makeClient() {
   });
 }
 
+// Forces a fresh browser session when a request hits a Puppeteer failure that
+// means the underlying page is dead (see isPageDeadError in app.js) --
+// whatsapp-web.js doesn't reliably emit 'disconnected' for these, so without
+// this the service can keep reporting CONNECTED while every real call fails.
+function handleClientFailure(reason) {
+  console.warn('[WA] Client failure detected, forcing reconnect:', reason);
+  setState({ state: 'DISCONNECTED', lastError: reason });
+  scheduleReconnect();
+}
+
 currentClient = makeClient();
-const { app, setState, getState } = createApp({ getClient: () => currentClient });
+const appHandles = createApp({ getClient: () => currentClient, onFatalError: handleClientFailure });
+const app = appHandles.app;
+setState = appHandles.setState;
+getState = appHandles.getState;
 
 // GET /debug — full diagnostics (boot-layer only, needs execSync)
 app.get('/debug', (req, res) => {
@@ -93,8 +106,13 @@ function startInitTimeout() {
 }
 
 function scheduleReconnect() {
+  // Several failure signals (a request's onFatalError, plus whatsapp-web.js's own
+  // events) can fire in the same window -- only run one reconnect cycle at a time.
+  if (reconnectScheduled) return;
+  reconnectScheduled = true;
   console.log(`[WA] Reconnecting in ${reconnectDelay / 1000}s...`);
   setTimeout(async () => {
+    reconnectScheduled = false;
     try { await currentClient.destroy(); } catch (_) {}
     cleanupStaleLock();
     currentClient = makeClient();

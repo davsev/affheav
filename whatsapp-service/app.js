@@ -1,6 +1,17 @@
 const express = require('express');
 const { withRetry } = require('./utils');
 
+// Puppeteer/whatsapp-web.js failure signatures that mean the underlying browser
+// page is unusable (e.g. WhatsApp Web reloaded its own page mid-call, or the
+// browser tab/context was torn down) — as opposed to a normal "chat not found"
+// or transient hiccup. whatsapp-web.js doesn't reliably emit a 'disconnected'
+// event for these, so the client can keep reporting CONNECTED while every real
+// call keeps failing until something forces a fresh browser session.
+const PAGE_DEAD_PATTERN = /detached Frame|Session closed|Target closed|Protocol error|Execution context was destroyed|Connection closed/i;
+function isPageDeadError(message) {
+  return PAGE_DEAD_PATTERN.test(message || '');
+}
+
 function createApp({
   getClient,
   apiKey = process.env.WHATSAPP_API_KEY,
@@ -8,6 +19,7 @@ function createApp({
   retryDelayMs = 2000,
   MessageMedia = require('whatsapp-web.js').MessageMedia,
   sharp = require('sharp'),
+  onFatalError = () => {},
 } = {}) {
   const app = express();
   app.use(express.json());
@@ -204,6 +216,7 @@ function createApp({
         // client-side code errors out from underneath us — log the full error
         // here so Railway logs carry more than what we hand back to the caller.
         console.error(`[whatsapp] /send failed for ${groupId}:`, err);
+        if (isPageDeadError(err.message)) onFatalError(err.message);
         res.status(err.status || 500).json({ success: false, error: err.message });
       });
   });
@@ -221,6 +234,7 @@ function createApp({
       res.json(groups);
     } catch (err) {
       console.error('[whatsapp] /groups failed:', err);
+      if (isPageDeadError(err.message)) onFatalError(err.message);
       res.status(502).json({ error: `WhatsApp client error while listing groups: ${err.message}` });
     }
   });
@@ -228,4 +242,4 @@ function createApp({
   return { app, setState, getState };
 }
 
-module.exports = { createApp };
+module.exports = { createApp, isPageDeadError };
