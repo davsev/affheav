@@ -2866,9 +2866,90 @@ function showToast(msg, durationMs = 2000) {
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
+// Centralized "how close am I to $1,000/month profit" view: goal progress,
+// this month's best products, best send time, and week-over-week momentum —
+// each pulled from the existing analytics endpoints, in one glanceable card.
+async function renderGoalWidget() {
+  const card = document.getElementById('goal-widget-card');
+  if (!card) return;
+
+  const GOAL = 1000;
+  const now        = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const fmt        = d => d.toISOString().slice(0, 10);
+
+  const bar   = document.getElementById('goal-widget-bar');
+  const text  = document.getElementById('goal-widget-text');
+  const pace  = document.getElementById('goal-widget-pace');
+  const days  = document.getElementById('goal-widget-days');
+  const topEl = document.getElementById('goal-widget-top-products');
+  const timeEl= document.getElementById('goal-widget-timing');
+  const momEl = document.getElementById('goal-widget-momentum');
+
+  try {
+    const [progress, topRes, timingRes, insightsRes] = await Promise.all([
+      api(`/api/analytics/campaign-progress?startDate=${fmt(monthStart)}&endDate=${fmt(monthEnd)}&cap=${GOAL}&perOrderCap=999999`),
+      api('/api/analytics/top-products'),
+      api('/api/analytics/timing'),
+      api('/api/analytics/marketing-insights'),
+    ]);
+    if (!progress.success) throw new Error(progress.error || 'failed');
+
+    // Progress bar + pace projection
+    const pct = Math.min(100, progress.pctUsed || 0);
+    bar.style.width      = `${pct}%`;
+    bar.style.background = progress.totalCommission >= GOAL ? '#16a34a' : pct > 33 ? '#f59e0b' : '#702ae1';
+
+    text.textContent = `$${progress.totalCommission.toFixed(2)} מתוך $${GOAL} (${pct.toFixed(0)}%) · ${progress.orderCount} הזמנות החודש`;
+    days.textContent = `${progress.daysRemaining} ימים נותרו החודש`;
+
+    const dayOfMonth  = now.getDate();
+    const dailyPace   = dayOfMonth > 0 ? progress.totalCommission / dayOfMonth : 0;
+    const projected   = dailyPace * monthEnd.getDate();
+    pace.textContent  = progress.totalCommission > 0
+      ? `בקצב הנוכחי: כ-$${projected.toFixed(0)} עד סוף החודש ${projected >= GOAL ? '— בדרך ליעד ✅' : '— עדיין מתחת ליעד'}`
+      : 'עוד אין עמלות מדווחות החודש — לחצו "עדכן עמלות" בטאב רווחיות';
+
+    // Top products this month
+    const top3 = (topRes.products || []).slice(0, 3);
+    topEl.innerHTML = top3.length
+      ? top3.map((p, i) => `<div style="margin-bottom:4px;">${i + 1}. ${escHtml((p.text || '(ללא כותרת)').slice(0, 40))}${p.attributed_commission != null ? ` — $${parseFloat(p.attributed_commission).toFixed(2)}` : ''}</div>`).join('')
+      : '<div style="color:var(--on-surface-var);">עוד אין מספיק נתונים</div>';
+
+    // Best send slot
+    const DOW = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+    const slots = (timingRes.slots || []).filter(s => s.sends >= 2);
+    const bestSlot = slots[0] || (timingRes.slots || [])[0];
+    timeEl.innerHTML = bestSlot
+      ? `<div>יום <b>${DOW[bestSlot.dow]}</b> בסביבות השעה <b>${String(bestSlot.hour).padStart(2, '0')}:00</b></div>
+         <div style="color:var(--on-surface-var);font-size:12px;margin-top:2px;">ממוצע ${parseFloat(bestSlot.avg_clicks).toFixed(1)} קליקים לשליחה</div>`
+      : '<div style="color:var(--on-surface-var);">עוד אין מספיק שליחות כדי לדעת</div>';
+
+    // Momentum: last 7 days vs prior 7 days
+    const m     = insightsRes.momentum || {};
+    const last7 = parseFloat(m.comm_last_7 || 0);
+    const prev7 = parseFloat(m.comm_prev_7 || 0);
+    if (last7 === 0 && prev7 === 0) {
+      momEl.innerHTML = '<div style="color:var(--on-surface-var);">עוד אין מספיק נתונים</div>';
+    } else {
+      const diff  = last7 - prev7;
+      const arrow = diff > 0 ? '📈' : diff < 0 ? '📉' : '➡️';
+      const color = diff > 0 ? '#16a34a' : diff < 0 ? '#ef4444' : 'var(--on-surface-var)';
+      momEl.innerHTML = `<div style="color:${color};font-weight:700;">${arrow} $${last7.toFixed(2)} השבוע</div>
+         <div style="color:var(--on-surface-var);font-size:12px;margin-top:2px;">לעומת $${prev7.toFixed(2)} בשבוע שעבר</div>`;
+    }
+  } catch (e) {
+    text.textContent = 'שגיאה בטעינת נתוני היעד';
+    pace.textContent = '';
+  }
+}
+
 async function renderDashboard() {
   const grid = document.getElementById('dashboard-subjects-grid');
   if (!grid) return;
+
+  renderGoalWidget();
 
   // Fetch products for all subjects
   let allProducts = [];

@@ -35,10 +35,13 @@ Current best sellers in this niche:
 Products previously rejected for this niche — avoid suggesting similar ones again:
 {{rejected}}
 
+Products that were approved and sent to the channel but got almost no clicks after two weeks live — real audience feedback, treat as equally worth avoiding:
+{{underperforming}}
+
 Candidate products found via AliExpress search:
 {{candidates}}
 
-Decide which candidates are a good fit to add to this channel's catalog: relevant to the niche, a genuine complement or variant of the best sellers, not similar to anything previously rejected, and not a near-duplicate of another candidate in this list. Reject anything off-topic, low-quality-looking, or redundant.
+Decide which candidates are a good fit to add to this channel's catalog: relevant to the niche, a genuine complement or variant of the best sellers, not similar to anything previously rejected or that underperformed after being sent, and not a near-duplicate of another candidate in this list. Reject anything off-topic, low-quality-looking, or redundant.
 
 Reply with only a valid JSON array of objects for the candidates to keep, each with the candidate number (1-indexed) and a short (under 12 words) reason a shop owner would find useful. Example:
 [{"index":1,"reason":"Matching screen protector for your best-selling phone case"},{"index":3,"reason":"Popular color variant of your top seller"}]
@@ -115,11 +118,12 @@ async function generateComplementaryKeywordsWithAI(subjectName, products) {
 }
 
 // Judges a subject's numeric-filter-passing candidates against its niche, best sellers,
-// and previously-rejected products, returning only the ones worth drafting — each
-// tagged with a short AI-written reason (used for the draft card's "why this?" line).
-// Falls back to keeping everything (untagged) on any failure (network error, bad JSON,
-// etc) — AI filtering is an enhancement, not a gate.
-async function filterCandidatesWithAI(subjectName, bestSellers, candidates, rejectedTitles) {
+// previously-rejected products, and products that underperformed after being sent
+// (real click data — see getUnderperformingTitles), returning only the ones worth
+// drafting — each tagged with a short AI-written reason (used for the draft card's
+// "why this?" line). Falls back to keeping everything (untagged) on any failure
+// (network error, bad JSON, etc) — AI filtering is an enhancement, not a gate.
+async function filterCandidatesWithAI(subjectName, bestSellers, candidates, rejectedTitles, underperformingTitles = []) {
   if (!candidates.length) return candidates;
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -130,12 +134,16 @@ async function filterCandidatesWithAI(subjectName, bestSellers, candidates, reje
   const rejectedList = rejectedTitles.length
     ? rejectedTitles.map((t, i) => `${i + 1}. ${t}`).join('\n')
     : '(none yet)';
+  const underperformingList = underperformingTitles.length
+    ? underperformingTitles.map((t, i) => `${i + 1}. ${t}`).join('\n')
+    : '(none yet)';
   const candidateList = candidates.map((c, i) => `${i + 1}. ${c.product_title}`).join('\n');
 
   const prompt = RELEVANCE_PROMPT
     .replace('{{niche}}', subjectName)
     .replace('{{bestSellers}}', bestSellerList)
     .replace('{{rejected}}', rejectedList)
+    .replace('{{underperforming}}', underperformingList)
     .replace('{{candidates}}', candidateList);
 
   const response = await client.chat.completions.create({
@@ -245,6 +253,27 @@ async function getTopSellersBySubject(userId) {
   }
 
   return result;
+}
+
+// Real-traffic negative signal for a subject, independent of manual rejection: products
+// the agent added, that got approved and sent, but earned almost no clicks after two
+// weeks live. Fed into filterCandidatesWithAI alongside human-rejected titles, so what
+// actually drives (or fails to drive) traffic — not just approve/reject judgment calls —
+// teaches the AI what to avoid suggesting again.
+const UNDERPERFORMING_DAYS_LIVE  = 14;
+const UNDERPERFORMING_MAX_CLICKS = 2;
+
+async function getUnderperformingTitles(userId, subjectId) {
+  const { rows } = await query(
+    `SELECT title FROM products
+     WHERE user_id = $1 AND subject_id = $2 AND added_by = 'auto_agent' AND status = 'active'
+       AND title IS NOT NULL
+       AND sent_at IS NOT NULL AND sent_at <= NOW() - INTERVAL '${UNDERPERFORMING_DAYS_LIVE} days'
+       AND clicks <= $3
+     ORDER BY sent_at DESC LIMIT 20`,
+    [userId, subjectId, UNDERPERFORMING_MAX_CLICKS]
+  );
+  return rows.map(r => r.title);
 }
 
 // Approves a single draft: resolves a WhatsApp group (explicit choice, or the
@@ -430,13 +459,16 @@ async function runAutoProductAgent(userId) {
 
     if (aiEnabled && candidates.length) {
       try {
-        const { rows: rejectedRows } = await query(
-          `SELECT title FROM products
-           WHERE user_id = $1 AND subject_id = $2 AND status = 'rejected' AND title IS NOT NULL
-           ORDER BY updated_at DESC LIMIT 20`,
-          [userId, subjectId]
-        );
-        candidates = await filterCandidatesWithAI(subjectName, products, candidates, rejectedRows.map(r => r.title));
+        const [{ rows: rejectedRows }, underperformingTitles] = await Promise.all([
+          query(
+            `SELECT title FROM products
+             WHERE user_id = $1 AND subject_id = $2 AND status = 'rejected' AND title IS NOT NULL
+             ORDER BY updated_at DESC LIMIT 20`,
+            [userId, subjectId]
+          ),
+          getUnderperformingTitles(userId, subjectId),
+        ]);
+        candidates = await filterCandidatesWithAI(subjectName, products, candidates, rejectedRows.map(r => r.title), underperformingTitles);
       } catch (err) {
         console.error(`[auto-agent] AI relevance filter failed for "${subjectName}", keeping all numeric-filtered candidates: ${err.message}`);
       }
