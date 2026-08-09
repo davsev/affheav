@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
-import { createApp } from '../app.js';
+import { createApp, isPageDeadError } from '../app.js';
 
 const MockMessageMedia = Object.assign(
   vi.fn(function(mimetype, data, filename) {
@@ -24,6 +24,21 @@ function makeApp(clientOverrides = {}, appOptions = {}) {
   });
   return { app, setState, client };
 }
+
+describe('isPageDeadError', () => {
+  it('matches known dead-page Puppeteer failure signatures', () => {
+    expect(isPageDeadError("Attempted to use detached Frame 'ABC123'.")).toBe(true);
+    expect(isPageDeadError('Session closed. Most likely the page has been closed.')).toBe(true);
+    expect(isPageDeadError('Protocol error (Runtime.callFunctionOn): Target closed.')).toBe(true);
+    expect(isPageDeadError('Execution context was destroyed, most likely because of a navigation.')).toBe(true);
+  });
+
+  it('does not match ordinary client errors', () => {
+    expect(isPageDeadError('r')).toBe(false);
+    expect(isPageDeadError('Group not found: 123@g.us')).toBe(false);
+    expect(isPageDeadError(undefined)).toBe(false);
+  });
+});
 
 describe('GET /status', () => {
   it('returns LOADING state with no qr field', async () => {
@@ -175,6 +190,42 @@ describe('POST /send — group resolution', () => {
     const res = await request(app).post('/send').send({ groupId: '123@g.us', text: 'hi' });
     expect(res.status).toBe(400);
   });
+
+  it('returns 502 with the real cause when the client errors instead of cleanly finding nothing', async () => {
+    const { app, setState } = makeApp({
+      getChatById: vi.fn().mockRejectedValue(new Error('r')),
+      getChats: vi.fn().mockRejectedValue(new Error('r')),
+    }, { retryDelayMs: 0 });
+    setState({ state: 'CONNECTED' });
+    const res = await request(app).post('/send').send({ groupId: '123@g.us', text: 'hi' });
+    expect(res.status).toBe(502);
+    expect(res.body.error).toMatch(/WhatsApp client error while looking up group 123@g\.us: r/);
+  });
+
+  it('calls onFatalError once when resolution exhausts retries on a dead-page error', async () => {
+    const onFatalError = vi.fn();
+    const deadPageErr = new Error("Attempted to use detached Frame 'ABC123'.");
+    const { app, setState } = makeApp({
+      getChatById: vi.fn().mockRejectedValue(deadPageErr),
+      getChats: vi.fn().mockRejectedValue(deadPageErr),
+    }, { retryDelayMs: 0, retryAttempts: 3, onFatalError });
+    setState({ state: 'CONNECTED' });
+    const res = await request(app).post('/send').send({ groupId: '123@g.us', text: 'hi' });
+    expect(res.status).toBe(502);
+    expect(onFatalError).toHaveBeenCalledTimes(1);
+    expect(onFatalError).toHaveBeenCalledWith(expect.stringContaining('detached Frame'));
+  });
+
+  it('does not call onFatalError for an ordinary client error like the "r" bug', async () => {
+    const onFatalError = vi.fn();
+    const { app, setState } = makeApp({
+      getChatById: vi.fn().mockRejectedValue(new Error('r')),
+      getChats: vi.fn().mockRejectedValue(new Error('r')),
+    }, { retryDelayMs: 0, onFatalError });
+    setState({ state: 'CONNECTED' });
+    await request(app).post('/send').send({ groupId: '123@g.us', text: 'hi' });
+    expect(onFatalError).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /groups', () => {
@@ -195,6 +246,34 @@ describe('GET /groups', () => {
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
     expect(res.body[0]).toMatchObject({ id: 'g1@g.us', name: 'Group A', participants: 2 });
+  });
+
+  it('returns 502 with a clear message when getChats() throws', async () => {
+    const { app, setState } = makeApp({ getChats: vi.fn().mockRejectedValue(new Error('r')) });
+    setState({ state: 'CONNECTED' });
+    const res = await request(app).get('/groups');
+    expect(res.status).toBe(502);
+    expect(res.body.error).toBe('WhatsApp client error while listing groups: r');
+  });
+
+  it('calls onFatalError when getChats() throws a dead-page error', async () => {
+    const onFatalError = vi.fn();
+    const { app, setState } = makeApp(
+      { getChats: vi.fn().mockRejectedValue(new Error("Attempted to use detached Frame 'ABC123'.")) },
+      { onFatalError }
+    );
+    setState({ state: 'CONNECTED' });
+    await request(app).get('/groups');
+    expect(onFatalError).toHaveBeenCalledTimes(1);
+    expect(onFatalError).toHaveBeenCalledWith(expect.stringContaining('detached Frame'));
+  });
+
+  it('does not call onFatalError for an ordinary client error like the "r" bug', async () => {
+    const onFatalError = vi.fn();
+    const { app, setState } = makeApp({ getChats: vi.fn().mockRejectedValue(new Error('r')) }, { onFatalError });
+    setState({ state: 'CONNECTED' });
+    await request(app).get('/groups');
+    expect(onFatalError).not.toHaveBeenCalled();
   });
 
   it('returns 401 when API key is wrong', async () => {

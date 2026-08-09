@@ -10,21 +10,25 @@ const DATA_PATH = process.env.WHATSAPP_DATA_PATH || './wwebjs_auth';
 const MAX_RECONNECT_DELAY_MS = 60 * 1000;
 const INIT_TIMEOUT_MS = 120_000;
 
-// webVersionCache: { type: 'none' } always loads whatever WhatsApp Web build is live,
-// which as of 2026-07 includes a 2.3000.x alpha rollout that renamed an internal
-// minified property (_serialized -> $1), breaking whatsapp-web.js's Store bindings
-// for getChats()/getState() ("r: r" evaluate errors -- see wwebjs/whatsapp-web.js#201845,
-// #201852). Pin to a cached build via wa-version instead so we don't keep tracking
-// whatever WhatsApp is currently serving. Override with WA_VERSION_HTML_URL if this
-// particular build turns out to be broken too, or once an upstream fix ships and
-// tracking live again is safe.
-const DEFAULT_WA_VERSION_HTML_URL =
-  'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1040481160-alpha.html';
-const WA_VERSION_HTML_URL = process.env.WA_VERSION_HTML_URL || DEFAULT_WA_VERSION_HTML_URL;
+// getChats()/getState() used to throw "r: r" because WhatsApp renamed an internal
+// minified property that our WhatsApp automation dependency read by the old name,
+// breaking its Store bindings -- now fixed via a patch applied at install time
+// (see patches/). We also tried pinning webVersionCache to an older cached WhatsApp
+// Web build as a workaround, but the archive that came from only ever mirrors a
+// rolling window of recent builds *within the same broken rollout* and prunes old
+// ones within days -- there was never an actual pre-bug build available there. Left
+// unpinned (tracks live) now that the real fix is in place; WA_VERSION_HTML_URL
+// stays available as an override if a version-specific issue ever needs it again.
+const WA_VERSION_HTML_URL = process.env.WA_VERSION_HTML_URL || null;
+const webVersionCache = WA_VERSION_HTML_URL
+  ? { type: 'remote', remotePath: WA_VERSION_HTML_URL }
+  : { type: 'none' };
 
 let reconnectDelay = 5000;
+let reconnectScheduled = false;
 let initTimeoutId = null;
 let currentClient = null;
+let setState, getState;
 
 function cleanupStaleLock() {
   const lockFile = path.join(DATA_PATH, 'session', 'SingletonLock');
@@ -34,7 +38,7 @@ function cleanupStaleLock() {
 function makeClient() {
   return new Client({
     authStrategy: new LocalAuth({ dataPath: DATA_PATH }),
-    webVersionCache: { type: 'remote', remotePath: WA_VERSION_HTML_URL },
+    webVersionCache,
     puppeteer: {
       headless: true,
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
@@ -52,8 +56,21 @@ function makeClient() {
   });
 }
 
+// Forces a fresh browser session when a request hits a Puppeteer failure that
+// means the underlying page is dead (see isPageDeadError in app.js) --
+// whatsapp-web.js doesn't reliably emit 'disconnected' for these, so without
+// this the service can keep reporting CONNECTED while every real call fails.
+function handleClientFailure(reason) {
+  console.warn('[WA] Client failure detected, forcing reconnect:', reason);
+  setState({ state: 'DISCONNECTED', lastError: reason });
+  scheduleReconnect();
+}
+
 currentClient = makeClient();
-const { app, setState, getState } = createApp({ getClient: () => currentClient });
+const appHandles = createApp({ getClient: () => currentClient, onFatalError: handleClientFailure });
+const app = appHandles.app;
+setState = appHandles.setState;
+getState = appHandles.getState;
 
 // GET /debug — full diagnostics (boot-layer only, needs execSync)
 app.get('/debug', (req, res) => {
@@ -89,8 +106,13 @@ function startInitTimeout() {
 }
 
 function scheduleReconnect() {
+  // Several failure signals (a request's onFatalError, plus whatsapp-web.js's own
+  // events) can fire in the same window -- only run one reconnect cycle at a time.
+  if (reconnectScheduled) return;
+  reconnectScheduled = true;
   console.log(`[WA] Reconnecting in ${reconnectDelay / 1000}s...`);
   setTimeout(async () => {
+    reconnectScheduled = false;
     try { await currentClient.destroy(); } catch (_) {}
     cleanupStaleLock();
     currentClient = makeClient();

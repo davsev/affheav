@@ -1,6 +1,7 @@
 const { query } = require('../db');
 const { signAndCall } = require('./aliexpressApi');
 const { passesFilters } = require('./aliexpressFilters');
+const { shortenUrl } = require('./spooMe');
 const OpenAI = require('openai');
 
 const DEFAULT_TRACKING_ID = process.env.ALIEXPRESS_TRACKING_ID || 'TechSalebuy';
@@ -34,10 +35,13 @@ Current best sellers in this niche:
 Products previously rejected for this niche — avoid suggesting similar ones again:
 {{rejected}}
 
+Products that were approved and sent to the channel but got almost no clicks after two weeks live — real audience feedback, treat as equally worth avoiding:
+{{underperforming}}
+
 Candidate products found via AliExpress search:
 {{candidates}}
 
-Decide which candidates are a good fit to add to this channel's catalog: relevant to the niche, a genuine complement or variant of the best sellers, not similar to anything previously rejected, and not a near-duplicate of another candidate in this list. Reject anything off-topic, low-quality-looking, or redundant.
+Decide which candidates are a good fit to add to this channel's catalog: relevant to the niche, a genuine complement or variant of the best sellers, not similar to anything previously rejected or that underperformed after being sent, and not a near-duplicate of another candidate in this list. Reject anything off-topic, low-quality-looking, or redundant.
 
 Reply with only a valid JSON array of objects for the candidates to keep, each with the candidate number (1-indexed) and a short (under 12 words) reason a shop owner would find useful. Example:
 [{"index":1,"reason":"Matching screen protector for your best-selling phone case"},{"index":3,"reason":"Popular color variant of your top seller"}]
@@ -114,11 +118,12 @@ async function generateComplementaryKeywordsWithAI(subjectName, products) {
 }
 
 // Judges a subject's numeric-filter-passing candidates against its niche, best sellers,
-// and previously-rejected products, returning only the ones worth drafting — each
-// tagged with a short AI-written reason (used for the draft card's "why this?" line).
-// Falls back to keeping everything (untagged) on any failure (network error, bad JSON,
-// etc) — AI filtering is an enhancement, not a gate.
-async function filterCandidatesWithAI(subjectName, bestSellers, candidates, rejectedTitles) {
+// previously-rejected products, and products that underperformed after being sent
+// (real click data — see getUnderperformingTitles), returning only the ones worth
+// drafting — each tagged with a short AI-written reason (used for the draft card's
+// "why this?" line). Falls back to keeping everything (untagged) on any failure
+// (network error, bad JSON, etc) — AI filtering is an enhancement, not a gate.
+async function filterCandidatesWithAI(subjectName, bestSellers, candidates, rejectedTitles, underperformingTitles = []) {
   if (!candidates.length) return candidates;
 
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -129,12 +134,16 @@ async function filterCandidatesWithAI(subjectName, bestSellers, candidates, reje
   const rejectedList = rejectedTitles.length
     ? rejectedTitles.map((t, i) => `${i + 1}. ${t}`).join('\n')
     : '(none yet)';
+  const underperformingList = underperformingTitles.length
+    ? underperformingTitles.map((t, i) => `${i + 1}. ${t}`).join('\n')
+    : '(none yet)';
   const candidateList = candidates.map((c, i) => `${i + 1}. ${c.product_title}`).join('\n');
 
   const prompt = RELEVANCE_PROMPT
     .replace('{{niche}}', subjectName)
     .replace('{{bestSellers}}', bestSellerList)
     .replace('{{rejected}}', rejectedList)
+    .replace('{{underperforming}}', underperformingList)
     .replace('{{candidates}}', candidateList);
 
   const response = await client.chat.completions.create({
@@ -246,23 +255,93 @@ async function getTopSellersBySubject(userId) {
   return result;
 }
 
+// Real-traffic negative signal for a subject, independent of manual rejection: products
+// the agent added, that got approved and sent, but earned almost no clicks after two
+// weeks live. Fed into filterCandidatesWithAI alongside human-rejected titles, so what
+// actually drives (or fails to drive) traffic — not just approve/reject judgment calls —
+// teaches the AI what to avoid suggesting again.
+const UNDERPERFORMING_DAYS_LIVE  = 14;
+const UNDERPERFORMING_MAX_CLICKS = 2;
+
+async function getUnderperformingTitles(userId, subjectId) {
+  const { rows } = await query(
+    `SELECT title FROM products
+     WHERE user_id = $1 AND subject_id = $2 AND added_by = 'auto_agent' AND status = 'active'
+       AND title IS NOT NULL
+       AND sent_at IS NOT NULL AND sent_at <= NOW() - INTERVAL '${UNDERPERFORMING_DAYS_LIVE} days'
+       AND clicks <= $3
+     ORDER BY sent_at DESC LIMIT 20`,
+    [userId, subjectId, UNDERPERFORMING_MAX_CLICKS]
+  );
+  return rows.map(r => r.title);
+}
+
+// Approves a single draft: resolves a WhatsApp group (explicit choice, or the
+// subject's first group), generates the short_link via spoo.me (deferred until
+// approval so drafts that never get approved never waste one), and flips it to
+// 'active' so it enters the normal send rotation. Shared by the manual approve
+// route (routes/products.js) and runAutoProductAgent's optional auto-approve mode
+// below — returns null if the row isn't a pending draft (already handled/gone).
+async function approveProduct(userId, productId, whatsappGroupId) {
+  const { rows: draftRows } = await query(
+    `SELECT * FROM products WHERE id = $1 AND user_id = $2 AND status = 'draft'`,
+    [productId, userId]
+  );
+  const draft = draftRows[0];
+  if (!draft) return null;
+
+  let wa_group = '', join_link = '', resolvedGroupId = whatsappGroupId || null;
+  if (whatsappGroupId) {
+    const { rows: grp } = await query(
+      'SELECT wa_group, join_link FROM whatsapp_groups WHERE id = $1 AND user_id = $2',
+      [whatsappGroupId, userId]
+    );
+    if (grp[0]) { wa_group = grp[0].wa_group; join_link = grp[0].join_link || ''; }
+  } else if (draft.subject_id) {
+    const { rows: grp } = await query(
+      `SELECT id, wa_group, join_link FROM whatsapp_groups
+       WHERE subject_id = $1 AND user_id = $2 ORDER BY created_at ASC LIMIT 1`,
+      [draft.subject_id, userId]
+    );
+    if (grp[0]) { resolvedGroupId = grp[0].id; wa_group = grp[0].wa_group; join_link = grp[0].join_link || ''; }
+  }
+
+  const shortLink = draft.short_link || await shortenUrl(draft.long_url);
+
+  const { rows: updated } = await query(
+    `UPDATE products SET
+       status = 'active', short_link = $1, wa_group = $2, join_link = $3,
+       whatsapp_group_id = $4, updated_at = NOW()
+     WHERE id = $5 AND user_id = $6
+     RETURNING *`,
+    [shortLink, wa_group, join_link, resolvedGroupId, productId, userId]
+  );
+  return updated[0];
+}
+
 // Runs the autonomous product-acquisition agent for one user: learns each channel's
 // best sellers, then searches AliExpress across three angles — similar variants,
 // complementary/cross-sell add-ons (AI only), and trending products for the niche as
 // a whole — and inserts drafts directly into the products table (status='draft') for
-// manual approval. Never touches the live catalog on its own.
+// manual approval. Never touches the live catalog on its own, UNLESS the
+// auto_agent_auto_approve setting is on (off by default, opt-in), in which case every
+// inserted draft is immediately approved via approveProduct() — no human review step.
 //
 // The auto_agent_enabled setting only gates the *scheduled* daily run (checked by the
 // caller in scheduler/index.js) — it does not gate this function itself, so a manual
 // "run now" trigger always works even when the user has paused automatic runs.
 async function runAutoProductAgent(userId) {
   const { rows: settingRows } = await query(
-    `SELECT key, value FROM settings WHERE user_id = $1 AND key IN ('auto_agent_ai_enabled', 'auto_agent_ai_prompt')`,
+    `SELECT key, value FROM settings WHERE user_id = $1
+     AND key IN ('auto_agent_ai_enabled', 'auto_agent_ai_prompt', 'auto_agent_auto_approve')`,
     [userId]
   );
   const settingsMap = Object.fromEntries(settingRows.map(r => [r.key, r.value]));
-  const aiEnabled = settingsMap.auto_agent_ai_enabled === 'true';
-  const aiPrompt  = settingsMap.auto_agent_ai_prompt || '';
+  const aiEnabled    = settingsMap.auto_agent_ai_enabled === 'true';
+  const aiPrompt     = settingsMap.auto_agent_ai_prompt || '';
+  // Off by default (opt-in) — unlike the other two settings, this one skips human
+  // review entirely, so it doesn't get the same "absence means enabled" default.
+  const autoApprove  = settingsMap.auto_agent_auto_approve === 'true';
 
   const subjectMap = await getTopSellersBySubject(userId);
 
@@ -380,13 +459,16 @@ async function runAutoProductAgent(userId) {
 
     if (aiEnabled && candidates.length) {
       try {
-        const { rows: rejectedRows } = await query(
-          `SELECT title FROM products
-           WHERE user_id = $1 AND subject_id = $2 AND status = 'rejected' AND title IS NOT NULL
-           ORDER BY updated_at DESC LIMIT 20`,
-          [userId, subjectId]
-        );
-        candidates = await filterCandidatesWithAI(subjectName, products, candidates, rejectedRows.map(r => r.title));
+        const [{ rows: rejectedRows }, underperformingTitles] = await Promise.all([
+          query(
+            `SELECT title FROM products
+             WHERE user_id = $1 AND subject_id = $2 AND status = 'rejected' AND title IS NOT NULL
+             ORDER BY updated_at DESC LIMIT 20`,
+            [userId, subjectId]
+          ),
+          getUnderperformingTitles(userId, subjectId),
+        ]);
+        candidates = await filterCandidatesWithAI(subjectName, products, candidates, rejectedRows.map(r => r.title), underperformingTitles);
       } catch (err) {
         console.error(`[auto-agent] AI relevance filter failed for "${subjectName}", keeping all numeric-filtered candidates: ${err.message}`);
       }
@@ -404,12 +486,13 @@ async function runAutoProductAgent(userId) {
         || (product._isTrending ? `Trending in "${subjectName}" on AliExpress` : null)
         || (bestSeller ? `Similar to your best seller "${bestSeller}"` : `Found via search: "${product._sourceKeyword}"`);
 
-      await query(
+      const { rows: insertedRows } = await query(
         `INSERT INTO products
            (user_id, subject_id, long_url, image, text, title, sort_order,
             sale_price, commission_rate, video_url, use_video, status, added_by,
             suggestion_reason, aliexpress_product_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'draft','auto_agent',$12,$13)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'draft','auto_agent',$12,$13)
+         RETURNING id`,
         [
           userId, subjectId, product.promotion_link,
           product.product_main_image_url || '',
@@ -419,6 +502,16 @@ async function runAutoProductAgent(userId) {
           reason, String(product.product_id),
         ]
       );
+
+      if (autoApprove) {
+        try {
+          await approveProduct(userId, insertedRows[0].id, null);
+        } catch (err) {
+          // Falls back to sitting as a normal draft for manual review — never
+          // blocks the run.
+          console.error(`[auto-agent] auto-approve failed for product ${insertedRows[0].id}: ${err.message}`);
+        }
+      }
 
       existingUrls.add(product.promotion_link);
       existingProductIds.add(String(product.product_id));
@@ -436,6 +529,7 @@ async function runAutoProductAgent(userId) {
 module.exports = {
   runAutoProductAgent,
   getTopSellersBySubject,
+  approveProduct,
   MAX_DRAFTS_PER_SUBJECT_PER_DAY,
   DEFAULT_KEYWORD_PROMPT,
 };

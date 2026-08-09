@@ -1,6 +1,17 @@
 const express = require('express');
 const { withRetry } = require('./utils');
 
+// Puppeteer/whatsapp-web.js failure signatures that mean the underlying browser
+// page is unusable (e.g. WhatsApp Web reloaded its own page mid-call, or the
+// browser tab/context was torn down) — as opposed to a normal "chat not found"
+// or transient hiccup. whatsapp-web.js doesn't reliably emit a 'disconnected'
+// event for these, so the client can keep reporting CONNECTED while every real
+// call keeps failing until something forces a fresh browser session.
+const PAGE_DEAD_PATTERN = /detached Frame|Session closed|Target closed|Protocol error|Execution context was destroyed|Connection closed/i;
+function isPageDeadError(message) {
+  return PAGE_DEAD_PATTERN.test(message || '');
+}
+
 function createApp({
   getClient,
   apiKey = process.env.WHATSAPP_API_KEY,
@@ -8,6 +19,7 @@ function createApp({
   retryDelayMs = 2000,
   MessageMedia = require('whatsapp-web.js').MessageMedia,
   sharp = require('sharp'),
+  onFatalError = () => {},
 } = {}) {
   const app = express();
   app.use(express.json());
@@ -85,16 +97,29 @@ function createApp({
       // that sync finishes. getChats() forces a resync pass, and retrying a few times
       // with a delay gives a chat that hasn't landed yet a chance to show up before we
       // give up on it.
+      // Tracks the last real error (client/Puppeteer crash) seen while resolving,
+      // as opposed to a clean "not in the chat list" result — these need different
+      // messages: one means "wrong group ID", the other means "we couldn't check".
+      let lastClientErr = null;
+
       async function resolveChat() {
-        let found;
-        try { found = await client.getChatById(groupId); } catch (_) { found = null; }
+        let found = null;
+        try {
+          found = await client.getChatById(groupId);
+          lastClientErr = null;
+        } catch (err) {
+          lastClientErr = err;
+        }
         if (!found) {
           try {
             const chats = await client.getChats();
             found = chats.find(c => c.id?._serialized === groupId) || null;
-          } catch (_) { /* keep found = null */ }
+            lastClientErr = null; // getChats() itself succeeded — a clean "not in the list"
+          } catch (err) {
+            lastClientErr = err;
+          }
         }
-        if (!found) throw new Error('not found yet');
+        if (!found) throw new Error('not resolved yet');
         return found;
       }
 
@@ -105,8 +130,17 @@ function createApp({
         chat = null;
       }
       if (!chat) {
-        const err = new Error(`Group not found: ${groupId}`);
-        err.status = 404;
+        let err;
+        if (lastClientErr) {
+          // The WhatsApp client itself errored out (e.g. a Puppeteer/whatsapp-web.js
+          // crash) — we never actually got a clean answer, so don't claim the group
+          // is missing. Surface the real cause instead.
+          err = new Error(`WhatsApp client error while looking up group ${groupId}: ${lastClientErr.message}`);
+          err.status = 502;
+        } else {
+          err = new Error(`Group not found: ${groupId}`);
+          err.status = 404;
+        }
         throw err;
       }
       if (!chat.isGroup) {
@@ -182,6 +216,7 @@ function createApp({
         // client-side code errors out from underneath us — log the full error
         // here so Railway logs carry more than what we hand back to the caller.
         console.error(`[whatsapp] /send failed for ${groupId}:`, err);
+        if (isPageDeadError(err.message)) onFatalError(err.message);
         res.status(err.status || 500).json({ success: false, error: err.message });
       });
   });
@@ -199,11 +234,12 @@ function createApp({
       res.json(groups);
     } catch (err) {
       console.error('[whatsapp] /groups failed:', err);
-      res.status(500).json({ error: err.message });
+      if (isPageDeadError(err.message)) onFatalError(err.message);
+      res.status(502).json({ error: `WhatsApp client error while listing groups: ${err.message}` });
     }
   });
 
   return { app, setState, getState };
 }
 
-module.exports = { createApp };
+module.exports = { createApp, isPageDeadError };

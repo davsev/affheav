@@ -32,6 +32,8 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY package*.json ./
+# patch-package (postinstall, below) needs this present before npm install runs
+COPY patches ./patches
 # puppeteer downloads its compatible Chromium here (no PUPPETEER_SKIP_CHROMIUM_DOWNLOAD)
 RUN npm install --omit=dev
 

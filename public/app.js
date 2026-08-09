@@ -1413,7 +1413,7 @@ async function loadAutoAgentSettings() {
   } catch (_) { /* non-critical */ }
 }
 
-function renderAutoAgentSettings({ enabled, aiEnabled, aiPrompt, defaultPrompt }) {
+function renderAutoAgentSettings({ enabled, aiEnabled, aiPrompt, autoApprove, defaultPrompt }) {
   const container = document.getElementById('auto-agent-settings');
   if (!container) return;
 
@@ -1461,6 +1461,15 @@ function renderAutoAgentSettings({ enabled, aiEnabled, aiPrompt, defaultPrompt }
           </button>
         </div>
       </div>` : ''}
+      <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span class="material-symbols-outlined" style="font-size:18px;color:${autoApprove ? '#ef4444' : 'var(--on-surface-var)'};">warning</span>
+          ${toggleRow('autoagent-autoapprove-toggle-btn', t('autoAgentAutoApproveLabel'), autoApprove, 'toggleAutoAgentAutoApprove')}
+        </div>
+        <div style="font-size:11px;color:${autoApprove ? '#ef4444' : 'var(--on-surface-var)'};margin-top:6px;">
+          ${t('autoAgentAutoApproveDesc')}
+        </div>
+      </div>
     </div>
   `;
 }
@@ -1512,6 +1521,18 @@ window.toggleAutoAgentAI = async (toggleEl) => {
   const isOn = toggleEl.classList.contains('on');
   try {
     await api('/api/products/auto-agent-settings', { method: 'PATCH', body: { aiEnabled: !isOn } });
+    await loadAutoAgentSettings();
+  } catch (err) {
+    alert(t('errSaveSetting') + err.message);
+  }
+};
+
+window.toggleAutoAgentAutoApprove = async (toggleEl) => {
+  const isOn = toggleEl.classList.contains('on');
+  // Only confirm on the way IN — turning it off is always the safe direction.
+  if (!isOn && !confirm(t('autoAgentAutoApproveConfirm'))) return;
+  try {
+    await api('/api/products/auto-agent-settings', { method: 'PATCH', body: { autoApprove: !isOn } });
     await loadAutoAgentSettings();
   } catch (err) {
     alert(t('errSaveSetting') + err.message);
@@ -2845,9 +2866,90 @@ function showToast(msg, durationMs = 2000) {
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
+// Centralized "how close am I to $1,000/month profit" view: goal progress,
+// this month's best products, best send time, and week-over-week momentum —
+// each pulled from the existing analytics endpoints, in one glanceable card.
+async function renderGoalWidget() {
+  const card = document.getElementById('goal-widget-card');
+  if (!card) return;
+
+  const GOAL = 1000;
+  const now        = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const fmt        = d => d.toISOString().slice(0, 10);
+
+  const bar   = document.getElementById('goal-widget-bar');
+  const text  = document.getElementById('goal-widget-text');
+  const pace  = document.getElementById('goal-widget-pace');
+  const days  = document.getElementById('goal-widget-days');
+  const topEl = document.getElementById('goal-widget-top-products');
+  const timeEl= document.getElementById('goal-widget-timing');
+  const momEl = document.getElementById('goal-widget-momentum');
+
+  try {
+    const [progress, topRes, timingRes, insightsRes] = await Promise.all([
+      api(`/api/analytics/campaign-progress?startDate=${fmt(monthStart)}&endDate=${fmt(monthEnd)}&cap=${GOAL}&perOrderCap=999999`),
+      api('/api/analytics/top-products'),
+      api('/api/analytics/timing'),
+      api('/api/analytics/marketing-insights'),
+    ]);
+    if (!progress.success) throw new Error(progress.error || 'failed');
+
+    // Progress bar + pace projection
+    const pct = Math.min(100, progress.pctUsed || 0);
+    bar.style.width      = `${pct}%`;
+    bar.style.background = progress.totalCommission >= GOAL ? '#16a34a' : pct > 33 ? '#f59e0b' : '#702ae1';
+
+    text.textContent = `$${progress.totalCommission.toFixed(2)} מתוך $${GOAL} (${pct.toFixed(0)}%) · ${progress.orderCount} הזמנות החודש`;
+    days.textContent = `${progress.daysRemaining} ימים נותרו החודש`;
+
+    const dayOfMonth  = now.getDate();
+    const dailyPace   = dayOfMonth > 0 ? progress.totalCommission / dayOfMonth : 0;
+    const projected   = dailyPace * monthEnd.getDate();
+    pace.textContent  = progress.totalCommission > 0
+      ? `בקצב הנוכחי: כ-$${projected.toFixed(0)} עד סוף החודש ${projected >= GOAL ? '— בדרך ליעד ✅' : '— עדיין מתחת ליעד'}`
+      : 'עוד אין עמלות מדווחות החודש — לחצו "עדכן עמלות" בטאב רווחיות';
+
+    // Top products this month
+    const top3 = (topRes.products || []).slice(0, 3);
+    topEl.innerHTML = top3.length
+      ? top3.map((p, i) => `<div style="margin-bottom:4px;">${i + 1}. ${escHtml((p.text || '(ללא כותרת)').slice(0, 40))}${p.attributed_commission != null ? ` — $${parseFloat(p.attributed_commission).toFixed(2)}` : ''}</div>`).join('')
+      : '<div style="color:var(--on-surface-var);">עוד אין מספיק נתונים</div>';
+
+    // Best send slot
+    const DOW = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+    const slots = (timingRes.slots || []).filter(s => s.sends >= 2);
+    const bestSlot = slots[0] || (timingRes.slots || [])[0];
+    timeEl.innerHTML = bestSlot
+      ? `<div>יום <b>${DOW[bestSlot.dow]}</b> בסביבות השעה <b>${String(bestSlot.hour).padStart(2, '0')}:00</b></div>
+         <div style="color:var(--on-surface-var);font-size:12px;margin-top:2px;">ממוצע ${parseFloat(bestSlot.avg_clicks).toFixed(1)} קליקים לשליחה</div>`
+      : '<div style="color:var(--on-surface-var);">עוד אין מספיק שליחות כדי לדעת</div>';
+
+    // Momentum: last 7 days vs prior 7 days
+    const m     = insightsRes.momentum || {};
+    const last7 = parseFloat(m.comm_last_7 || 0);
+    const prev7 = parseFloat(m.comm_prev_7 || 0);
+    if (last7 === 0 && prev7 === 0) {
+      momEl.innerHTML = '<div style="color:var(--on-surface-var);">עוד אין מספיק נתונים</div>';
+    } else {
+      const diff  = last7 - prev7;
+      const arrow = diff > 0 ? '📈' : diff < 0 ? '📉' : '➡️';
+      const color = diff > 0 ? '#16a34a' : diff < 0 ? '#ef4444' : 'var(--on-surface-var)';
+      momEl.innerHTML = `<div style="color:${color};font-weight:700;">${arrow} $${last7.toFixed(2)} השבוע</div>
+         <div style="color:var(--on-surface-var);font-size:12px;margin-top:2px;">לעומת $${prev7.toFixed(2)} בשבוע שעבר</div>`;
+    }
+  } catch (e) {
+    text.textContent = 'שגיאה בטעינת נתוני היעד';
+    pace.textContent = '';
+  }
+}
+
 async function renderDashboard() {
   const grid = document.getElementById('dashboard-subjects-grid');
   if (!grid) return;
+
+  renderGoalWidget();
 
   // Fetch products for all subjects
   let allProducts = [];
@@ -3630,10 +3732,48 @@ document.getElementById('btn-migrate-subjects')?.addEventListener('click', async
   if (endEl)   endEl.value   = now.toISOString().slice(0, 10);
 })();
 
+// Reads real synced commission data (from commission_snapshots) within the
+// active AliExpress campaign window and shows progress toward its incentive cap.
+async function loadCampaignProgress() {
+  const card = document.getElementById('campaign-progress-card');
+  if (!card) return;
+
+  try {
+    const data = await api('/api/analytics/campaign-progress');
+    if (!data.success) { card.style.display = 'none'; return; }
+
+    card.style.display = '';
+    const bar  = document.getElementById('campaign-progress-bar');
+    const text = document.getElementById('campaign-progress-text');
+    const days = document.getElementById('campaign-progress-days');
+    const warn = document.getElementById('campaign-progress-warning');
+
+    const pct = Math.min(100, data.pctUsed);
+    bar.style.width      = `${pct}%`;
+    bar.style.background = data.capReached ? '#ef4444' : pct > 80 ? '#f59e0b' : '#16a34a';
+
+    text.textContent = `$${data.totalCommission.toFixed(2)} מתוך $${data.cap} · ${data.orderCount} הזמנות בחלון הקמפיין (${data.startDate} — ${data.endDate})`;
+    days.textContent = data.daysRemaining > 0 ? `${data.daysRemaining} ימים נותרו` : 'הקמפיין הסתיים';
+
+    if (data.capReached) {
+      warn.style.display = '';
+      warn.textContent   = 'התקרה הכוללת ($100) הושגה — עמלות נוספות מעבר לתקרה לא ישולמו על ידי AliExpress.';
+    } else if (data.ordersOverCap > 0) {
+      warn.style.display = '';
+      warn.textContent   = `${data.ordersOverCap} הזמנות חרגו מתקרת $50 להזמנה — יעוגלו כלפי מטה על ידי AliExpress.`;
+    } else {
+      warn.style.display = 'none';
+    }
+  } catch (_) {
+    card.style.display = 'none';
+  }
+}
+
 async function renderAnalyticsSummary() {
   const grid = document.getElementById('analytics-niches-grid');
   if (!grid) return;
   grid.innerHTML = `<div style="padding:40px;text-align:center;color:var(--on-surface-var);">${t('anLoading')}</div>`;
+  loadCampaignProgress();
 
   try {
     const data   = await api('/api/analytics/summary');
