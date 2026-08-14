@@ -410,6 +410,24 @@ async function migrate() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS aliexpress_product_id TEXT`);
   await query(`CREATE INDEX IF NOT EXISTS products_aliexpress_product_id_idx ON products(user_id, aliexpress_product_id)`);
 
+  // ── Autonomous agent suggestion history (durable dedup memory) ───────────
+  // Independent of the products table's lifecycle — a row here survives even if the
+  // corresponding draft/product is later deleted, so a user cleaning up old sent
+  // products doesn't erase the auto-agent's memory of what it already suggested and
+  // cause the same product to resurface as "new".
+  await query(`
+    CREATE TABLE IF NOT EXISTS agent_suggestion_history (
+      id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id               UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      subject_id            UUID REFERENCES subjects(id) ON DELETE SET NULL,
+      aliexpress_product_id TEXT NOT NULL,
+      title                 TEXT,
+      created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS agent_suggestion_history_user    ON agent_suggestion_history(user_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS agent_suggestion_history_product ON agent_suggestion_history(user_id, aliexpress_product_id)`);
+
   console.log('✓ Database schema up to date');
 }
 

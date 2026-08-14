@@ -395,6 +395,25 @@ app.listen(PORT, async () => {
       console.warn('[db] aliexpress_product_id column safety guard:', err.message);
     }
 
+    // Belt-and-suspenders: ensure agent_suggestion_history exists even if the main
+    // migration was interrupted before reaching that step on a previous deploy.
+    try {
+      await dbQuery(`
+        CREATE TABLE IF NOT EXISTS agent_suggestion_history (
+          id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id               UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          subject_id            UUID REFERENCES subjects(id) ON DELETE SET NULL,
+          aliexpress_product_id TEXT NOT NULL,
+          title                 TEXT,
+          created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      await dbQuery(`CREATE INDEX IF NOT EXISTS agent_suggestion_history_user    ON agent_suggestion_history(user_id)`);
+      await dbQuery(`CREATE INDEX IF NOT EXISTS agent_suggestion_history_product ON agent_suggestion_history(user_id, aliexpress_product_id)`);
+    } catch (err) {
+      console.warn('[db] agent_suggestion_history table safety guard:', err.message);
+    }
+
     // Belt-and-suspenders: ensure logs.subject_id exists even if the main migration
     // was interrupted before reaching that step on a previous deploy.
     try {

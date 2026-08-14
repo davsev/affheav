@@ -1,6 +1,7 @@
 const { query } = require('../db');
 const { signAndCall } = require('./aliexpressApi');
 const { passesFilters } = require('./aliexpressFilters');
+const { significantWords, isNearDuplicateTitle } = require('./productDedup');
 const OpenAI = require('openai');
 
 const DEFAULT_TRACKING_ID = process.env.ALIEXPRESS_TRACKING_ID || 'TechSalebuy';
@@ -170,57 +171,94 @@ async function runDiscovery(userId) {
 
   // 4. Deduplication sets
   const { rows: existingRows } = await query(
-    `SELECT long_url FROM products WHERE user_id = $1 AND long_url IS NOT NULL`,
+    `SELECT long_url, title FROM products WHERE user_id = $1 AND long_url IS NOT NULL`,
     [userId]
   );
   const existingUrls = new Set(existingRows.map(r => r.long_url));
 
   const { rows: existingSugRows } = await query(
-    `SELECT aliexpress_id FROM product_suggestions WHERE user_id = $1`,
+    `SELECT aliexpress_id, title FROM product_suggestions WHERE user_id = $1`,
     [userId]
   );
   const existingSugIds = new Set(existingSugRows.map(r => r.aliexpress_id));
+
+  // Near-duplicate title check on top of the ID/URL sets above — AliExpress product
+  // IDs differ per seller even for the exact same physical item, so the same product
+  // listed by a different supplier would otherwise sail through ID-based dedup and
+  // resurface as "new".
+  const existingTitleWords = [...existingRows, ...existingSugRows]
+    .map(r => r.title)
+    .filter(Boolean)
+    .map(significantWords);
 
   // 5. Search AliExpress per subject (max 5 subjects, up to 5 keywords each)
   const entries = [...subjectMap.entries()].slice(0, 5);
   let newCount = 0;
 
   for (const [subjectId, { keywords, trackingId }] of entries) {
+    // Gather every keyword's results for this subject first so near-duplicate
+    // listings from different suppliers (same product, different seller/ID) can be
+    // collapsed to one before anything is inserted, instead of inserting each as it
+    // streams in per-keyword.
+    let candidates = [];
     for (const keyword of keywords) {
       try {
         const results = await searchAliExpress(keyword, trackingId);
-        const filtered = results.filter(passesFilters);
-
-        for (const product of filtered) {
-          const pid = String(product.product_id);
-          if (existingSugIds.has(pid)) continue;
-          if (existingUrls.has(product.promotion_link)) continue;
-
-          await query(`
-            INSERT INTO product_suggestions
-              (user_id, subject_id, aliexpress_id, title, image_url, promotion_link,
-               sale_price, evaluate_rate, lastest_volume, source_keyword)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-            ON CONFLICT (user_id, aliexpress_id) DO NOTHING
-          `, [
-            userId, subjectId, pid,
-            product.product_title,
-            product.product_main_image_url || '',
-            product.promotion_link,
-            parseFloat(product.app_sale_price) || null,
-            product.evaluate_rate || null,
-            Number(product.lastest_volume) || null,
-            keyword,
-          ]);
-
-          existingSugIds.add(pid);
-          newCount++;
-        }
+        candidates.push(
+          ...results
+            .filter(passesFilters)
+            .filter(p => !existingSugIds.has(String(p.product_id)) && !existingUrls.has(p.promotion_link))
+            .filter(p => !isNearDuplicateTitle(p.product_title, existingTitleWords))
+            .map(p => ({ ...p, _sourceKeyword: keyword }))
+        );
       } catch (err) {
         console.error(`[discovery] search failed for keyword "${keyword}": ${err.message}`);
       }
 
       await new Promise(r => setTimeout(r, 1000));
+    }
+
+    const seenIds = new Set();
+    candidates = candidates.filter(c => {
+      const pid = String(c.product_id);
+      if (seenIds.has(pid)) return false;
+      seenIds.add(pid);
+      return true;
+    });
+
+    // Diversity pass: collapse near-duplicate listings of the same physical product
+    // from different sellers down to the single best one, ranked by recent sales
+    // volume, before any suggestion is inserted.
+    candidates.sort((a, b) => (Number(b.lastest_volume) || 0) - (Number(a.lastest_volume) || 0));
+    const keptTitleWords = [];
+    candidates = candidates.filter(c => {
+      if (isNearDuplicateTitle(c.product_title, keptTitleWords)) return false;
+      keptTitleWords.push(significantWords(c.product_title));
+      return true;
+    });
+
+    for (const product of candidates) {
+      const pid = String(product.product_id);
+
+      await query(`
+        INSERT INTO product_suggestions
+          (user_id, subject_id, aliexpress_id, title, image_url, promotion_link,
+           sale_price, evaluate_rate, lastest_volume, source_keyword)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        ON CONFLICT (user_id, aliexpress_id) DO NOTHING
+      `, [
+        userId, subjectId, pid,
+        product.product_title,
+        product.product_main_image_url || '',
+        product.promotion_link,
+        parseFloat(product.app_sale_price) || null,
+        product.evaluate_rate || null,
+        Number(product.lastest_volume) || null,
+        product._sourceKeyword,
+      ]);
+
+      existingSugIds.add(pid);
+      newCount++;
     }
   }
 
