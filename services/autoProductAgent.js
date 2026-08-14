@@ -1,6 +1,7 @@
 const { query } = require('../db');
 const { signAndCall } = require('./aliexpressApi');
 const { passesFilters } = require('./aliexpressFilters');
+const { significantWords, isNearDuplicateTitle } = require('./productDedup');
 const { shortenUrl } = require('./spooMe');
 const OpenAI = require('openai');
 
@@ -354,12 +355,29 @@ async function runAutoProductAgent(userId) {
   // silently fails and the same product keeps resurfacing as "new". long_url is
   // kept as a secondary check for older rows inserted before this column existed.
   const { rows: existingRows } = await query(
-    `SELECT long_url, aliexpress_product_id FROM products
+    `SELECT long_url, aliexpress_product_id, title FROM products
      WHERE user_id = $1 AND (long_url IS NOT NULL OR aliexpress_product_id IS NOT NULL)`,
     [userId]
   );
   const existingUrls       = new Set(existingRows.map(r => r.long_url).filter(Boolean));
   const existingProductIds = new Set(existingRows.map(r => r.aliexpress_product_id).filter(Boolean));
+
+  // agent_suggestion_history is a durable, insert-only log of every product this
+  // agent has ever drafted for this user — independent of the products table, so a
+  // user deleting old (already-sent) products doesn't erase the agent's memory and
+  // cause the exact same product to resurface as "new". Combined with existingRows'
+  // titles below for the near-duplicate check (different sellers of the same item
+  // have different product_ids, so ID dedup alone misses them).
+  const { rows: historyRows } = await query(
+    `SELECT aliexpress_product_id, title FROM agent_suggestion_history WHERE user_id = $1`,
+    [userId]
+  );
+  for (const r of historyRows) if (r.aliexpress_product_id) existingProductIds.add(r.aliexpress_product_id);
+
+  const existingTitleWords = [...existingRows, ...historyRows]
+    .map(r => r.title)
+    .filter(Boolean)
+    .map(significantWords);
 
   const { rows: maxRow } = await query(
     'SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM products WHERE user_id = $1',
@@ -439,6 +457,7 @@ async function runAutoProductAgent(userId) {
           ...results
             .filter(passesFilters)
             .filter(p => !existingProductIds.has(String(p.product_id)) && !existingUrls.has(p.promotion_link))
+            .filter(p => !isNearDuplicateTitle(p.product_title, existingTitleWords))
             .map(p => ({ ...p, _sourceKeyword: task.keyword, _isTrending: task.hot }))
         );
       } catch (err) {
@@ -454,6 +473,19 @@ async function runAutoProductAgent(userId) {
       const pid = String(c.product_id);
       if (seenIds.has(pid)) return false;
       seenIds.add(pid);
+      return true;
+    });
+
+    // Diversity pass: collapse near-duplicate listings of the same physical product
+    // from different sellers (e.g. the same LED strip offered by five suppliers) down
+    // to a single best candidate, ranked by recent sales volume, before any draft is
+    // created. Runs unconditionally (not just when AI filtering is on) since this is
+    // exactly the pattern non-AI title-extraction search tends to surface.
+    candidates.sort((a, b) => (Number(b.lastest_volume) || 0) - (Number(a.lastest_volume) || 0));
+    const keptTitleWords = [];
+    candidates = candidates.filter(c => {
+      if (isNearDuplicateTitle(c.product_title, keptTitleWords)) return false;
+      keptTitleWords.push(significantWords(c.product_title));
       return true;
     });
 
@@ -512,6 +544,14 @@ async function runAutoProductAgent(userId) {
           console.error(`[auto-agent] auto-approve failed for product ${insertedRows[0].id}: ${err.message}`);
         }
       }
+
+      // Durable memory: recorded independently of the products row above, so it
+      // survives that row later being deleted (e.g. cleanup of old sent products).
+      await query(
+        `INSERT INTO agent_suggestion_history (user_id, subject_id, aliexpress_product_id, title)
+         VALUES ($1,$2,$3,$4)`,
+        [userId, subjectId, String(product.product_id), product.product_title]
+      );
 
       existingUrls.add(product.promotion_link);
       existingProductIds.add(String(product.product_id));
