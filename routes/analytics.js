@@ -340,14 +340,14 @@ router.get('/orders', async (req, res) => {
 // GET /api/analytics/campaign-progress?subjectId=&startDate=&endDate=&cap=&perOrderCap=
 // Tracks progress toward an AliExpress promo-campaign incentive cap, using
 // commission_snapshots already pulled in by /sync-commissions. Defaults match
-// the "IL Raising Commission Incentive - Summer Clearance" campaign
-// (2026-07-31 to 2026-08-16, $100 total cap, $50 per-order cap).
+// the "IL Raising Commission Incentive - Back To School Sale" campaign
+// (2026-08-16 to 2026-09-01, $100 total cap, $50 per-order cap).
 router.get('/campaign-progress', async (req, res) => {
   try {
     const userId      = req.user.id;
     const { subjectId } = req.query;
-    const startDate    = req.query.startDate   || '2026-07-31';
-    const endDate       = req.query.endDate     || '2026-08-16';
+    const startDate    = req.query.startDate   || '2026-08-16';
+    const endDate       = req.query.endDate     || '2026-09-01';
     const cap           = req.query.cap         != null ? parseFloat(req.query.cap)         : 100;
     const perOrderCap   = req.query.perOrderCap != null ? parseFloat(req.query.perOrderCap) : 50;
 
