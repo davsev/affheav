@@ -106,24 +106,25 @@ router.post('/add', async (req, res) => {
       product.product_main_image_url || '', product.product_title,
       join_link, wa_group, resolvedGroupId, maxRow[0].next_order,
       salePrice, commissionRate];
+    const aliexpressProductId = product.product_id ? String(product.product_id) : null;
 
     try {
       await query(
         `INSERT INTO products
-           (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, whatsapp_group_id, sort_order, sale_price, commission_rate, video_url, use_video)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-        [...baseParams, videoUrl, !!videoUrl]
+           (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, whatsapp_group_id, sort_order, sale_price, commission_rate, video_url, use_video, aliexpress_product_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+        [...baseParams, videoUrl, !!videoUrl, aliexpressProductId]
       );
     } catch (insertErr) {
-      // video_url/use_video columns may not exist yet if migration hasn't run — retry without them
-      if (insertErr.message?.includes('video_url') || insertErr.message?.includes('use_video')) {
+      // video_url/use_video/aliexpress_product_id columns may not exist yet if migration hasn't run — retry without them
+      if (insertErr.message?.includes('video_url') || insertErr.message?.includes('use_video') || insertErr.message?.includes('aliexpress_product_id')) {
         await query(
           `INSERT INTO products
              (user_id, subject_id, long_url, short_link, image, text, join_link, wa_group, whatsapp_group_id, sort_order, sale_price, commission_rate)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
           baseParams
         );
-        workflow.log('⚠ video_url/use_video columns missing — restart server to run migration');
+        workflow.log('⚠ video_url/use_video/aliexpress_product_id columns missing — restart server to run migration');
       } else {
         throw insertErr;
       }

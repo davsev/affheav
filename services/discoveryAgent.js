@@ -171,16 +171,23 @@ async function runDiscovery(userId) {
 
   // 4. Deduplication sets
   const { rows: existingRows } = await query(
-    `SELECT long_url, title FROM products WHERE user_id = $1 AND long_url IS NOT NULL`,
+    `SELECT long_url, aliexpress_product_id, title FROM products
+     WHERE user_id = $1 AND (long_url IS NOT NULL OR aliexpress_product_id IS NOT NULL)`,
     [userId]
   );
-  const existingUrls = new Set(existingRows.map(r => r.long_url));
+  const existingUrls = new Set(existingRows.map(r => r.long_url).filter(Boolean));
 
   const { rows: existingSugRows } = await query(
     `SELECT aliexpress_id, title FROM product_suggestions WHERE user_id = $1`,
     [userId]
   );
-  const existingSugIds = new Set(existingSugRows.map(r => r.aliexpress_id));
+  // Exact-ID dedup covers both product_suggestions (aliexpress_id) and products already
+  // added to the live catalog (aliexpress_product_id) — a suggestion approved via
+  // POST /api/aliexpress/add ends up in the latter, not the former.
+  const existingSugIds = new Set([
+    ...existingSugRows.map(r => r.aliexpress_id),
+    ...existingRows.map(r => r.aliexpress_product_id).filter(Boolean),
+  ]);
 
   // Near-duplicate title check on top of the ID/URL sets above — AliExpress product
   // IDs differ per seller even for the exact same physical item, so the same product
